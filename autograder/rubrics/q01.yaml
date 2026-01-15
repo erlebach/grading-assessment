@@ -1,0 +1,21 @@
+question_id: "q01"
+question_text: "Implement a function to calculate factorial"
+total_points: 10
+
+criteria:
+  - criterion_id: "correctness"
+    description: "Function correctly calculates factorial for valid inputs"
+    points: 7
+    evidence_required: true
+    evaluation_method: "semantic"
+  
+  - criterion_id: "edge_cases"
+    description: "Handles edge cases (0, 1, negative numbers)"
+    points: 3
+    evidence_required: true
+    evaluation_method: "semantic"
+
+metadata:
+  course: "CS101"
+  assignment: "hw01"
+  version: "1.0"

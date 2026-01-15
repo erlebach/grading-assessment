@@ -1,0 +1,33 @@
+# Evidence Index Configuration
+# Configuration for building and using the RAG evidence index
+
+index_config:
+  # Index type: "vector", "bm25", "hybrid"
+  index_type: "vector"
+  
+  # Embedding model configuration
+  embedding:
+    model: "text-embedding-3-small"  # or local model path
+    dimension: 1536
+    provider: "openai"  # "openai", "local", "huggingface"
+  
+  # Retrieval configuration
+  retrieval:
+    top_k: 5  # Number of evidence chunks to retrieve
+    similarity_threshold: 0.7  # Minimum similarity score
+    rerank: true  # Whether to rerank results
+  
+  # Chunking configuration
+  chunking:
+    chunk_size: 512  # Characters per chunk
+    chunk_overlap: 50  # Overlap between chunks
+    strategy: "sentence"  # "sentence", "paragraph", "fixed"
+  
+  # Source configuration
+  sources:
+    - type: "file"
+      path: "evidence/sources/"
+      patterns: ["*.py", "*.md", "*.txt"]
+    - type: "documentation"
+      url: "https://docs.python.org/3/"
+      cache_dir: "evidence/cache/"
