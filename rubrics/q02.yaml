@@ -1,0 +1,27 @@
+question_id: "q02"
+question_text: "Implement a function to reverse a string"
+total_points: 10
+
+criteria:
+  - criterion_id: "correctness"
+    description: "Function correctly reverses strings"
+    points: 6
+    evidence_required: true
+    evaluation_method: "semantic"
+  
+  - criterion_id: "edge_cases"
+    description: "Handles empty strings and single characters"
+    points: 2
+    evidence_required: true
+    evaluation_method: "semantic"
+  
+  - criterion_id: "style"
+    description: "Code follows style guidelines and is readable"
+    points: 2
+    evidence_required: false
+    evaluation_method: "manual"
+
+metadata:
+  course: "CS101"
+  assignment: "hw01"
+  version: "1.0"

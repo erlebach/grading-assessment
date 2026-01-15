@@ -1,0 +1,44 @@
+# Rubric Schema Definition
+# This schema defines the structure for rubric YAML files
+
+schema_version: "1.0"
+
+rubric_structure:
+  question_id: string  # Unique identifier for the question
+  question_text: string  # Description of the question
+  total_points: number  # Maximum points for this question
+  
+  criteria:
+    - criterion_id: string  # Unique identifier for this criterion
+      description: string  # Description of what is being evaluated
+      points: number  # Points allocated to this criterion
+      evidence_required: boolean  # Whether evidence retrieval is needed
+      evaluation_method: string  # e.g., "exact_match", "semantic", "manual"
+      
+  metadata:
+    course: string  # Course identifier
+    assignment: string  # Assignment identifier
+    version: string  # Rubric version
+
+example:
+  question_id: "q01"
+  question_text: "Implement a function to calculate factorial"
+  total_points: 10
+  
+  criteria:
+    - criterion_id: "correctness"
+      description: "Function correctly calculates factorial for valid inputs"
+      points: 7
+      evidence_required: true
+      evaluation_method: "semantic"
+    
+    - criterion_id: "edge_cases"
+      description: "Handles edge cases (0, 1, negative numbers)"
+      points: 3
+      evidence_required: true
+      evaluation_method: "semantic"
+  
+  metadata:
+    course: "CS101"
+    assignment: "hw01"
+    version: "1.0"
