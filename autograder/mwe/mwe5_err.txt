@@ -13,18 +13,18 @@ MWE 5: Concurrent Grading of Multiple Students
 
 [Step 1] Configuring system...
   OLLAMA_NUM_PARALLEL in Python process: 4
-  ✓ OLLAMA_NUM_PARALLEL is set to 4 in this process
-    → Note: Ollama server reads its own environment at startup
-    → If Ollama was started before setting this, restart Ollama to apply
+  → This is inherited from shell environment (e.g., .zshrc)
+  → Real verification: Check 'ollama serve' logs for 'OLLAMA_NUM_PARALLEL:4'
+  → If Ollama logs show OLLAMA_NUM_PARALLEL:4, concurrent requests should work
 ✓ Configuration loaded
 
 [Step 2] Creating sample evidence index...
-Parsing nodes:   0%|          | 0/5 [00:00<?, ?it/s]Parsing nodes: 100%|██████████| 5/5 [00:00<00:00, 2918.79it/s]
-Generating embeddings:   0%|          | 0/5 [00:00<?, ?it/s]Generating embeddings: 100%|██████████| 5/5 [00:00<00:00, 38.96it/s]Generating embeddings: 100%|██████████| 5/5 [00:00<00:00, 38.92it/s]
+Parsing nodes:   0%|          | 0/5 [00:00<?, ?it/s]Parsing nodes: 100%|██████████| 5/5 [00:00<00:00, 3445.86it/s]
+Generating embeddings:   0%|          | 0/5 [00:00<?, ?it/s]Generating embeddings: 100%|██████████| 5/5 [00:00<00:00, 37.78it/s]Generating embeddings: 100%|██████████| 5/5 [00:00<00:00, 37.75it/s]
 WARNING:root:Removing unpickleable private attribute _chunking_tokenizer_fn
 WARNING:root:Removing unpickleable private attribute _split_fns
 WARNING:root:Removing unpickleable private attribute _sub_sentence_split_fns
-✓ Index created at /var/folders/g_/_bggj09s1z183t3_j5jy1r9c0000gn/T/tmpo5z3aqmg
+✓ Index created at /var/folders/g_/_bggj09s1z183t3_j5jy1r9c0000gn/T/tmpqic320h5
 
 [Step 3] Creating sample rubric and student submissions...
 ✓ Rubric: Explain mutual information and its relationship to entropy
@@ -38,132 +38,134 @@ WARNING:root:Removing unpickleable private attribute _sub_sentence_split_fns
 ======================================================================
 
   Grading student_1...
-    ✓ student_1: 4/10 (13.85s)
-      - Load index: 0.104s
-      - Retrieve evidence: 0.071s
+    ✓ student_1: 4/10 (20.99s)
+      - Load index: 0.088s
+      - Retrieve evidence: 0.079s
       - Apply scoring: 0.000s
-      - Generate feedback: 13.678s
+      - Generate feedback: 20.828s
 
   Grading student_2...
-    ✓ student_2: 4/10 (26.24s)
-      - Load index: 0.140s
-      - Retrieve evidence: 0.071s
+    ✓ student_2: 4/10 (22.15s)
+      - Load index: 0.130s
+      - Retrieve evidence: 0.069s
       - Apply scoring: 0.000s
-      - Generate feedback: 26.032s
+      - Generate feedback: 21.955s
 
   Grading student_3...
-    ✓ student_3: 4/10 (19.06s)
-      - Load index: 0.173s
-      - Retrieve evidence: 0.098s
+    ✓ student_3: 4/10 (20.01s)
+      - Load index: 0.128s
+      - Retrieve evidence: 0.079s
       - Apply scoring: 0.000s
-      - Generate feedback: 18.789s
+      - Generate feedback: 19.803s
 
   Grading student_4...
-    ✓ student_4: 3/10 (25.46s)
-      - Load index: 0.126s
-      - Retrieve evidence: 0.055s
+    ✓ student_4: 3/10 (18.49s)
+      - Load index: 0.144s
+      - Retrieve evidence: 0.106s
       - Apply scoring: 0.000s
-      - Generate feedback: 25.277s
+      - Generate feedback: 18.237s
 
-  Sequential total time: 84.614s
-  Average per student: 21.153s
+  Sequential total time: 81.646s
+  Average per student: 20.412s
 
 ======================================================================
-[Step 5] Concurrent Execution (Optimized with async/await)
+[Step 5] Batched Execution (Single LLM Call for All Students)
 ======================================================================
-  ✓ student_1: 4/10 (54.93s)
-      - Load index: 0.126s
-      - Retrieve evidence: 0.027s
+  Using batched grading: All 4 students in one LLM prompt
+  This is more efficient than concurrent async calls
+  ✓ student_1: 4/10 (50.98s)
+      - Load index: 0.224s
+      - Retrieve evidence: 0.131s
       - Apply scoring: 0.000s
-      - Generate feedback: 54.776s
-  ✓ student_2: 4/10 (68.02s)
-      - Load index: 0.085s
-      - Retrieve evidence: 0.022s
+      - Generate feedback: 50.623s
+  ✓ student_2: 4/10 (50.98s)
+      - Load index: 0.224s
+      - Retrieve evidence: 0.131s
       - Apply scoring: 0.000s
-      - Generate feedback: 67.910s
-  ✓ student_3: 4/10 (33.42s)
-      - Load index: 0.091s
-      - Retrieve evidence: 0.023s
+      - Generate feedback: 50.623s
+  ✓ student_3: 4/10 (50.98s)
+      - Load index: 0.224s
+      - Retrieve evidence: 0.131s
       - Apply scoring: 0.000s
-      - Generate feedback: 33.307s
-  ✓ student_4: 3/10 (17.35s)
-      - Load index: 0.084s
-      - Retrieve evidence: 0.023s
+      - Generate feedback: 50.623s
+  ✓ student_4: 3/10 (50.98s)
+      - Load index: 0.224s
+      - Retrieve evidence: 0.131s
       - Apply scoring: 0.000s
-      - Generate feedback: 17.242s
+      - Generate feedback: 50.623s
 
-  Concurrent total time: 68.276s
-  Average per student: 17.069s
+  Batched total time: 50.979s
+  Average per student: 12.745s
+  ✓ All 4 students graded in a single LLM call
 
 ======================================================================
 [Step 6] Timing Comparison
 ======================================================================
 
   Overall Timing:
-    Sequential execution: 84.614s
-    Concurrent execution: 68.276s
-    Average per student:  21.153s
-    Expected concurrent:  21.153s (perfect parallelization)
-    Time saved:          16.338s (19.3%)
-    Speedup:             1.24x
-    Efficiency:          31.0% (ideal: 100%)
-    Actual/Expected:     3.23x (1.0x = perfect, >1.0x = overhead)
+    Sequential execution: 81.646s
+    Batched execution:    50.979s (single LLM call)
+    Average per student:  20.412s
+    Expected batched:     20.412s (if single call = 1x time)
+    Time saved:          30.667s (37.6%)
+    Speedup:             1.60x
+    Efficiency:          40.0% (ideal: 100%)
+    Actual/Expected:     2.50x (1.0x = perfect, >1.0x = overhead)
 
-  Concurrency Analysis:
-    ✗ No parallelization - operations are running sequentially!
+  Batched Execution Analysis:
+    ✗ Poor efficiency - batched call takes nearly as long as sequential
       Possible causes:
-      - LLM API processes requests sequentially (rate limits)
-      - Local LLM (Ollama) processes requests one at a time
-      - Python GIL preventing true parallelism
-      - Shared resources with locks preventing concurrency
-      - Synchronous blocking I/O not releasing GIL
-      - Concurrent time (68.3s) ≈ 4x single student time
-        This indicates sequential execution, not parallel
+      - LLM processing time scales with prompt length
+      - Large prompt (4 students) may take longer to process
+      - Model context limits or processing constraints
+      - Batched time (51.0s) ≈ 4x single student time
+        This suggests the LLM processes the batched prompt sequentially
 
   Step-by-Step Timing Comparison:
 
-    Step                      Sequential      Concurrent      Speedup   
+    Step                      Sequential      Batched         Speedup   
     -----------------------------------------------------------------
-    Load index                   0.136s         0.096s        1.41x
-    Retrieve evidence            0.074s         0.024s        3.12x
-    Apply scoring                0.000s         0.000s        1.63x
-    Generate feedback           20.944s        43.309s        0.48x
+    Load index                   0.123s         0.224s        0.55x
+    Retrieve evidence            0.083s         0.131s        0.63x
+    Apply scoring                0.000s         0.000s        0.51x
+    Generate feedback           20.206s        50.623s        0.40x
 
   Individual Student Total Timings:
     Sequential:
-      student_1: 13.854s
-      student_2: 26.242s
-      student_3: 19.060s
-      student_4: 25.458s
-    Concurrent:
-      student_1: 54.928s
-      student_2: 68.017s
-      student_3: 33.421s
-      student_4: 17.349s
+      student_1: 20.995s
+      student_2: 22.154s
+      student_3: 20.010s
+      student_4: 18.487s
+    Batched:
+      All 4 students: 50.979s (single call)
+      student_1: 50.979s (shared timing)
+      student_2: 50.979s (shared timing)
+      student_3: 50.979s (shared timing)
+      student_4: 50.979s (shared timing)
 
   Result Verification:
-    ✓ Scores match between sequential and concurrent execution
+    ✓ Scores match between sequential and batched execution
 
 ======================================================================
 MWE 5 Summary
 ======================================================================
-✓ Concurrent execution demonstrated
-✓ Time savings through parallelization confirmed
+✓ Batched execution demonstrated (single LLM call for all students)
+✓ Time savings through batching confirmed
 ✓ Results verified to be consistent
 
 ======================================================================
 Complete Timing Summary
 ======================================================================
-step_1_setup                  :    1.570s (  1.0%)
-step_2_create_index           :    0.312s (  0.2%)
+step_1_setup                  :    1.839s (  1.4%)
+step_2_create_index           :    0.318s (  0.2%)
 step_3_create_rubric          :    0.000s (  0.0%)
-step_4_sequential_total       :   84.614s ( 54.7%)
-step_5_concurrent_total       :   68.276s ( 44.1%)
+step_4_sequential_total       :   81.646s ( 60.6%)
+step_5_batched_total          :   50.979s ( 37.8%)
 ----------------------------------------------------------------------
-Total time                    :  154.773s
+Total time                    :  134.782s
 ======================================================================
 
 Key Insight:
-  ✓ Concurrent execution saved 16.34s (19.3%)
-  ✓ This represents a 1.24x speedup for 4 students
-  ✓ Efficiency: 31.0% (closer to 100% is better)
+  ✓ Concurrent execution saved 30.67s (37.6%)
+  ✓ This represents a 1.60x speedup for 4 students
+  ✓ Efficiency: 40.0% (closer to 100% is better)

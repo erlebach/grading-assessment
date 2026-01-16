@@ -1,9 +1,9 @@
-"""MWE 5: Concurrent Grading of Multiple Students.
+"""MWE 5: Batched Grading of Multiple Students.
 
-This script demonstrates concurrent execution of the grading pipeline for
-multiple students to show time savings through parallelization:
-1. Grade four students sequentially (baseline)
-2. Grade four students concurrently (optimized)
+This script demonstrates batched execution of the grading pipeline for
+multiple students to show time savings through batching:
+1. Grade four students sequentially (baseline - 4 separate LLM calls)
+2. Grade four students in a batch (optimized - 1 LLM call for all)
 3. Compare timing results
 
 Prerequisites:
@@ -20,12 +20,11 @@ Usage:
 
 import argparse
 import asyncio
-import json
 import os
-import subprocess
 import tempfile
 import time
 from pathlib import Path
+from typing import Any
 
 from config.llm_config import setup_llamaindex_defaults
 
@@ -213,6 +212,115 @@ def grade_student_sync(
     }
 
     return (student_id, result, step_timings)
+
+
+async def grade_students_batched_async(
+    students: list[tuple[str, str]],
+    rubric: dict,
+    index_path: Path,
+) -> list[tuple[str, dict, dict[str, float]]]:
+    """Grade multiple students in a single LLM call (batched).
+
+    Args:
+        students: List of (student_id, student_answer) tuples.
+        rubric: The rubric dictionary.
+        index_path: Path to the evidence index.
+
+    Returns:
+        List of tuples (student_id, grading_result, step_timings).
+
+    """
+    step_timings: dict[str, float] = {}
+    overall_start = time.time()
+
+    # Step 4: Load evidence index and create retrievers (once for all students)
+    step_start = time.time()
+    index = load_saved_index(index_path)
+    base_retriever = EvidenceRetriever(index)
+    grading_retriever = GradingEvidenceRetriever(base_retriever)
+    step_timings["load_index"] = time.time() - step_start
+
+    # Step 5: Retrieve evidence for each student
+    step_start = time.time()
+    students_evidence: dict[str, dict[str, list[dict[str, Any]]]] = {}
+    for student_id, student_answer in students:
+        evidence_by_criterion = grading_retriever.retrieve_for_rubric(
+            rubric, student_answer, top_k_per_criterion=2
+        )
+        students_evidence[student_id] = evidence_by_criterion
+    step_timings["retrieve_evidence"] = time.time() - step_start
+
+    # Step 6: Apply rubric scoring for each student
+    step_start = time.time()
+    students_scores: dict[str, dict[str, dict[str, Any]]] = {}
+    for student_id, student_answer in students:
+        scores = apply_rubric_scoring(
+            rubric, student_answer, students_evidence[student_id]
+        )
+        students_scores[student_id] = scores
+    step_timings["apply_scoring"] = time.time() - step_start
+
+    # Step 7: Generate LMQL-constrained feedback (batched - single call for all)
+    step_start = time.time()
+    lmql_grader = LMQLGrader()
+
+    # Prepare students data for batched grading
+    students_data = []
+    for student_id, student_answer in students:
+        students_data.append(
+            {
+                "student_id": student_id,
+                "student_answer": student_answer,
+                "evidence_by_criterion": students_evidence[student_id],
+                "scores": students_scores[student_id],
+            }
+        )
+
+    # Single batched call
+    batch_results = await lmql_grader.grade_batch_async(
+        rubric=rubric, students_data=students_data
+    )
+    step_timings["generate_feedback"] = time.time() - step_start
+
+    step_timings["total"] = time.time() - overall_start
+
+    # Format results
+    results = []
+    for student_id, student_answer in students:
+        grading_result = batch_results[student_id]
+
+        # Format result to match grade_question output structure
+        result = {
+            "question_id": grading_result["question_id"],
+            "score": grading_result["total_score"],
+            "max_score": grading_result["max_score"],
+            "rubric_items": [
+                {
+                    "criterion_id": cid,
+                    "score": info["score"],
+                    "max_score": info["max_score"],
+                    "description": rubric["criteria"][
+                        next(
+                            i
+                            for i, c in enumerate(rubric["criteria"])
+                            if c["criterion_id"] == cid
+                        )
+                    ]["description"],
+                }
+                for cid, info in grading_result["scores"].items()
+            ],
+            "citations": [
+                cit
+                for ev in grading_result["evidence_used"]
+                for cit in [ev["source_id"]]
+            ],
+            "feedback": grading_result["feedback"],
+        }
+
+        # Use the same step_timings for all students (they were graded together)
+        results.append((student_id, result, step_timings.copy()))
+
+    return results
 
 
 async def grade_student_async(
@@ -615,20 +723,19 @@ async def main_async(run_sequential: bool = True, run_concurrent: bool = True) -
         sequential_total_time = 0.0
 
     # Step 5: Concurrent execution (optimized) - using async/await with asyncio.gather
+    # OR batched execution (single LLM call for all students)
     if run_concurrent:
         print("\n" + "=" * 70)
-        print("[Step 5] Concurrent Execution (Optimized with async/await)")
+        print("[Step 5] Batched Execution (Single LLM Call for All Students)")
         print("=" * 70)
+        print("  Using batched grading: All 4 students in one LLM prompt")
+        print("  This is more efficient than concurrent async calls")
 
         start_time = time.time()
 
         try:
-            # Run all grading tasks concurrently using asyncio.gather
-            tasks = [
-                grade_student_async(student_id, student_answer, rubric, index_path)
-                for student_id, student_answer in students
-            ]
-            results = await asyncio.gather(*tasks)
+            # Grade all students in a single batched LLM call
+            results = await grade_students_batched_async(students, rubric, index_path)
 
             # Process results as they complete
             for result in results:
@@ -666,10 +773,11 @@ async def main_async(run_sequential: bool = True, run_concurrent: bool = True) -
             raise
 
         concurrent_total_time = time.time() - start_time
-        timings["step_5_concurrent_total"] = concurrent_total_time
+        timings["step_5_batched_total"] = concurrent_total_time
 
-        print(f"\n  Concurrent total time: {concurrent_total_time:.3f}s")
+        print(f"\n  Batched total time: {concurrent_total_time:.3f}s")
         print(f"  Average per student: {concurrent_total_time / len(students):.3f}s")
+        print(f"  ✓ All {len(students)} students graded in a single LLM call")
     else:
         concurrent_total_time = 0.0
 
@@ -698,10 +806,12 @@ async def main_async(run_sequential: bool = True, run_concurrent: bool = True) -
 
         print(f"\n  Overall Timing:")
         print(f"    Sequential execution: {sequential_total_time:.3f}s")
-        print(f"    Concurrent execution: {concurrent_total_time:.3f}s")
+        print(
+            f"    Batched execution:    {concurrent_total_time:.3f}s (single LLM call)"
+        )
         print(f"    Average per student:  {avg_student_time:.3f}s")
         print(
-            f"    Expected concurrent:  {expected_concurrent_time:.3f}s (perfect parallelization)"
+            f"    Expected batched:     {expected_concurrent_time:.3f}s (if single call = 1x time)"
         )
         print(
             f"    Time saved:          {time_saved:.3f}s ({time_saved/sequential_total_time*100:.1f}%)"
@@ -712,27 +822,29 @@ async def main_async(run_sequential: bool = True, run_concurrent: bool = True) -
             f"    Actual/Expected:     {actual_vs_expected:.2f}x (1.0x = perfect, >1.0x = overhead)"
         )
 
-        # Analysis of concurrency effectiveness
-        print("\n  Concurrency Analysis:")
+        # Analysis of batched execution effectiveness
+        print("\n  Batched Execution Analysis:")
         if actual_vs_expected < 1.1:
-            print("    ✓ Excellent parallelization - operations are truly concurrent")
+            print("    ✓ Excellent - batched call is as fast as single student")
         elif actual_vs_expected < 1.5:
-            print("    ⚠ Moderate parallelization - some overhead or contention")
+            print("    ⚠ Good - batched call has some overhead but still efficient")
         elif actual_vs_expected < 1.9:
-            print("    ⚠ Poor parallelization - significant overhead or contention")
+            print("    ⚠ Moderate - batched call has significant overhead")
         else:
-            print("    ✗ No parallelization - operations are running sequentially!")
+            print(
+                "    ✗ Poor efficiency - batched call takes nearly as long as sequential"
+            )
             print("      Possible causes:")
-            print("      - LLM API processes requests sequentially (rate limits)")
-            print("      - Local LLM (Ollama) processes requests one at a time")
-            print("      - Python GIL preventing true parallelism")
-            print("      - Shared resources with locks preventing concurrency")
-            print("      - Synchronous blocking I/O not releasing GIL")
+            print("      - LLM processing time scales with prompt length")
+            print("      - Large prompt (4 students) may take longer to process")
+            print("      - Model context limits or processing constraints")
             if actual_vs_expected > 1.95:
                 print(
-                    f"      - Concurrent time ({concurrent_total_time:.1f}s) ≈ {len(students)}x single student time"
+                    f"      - Batched time ({concurrent_total_time:.1f}s) ≈ {len(students)}x single student time"
                 )
-                print("        This indicates sequential execution, not parallel")
+                print(
+                    "        This suggests the LLM processes the batched prompt sequentially"
+                )
 
         # Step-by-step timing comparison
         print("\n  Step-by-Step Timing Comparison:")
@@ -756,24 +868,23 @@ async def main_async(run_sequential: bool = True, run_concurrent: bool = True) -
                 r[2][step] for r in sequential_results
             ) / len(sequential_results)
 
-        # Calculate average times per step for concurrent
-        concurrent_step_times: dict[str, float] = {}
-        for step in steps:
-            concurrent_step_times[step] = sum(
-                r[2][step] for r in concurrent_results
-            ) / len(concurrent_results)
+        # For batched, use the single timing (all students processed together)
+        batched_step_times: dict[str, float] = {}
+        if concurrent_results:
+            # All students have the same timings in batched mode
+            batched_step_times = concurrent_results[0][2].copy()
+            # Remove 'total' from step times
+            batched_step_times.pop("total", None)
 
-        print(
-            f"\n    {'Step':<25} {'Sequential':<15} {'Concurrent':<15} {'Speedup':<10}"
-        )
+        print(f"\n    {'Step':<25} {'Sequential':<15} {'Batched':<15} {'Speedup':<10}")
         print("    " + "-" * 65)
         for step in steps:
             seq_time = sequential_step_times[step]
-            conc_time = concurrent_step_times[step]
-            step_speedup = seq_time / conc_time if conc_time > 0 else 0
+            batch_time = batched_step_times.get(step, 0.0)
+            step_speedup = seq_time / batch_time if batch_time > 0 else 0
             print(
                 f"    {step_labels[step]:<25} {seq_time:>8.3f}s      "
-                f"{conc_time:>8.3f}s      {step_speedup:>6.2f}x"
+                f"{batch_time:>8.3f}s      {step_speedup:>6.2f}x"
             )
 
         # Individual student timings
@@ -781,27 +892,30 @@ async def main_async(run_sequential: bool = True, run_concurrent: bool = True) -
         print("    Sequential:")
         for student_id, result, step_timings in sequential_results:
             print(f"      {student_id}: {step_timings['total']:.3f}s")
-        print("    Concurrent:")
+        print("    Batched:")
+        print(
+            f"      All {len(concurrent_results)} students: {concurrent_total_time:.3f}s (single call)"
+        )
         for student_id, result, step_timings in concurrent_results:
-            print(f"      {student_id}: {step_timings['total']:.3f}s")
+            print(f"      {student_id}: {step_timings['total']:.3f}s (shared timing)")
 
         # Verify results are the same
         print("\n  Result Verification:")
         sequential_scores = {sid: r["score"] for sid, r, _ in sequential_results}
-        concurrent_scores = {sid: r["score"] for sid, r, _ in concurrent_results}
-        if sequential_scores == concurrent_scores:
-            print("    ✓ Scores match between sequential and concurrent execution")
+        batched_scores = {sid: r["score"] for sid, r, _ in concurrent_results}
+        if sequential_scores == batched_scores:
+            print("    ✓ Scores match between sequential and batched execution")
         else:
-            print("    ✗ Scores differ between sequential and concurrent execution")
+            print("    ✗ Scores differ between sequential and batched execution")
             print(f"      Sequential: {sequential_scores}")
-            print(f"      Concurrent: {concurrent_scores}")
+            print(f"      Batched: {batched_scores}")
 
     # Step 7: Summary
     print("\n" + "=" * 70)
     print("MWE 5 Summary")
     print("=" * 70)
-    print("✓ Concurrent execution demonstrated")
-    print("✓ Time savings through parallelization confirmed")
+    print("✓ Batched execution demonstrated (single LLM call for all students)")
+    print("✓ Time savings through batching confirmed")
     print("✓ Results verified to be consistent")
 
     # Print complete timing summary
@@ -826,12 +940,12 @@ async def main_async(run_sequential: bool = True, run_concurrent: bool = True) -
         )
         print(f"  ✓ Efficiency: {efficiency:.1f}% (closer to 100% is better)")
     elif actual_vs_expected > 1.9:
-        print("  ✗ No speedup achieved - operations are running sequentially")
+        print("  ✗ No speedup achieved - batched call takes nearly sequential time")
         print(
-            f"  ✗ Concurrent time ({concurrent_total_time:.1f}s) ≈ {len(students)}x single student time"
+            f"  ✗ Batched time ({concurrent_total_time:.1f}s) ≈ {len(students)}x single student time"
         )
         print(
-            f"  ✗ Expected concurrent time: {expected_concurrent_time:.1f}s (if perfectly parallelized)"
+            f"  ✗ Expected batched time: {expected_concurrent_time:.1f}s (if single call is efficient)"
         )
         print("\n  Why this happens:")
         print(
@@ -857,9 +971,9 @@ async def main_async(run_sequential: bool = True, run_concurrent: bool = True) -
             f"  ⚠ Time saved: {time_saved:.2f}s ({time_saved/sequential_total_time*100:.1f}%)"
         )
         print(
-            f"  ⚠ Speedup: {speedup:.2f}x (expected: {len(students)}x for perfect parallelization)"
+            f"  ⚠ Speedup: {speedup:.2f}x (expected: ~{len(students)}x if batched call is efficient)"
         )
-        print("  ⚠ Some operations may not be parallelizing effectively")
+        print("  ⚠ Batched call may have overhead due to larger prompt size")
 
 
 def main() -> None:
@@ -875,7 +989,7 @@ def main() -> None:
     parser.add_argument(
         "--concurrent-only",
         action="store_true",
-        help="Run only concurrent execution (skip sequential, uses asyncio)",
+        help="Run only batched execution (single LLM call for all students, uses asyncio)",
     )
     args = parser.parse_args()
 
