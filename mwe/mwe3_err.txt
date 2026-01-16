@@ -1,0 +1,90 @@
+/Users/erlebach/src/2026/grading_assessment/autograder/.venv/lib/python3.11/site-packages/llama_index/llms/gemini/base.py:20: FutureWarning: 
+
+All support for the `google.generativeai` package has ended. It will no longer be receiving 
+updates or bug fixes. Please switch to the `google.genai` package as soon as possible.
+See README for more details:
+
+https://github.com/google-gemini/deprecated-generative-ai-python/blob/main/README.md
+
+  import google.generativeai as genai
+======================================================================
+MWE 3: LMQL Integration for Structured Grading
+======================================================================
+
+[Step 1] Configuring LlamaIndex and LMQL...
+✓ Configuration loaded
+
+[Step 2] Creating evidence corpus...
+Parsing nodes:   0%|          | 0/5 [00:00<?, ?it/s]Parsing nodes: 100%|██████████| 5/5 [00:00<00:00, 2876.75it/s]
+Generating embeddings:   0%|          | 0/5 [00:00<?, ?it/s]Generating embeddings: 100%|██████████| 5/5 [00:00<00:00, 36.60it/s]Generating embeddings: 100%|██████████| 5/5 [00:00<00:00, 36.57it/s]
+✓ Index created with 5 evidence documents
+
+[Step 3] Setting up evidence retrievers...
+✓ Retrievers initialized
+
+[Step 4] Defining rubric and student answer...
+✓ Rubric: Explain mutual information and its relationship to entropy
+  Criteria: 3
+  Total points: 10
+
+[Step 5] Retrieving evidence for rubric criteria...
+  definition: 2 evidence items
+  properties: 2 evidence items
+  entropy_relation: 2 evidence items
+
+[Step 6] Assigning scores (rubric-driven)...
+✓ Scores assigned: 9/10
+  definition: 4/4
+  properties: 3/3
+  entropy_relation: 2/3
+
+[Step 7] Generating citation-enforced feedback with LMQL...
+  (This may take 10-30 seconds...)
+✓ Feedback generated in 1 attempt(s)
+  Validation passed: True
+
+======================================================================
+Grading Results
+======================================================================
+
+Question: q01
+Score: 9/10
+
+Score Breakdown:
+  definition: 4/4
+  properties: 3/3
+  entropy_relation: 2/3
+
+Citation-Enforced Feedback:
+──────────────────────────────────────────────────────────────────────
+For the definition criterion, mutual information captures both linear and nonlinear dependencies between variables. [slide_14] It can detect any type of statistical dependence. [slide_14] For the properties criterion, the mutual information is always non-negative: I(X;Y) >= 0. [slide_13] It is also symmetric: I(X;Y) = I(Y;X). [slide_13] For the entropy_relation criterion, mutual information is related to entropy by: I(X;Y) = H(X) - H(X|Y). [slide_21]
+──────────────────────────────────────────────────────────────────────
+
+Structured Explanation (with citations):
+  [1] For the definition criterion, mutual information captures both linear and nonlinear dependencies between variables.
+      Citations: slide_14
+  [2] It can detect any type of statistical dependence.
+      Citations: slide_14
+  [3] For the properties criterion, the mutual information is always non-negative: I(X;Y) >= 0.
+      Citations: slide_13
+  [4] It is also symmetric: I(X;Y) = I(Y;X).
+      Citations: slide_13
+  [5] For the entropy_relation criterion, mutual information is related to entropy by: I(X;Y) = H(X) - H(X|Y).
+      Citations: slide_21
+
+Evidence Sources Used:
+  [1] slide_13: The mutual information is always non-negative: I(X;Y) >= 0. It equals zero if an...
+  [2] slide_14: Mutual information captures both linear and nonlinear dependencies between varia...
+  [3] slide_21: Conditional entropy H(X|Y) measures the average uncertainty remaining about X af...
+
+======================================================================
+MWE 3 Summary
+======================================================================
+✓ Evidence retrieved for rubric criteria
+✓ Scores assigned deterministically (rubric-driven)
+✓ LMQL-constrained feedback generated
+✓ Every sentence includes citations
+✓ All citations reference valid evidence IDs
+✓ Validation passed
+
+Next: MWE 4 will integrate all components into the full pipeline

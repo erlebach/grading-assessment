@@ -1,0 +1,683 @@
+tests/test_mwe1.py::test_env_config_loads PASSED                                                                                                [ 14%]
+tests/test_mwe1.py::test_llm_configuration PASSED                                                                                               [ 28%]
+tests/test_mwe1.py::test_embedding_configuration FAILED                                                                                         [ 42%]
+tests/test_mwe1.py::test_document_creation PASSED                                                                                               [ 57%]
+tests/test_mwe1.py::test_index_creation FAILED                                                                                                  [ 71%]
+tests/test_mwe1.py::test_query_retrieval FAILED                                                                                                 [ 85%]
+tests/test_mwe1.py::test_retrieval_relevance
+FAILED                                                                                             [100%]
+
+====================================================================== FAILURES =======================================================================
+____________________________________________________________ test_embedding_configuration _____________________________________________________________
+
+    def test_embedding_configuration() -> None:
+        """Test embedding model configuration."""
+>       embed_model = configure_embedding("openai")
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_mwe1.py:37:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+config/llm_config.py:86: in configure_embedding
+    return OpenAIEmbedding(model=model_name, api_key=api_key)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/llama_index/embeddings/openai/base.py:307: in __init__
+    query_engine = get_engine(mode, model, _QUERY_MODE_MODEL_DICT)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/llama_index/embeddings/openai/base.py:208: in get_engine
+    key = (OpenAIEmbeddingMode(mode), OpenAIEmbeddingModelType(model))
+                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/enum.py:714: in __call__
+    return cls.__new__(cls, value)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+cls = <enum 'OpenAIEmbeddingModelType'>, value = 'sentence-transformers/all-MiniLM-L6-v2'
+
+    def __new__(cls, value):
+        # all enum instances are actually created during class construction
+        # without calling this method; this method is called by the metaclass'
+        # __call__ (i.e. Color(3) ), and by pickle
+        if type(value) is cls:
+            # For lookups like Color(Color.RED)
+            return value
+        # by-value search for a matching enum member
+        # see if it's in the reverse mapping (for hashable values)
+        try:
+            return cls._value2member_map_[value]
+        except KeyError:
+            # Not found, no need to do long O(n) search
+            pass
+        except TypeError:
+            # not there, now do long search -- O(n) behavior
+            for member in cls._member_map_.values():
+                if member._value_ == value:
+                    return member
+        # still not found -- try _missing_ hook
+        try:
+            exc = None
+            result = cls._missing_(value)
+        except Exception as e:
+            exc = e
+            result = None
+        try:
+            if isinstance(result, cls):
+                return result
+            elif (
+                    Flag is not None and issubclass(cls, Flag)
+                    and cls._boundary_ is EJECT and isinstance(result, int)
+                ):
+                return result
+            else:
+                ve_exc = ValueError("%r is not a valid %s" % (value, cls.__qualname__))
+                if result is None and exc is None:
+>                   raise ve_exc
+E                   ValueError: 'sentence-transformers/all-MiniLM-L6-v2' is not a valid OpenAIEmbeddingModelType
+
+/Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/enum.py:1130: ValueError
+_________________________________________________________________ test_index_creation _________________________________________________________________
+
+        assert len(documents) == len(texts)
+        for doc, text in zip(documents, texts):
+            assert doc.text == text
+
+
+    def test_index_creation() -> None:
+        """Test creating an in-memory vector index."""
+        texts = [
+            "Mutual information measures statistical dependence.",
+>           "Entropy measures uncertainty in a random variable.",
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+            "Data quality includes accuracy and completeness.",
+        ]
+
+tests/test_mwe1.py:60:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+evidence/llamaindex_setup.py:46: in create_in_memory_index
+    index = VectorStoreIndex.from_documents(
+.venv/lib/python3.11/site-packages/llama_index/core/indices/base.py:122: in from_documents
+    return cls(
+.venv/lib/python3.11/site-packages/llama_index/core/indices/vector_store/base.py:75: in __init__
+    super().__init__(
+.venv/lib/python3.11/site-packages/llama_index/core/indices/base.py:79: in __init__
+    index_struct = self.build_index_from_nodes(
+.venv/lib/python3.11/site-packages/llama_index/core/indices/vector_store/base.py:309: in build_index_from_nodes
+    return self._build_index_from_nodes(content_nodes, **insert_kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/llama_index/core/indices/vector_store/base.py:278: in _build_index_from_nodes
+    self._add_nodes_to_index(
+.venv/lib/python3.11/site-packages/llama_index/core/indices/vector_store/base.py:231: in _add_nodes_to_index
+    nodes_batch = self._get_node_with_embedding(nodes_batch, show_progress)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/llama_index/core/indices/vector_store/base.py:138: in _get_node_with_embedding
+    id_to_embed_map = embed_nodes(
+.venv/lib/python3.11/site-packages/llama_index/core/indices/utils.py:177: in embed_nodes
+    new_embeddings = embed_model.get_text_embedding_batch(
+.venv/lib/python3.11/site-packages/llama_index_instrumentation/dispatcher.py:335: in wrapper
+    result = func(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/llama_index/core/base/embeddings/base.py:473: in get_text_embedding_batch
+    embeddings = self._get_text_embeddings(cur_batch)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/llama_index/embeddings/openai/base.py:472: in _get_text_embeddings
+    return _retryable_get_embeddings()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/tenacity/__init__.py:338: in wrapped_f
+    return copy(f, *args, **kw)
+           ^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/tenacity/__init__.py:477: in __call__
+    do = self.iter(retry_state=retry_state)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/tenacity/__init__.py:378: in iter
+    result = action(retry_state)
+             ^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/tenacity/__init__.py:420: in exc_check
+    raise retry_exc.reraise()
+          ^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/tenacity/__init__.py:187: in reraise
+    raise self.last_attempt.result()
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/concurrent/futures/_base.py:449: in result
+    return self.__get_result()
+           ^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/concurrent/futures/_base.py:401: in __get_result
+    raise self._exception
+.venv/lib/python3.11/site-packages/tenacity/__init__.py:480: in __call__
+    result = fn(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/llama_index/embeddings/openai/base.py:465: in _retryable_get_embeddings
+    return get_embeddings(
+.venv/lib/python3.11/site-packages/llama_index/embeddings/openai/base.py:172: in get_embeddings
+    data = client.embeddings.create(input=list_of_text, model=engine, **kwargs).data
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/openai/resources/embeddings.py:132: in create
+    return self._post(
+.venv/lib/python3.11/site-packages/openai/_base_client.py:1259: in post
+    return cast(ResponseT, self.request(cast_to, opts, stream=stream, stream_cls=stream_cls))
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <openai.OpenAI object at 0x15bbbe090>, cast_to = <class 'openai.types.create_embedding_response.CreateEmbeddingResponse'>
+options = FinalRequestOptions(method='post', url='/embeddings', params={}, headers=NOT_GIVEN, max_retries=NOT_GIVEN, timeout=NOT...ncludes accuracy and completeness.'], 'model': 'text-embedding-ada-002', 'encoding_format': 'base64'}, extra_json=None)
+
+    def request(
+        self,
+        cast_to: Type[ResponseT],
+        options: FinalRequestOptions,
+        *,
+        stream: bool = False,
+        stream_cls: type[_StreamT] | None = None,
+    ) -> ResponseT | _StreamT:
+        cast_to = self._maybe_override_cast_to(cast_to, options)
+
+        # create a copy of the options we were given so that if the
+        # options are mutated later & we then retry, the retries are
+        # given the original options
+        input_options = model_copy(options)
+        if input_options.idempotency_key is None and input_options.method.lower() != "get":
+            # ensure the idempotency key is reused between requests
+            input_options.idempotency_key = self._idempotency_key()
+
+        response: httpx.Response | None = None
+        max_retries = input_options.get_max_retries(self.max_retries)
+
+        retries_taken = 0
+        for retries_taken in range(max_retries + 1):
+            options = model_copy(input_options)
+            options = self._prepare_options(options)
+
+            remaining_retries = max_retries - retries_taken
+            request = self._build_request(options, retries_taken=retries_taken)
+            self._prepare_request(request)
+
+            kwargs: HttpxSendArgs = {}
+            if self.custom_auth is not None:
+                kwargs["auth"] = self.custom_auth
+
+            if options.follow_redirects is not None:
+                kwargs["follow_redirects"] = options.follow_redirects
+
+            log.debug("Sending HTTP Request: %s %s", request.method, request.url)
+
+            response = None
+            try:
+                response = self._client.send(
+                    request,
+                    stream=stream or self._should_stream_response_body(request=request),
+                    **kwargs,
+                )
+            except httpx.TimeoutException as err:
+                log.debug("Encountered httpx.TimeoutException", exc_info=True)
+
+                if remaining_retries > 0:
+                    self._sleep_for_retry(
+                        retries_taken=retries_taken,
+                        max_retries=max_retries,
+                        options=input_options,
+                        response=None,
+                    )
+                    continue
+
+                log.debug("Raising timeout error")
+                raise APITimeoutError(request=request) from err
+            except Exception as err:
+                log.debug("Encountered Exception", exc_info=True)
+
+                if remaining_retries > 0:
+                    self._sleep_for_retry(
+                        retries_taken=retries_taken,
+                        max_retries=max_retries,
+                        options=input_options,
+                        response=None,
+                    )
+                    continue
+
+                log.debug("Raising connection error")
+                raise APIConnectionError(request=request) from err
+
+            log.debug(
+                'HTTP Response: %s %s "%i %s" %s',
+                request.method,
+                request.url,
+                response.status_code,
+                response.reason_phrase,
+                response.headers,
+            )
+            log.debug("request_id: %s", response.headers.get("x-request-id"))
+
+            try:
+                response.raise_for_status()
+            except httpx.HTTPStatusError as err:  # thrown on 4xx and 5xx status code
+                log.debug("Encountered httpx.HTTPStatusError", exc_info=True)
+
+                if remaining_retries > 0 and self._should_retry(err.response):
+                    err.response.close()
+                    self._sleep_for_retry(
+                        retries_taken=retries_taken,
+                        max_retries=max_retries,
+                        options=input_options,
+                        response=response,
+                    )
+                    continue
+
+                # If the response is streamed then we need to explicitly read the response
+                # to completion before attempting to access the response text.
+                if not err.response.is_closed:
+                    err.response.read()
+
+                log.debug("Re-raising status error")
+>               raise self._make_status_error_from_response(err.response) from None
+E               openai.RateLimitError: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}
+
+.venv/lib/python3.11/site-packages/openai/_base_client.py:1047: RateLimitError
+---------------------------------------------------------------- Captured stderr call -----------------------------------------------------------------
+Parsing nodes: 100%|██████████| 3/3 [00:00<00:00, 1903.62it/s]
+Generating embeddings:   0%|          | 0/3 [00:00<?, ?it/s]
+------------------------------------------------------------------ Captured log call ------------------------------------------------------------------
+WARNING  llama_index.embeddings.openai.utils:before_sleep.py:65 Retrying llama_index.embeddings.openai.base.OpenAIEmbedding._get_text_embeddings.<locals>._retryable_get_embeddings in 1.0 seconds as it raised RateLimitError: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}.
+________________________________________________________________ test_query_retrieval _________________________________________________________________
+
+        index = create_in_memory_index(documents, chunk_size=200, chunk_overlap=20)
+
+        assert index is not None
+
+
+    def test_query_retrieval() -> None:
+        """Test querying the index and retrieving results."""
+        texts = [
+            "Mutual information I(X;Y) measures the reduction in uncertainty.",
+>           "The mutual information is always non-negative and symmetric.",
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+            "Entropy H(X) measures the average information content.",
+        ]
+
+tests/test_mwe1.py:74:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+evidence/llamaindex_setup.py:46: in create_in_memory_index
+    index = VectorStoreIndex.from_documents(
+.venv/lib/python3.11/site-packages/llama_index/core/indices/base.py:122: in from_documents
+    return cls(
+.venv/lib/python3.11/site-packages/llama_index/core/indices/vector_store/base.py:75: in __init__
+    super().__init__(
+.venv/lib/python3.11/site-packages/llama_index/core/indices/base.py:79: in __init__
+    index_struct = self.build_index_from_nodes(
+.venv/lib/python3.11/site-packages/llama_index/core/indices/vector_store/base.py:309: in build_index_from_nodes
+    return self._build_index_from_nodes(content_nodes, **insert_kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/llama_index/core/indices/vector_store/base.py:278: in _build_index_from_nodes
+    self._add_nodes_to_index(
+.venv/lib/python3.11/site-packages/llama_index/core/indices/vector_store/base.py:231: in _add_nodes_to_index
+    nodes_batch = self._get_node_with_embedding(nodes_batch, show_progress)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/llama_index/core/indices/vector_store/base.py:138: in _get_node_with_embedding
+    id_to_embed_map = embed_nodes(
+.venv/lib/python3.11/site-packages/llama_index/core/indices/utils.py:177: in embed_nodes
+    new_embeddings = embed_model.get_text_embedding_batch(
+.venv/lib/python3.11/site-packages/llama_index_instrumentation/dispatcher.py:335: in wrapper
+    result = func(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/llama_index/core/base/embeddings/base.py:473: in get_text_embedding_batch
+    embeddings = self._get_text_embeddings(cur_batch)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/llama_index/embeddings/openai/base.py:472: in _get_text_embeddings
+    return _retryable_get_embeddings()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/tenacity/__init__.py:338: in wrapped_f
+    return copy(f, *args, **kw)
+           ^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/tenacity/__init__.py:477: in __call__
+    do = self.iter(retry_state=retry_state)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/tenacity/__init__.py:378: in iter
+    result = action(retry_state)
+             ^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/tenacity/__init__.py:420: in exc_check
+    raise retry_exc.reraise()
+          ^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/tenacity/__init__.py:187: in reraise
+    raise self.last_attempt.result()
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/concurrent/futures/_base.py:449: in result
+    return self.__get_result()
+           ^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/concurrent/futures/_base.py:401: in __get_result
+    raise self._exception
+.venv/lib/python3.11/site-packages/tenacity/__init__.py:480: in __call__
+    result = fn(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/llama_index/embeddings/openai/base.py:465: in _retryable_get_embeddings
+    return get_embeddings(
+.venv/lib/python3.11/site-packages/llama_index/embeddings/openai/base.py:172: in get_embeddings
+    data = client.embeddings.create(input=list_of_text, model=engine, **kwargs).data
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/openai/resources/embeddings.py:132: in create
+    return self._post(
+.venv/lib/python3.11/site-packages/openai/_base_client.py:1259: in post
+    return cast(ResponseT, self.request(cast_to, opts, stream=stream, stream_cls=stream_cls))
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <openai.OpenAI object at 0x15bbbe090>, cast_to = <class 'openai.types.create_embedding_response.CreateEmbeddingResponse'>
+options = FinalRequestOptions(method='post', url='/embeddings', params={}, headers=NOT_GIVEN, max_retries=NOT_GIVEN, timeout=NOT...s the average information content.'], 'model': 'text-embedding-ada-002', 'encoding_format': 'base64'}, extra_json=None)
+
+    def request(
+        self,
+        cast_to: Type[ResponseT],
+        options: FinalRequestOptions,
+        *,
+        stream: bool = False,
+        stream_cls: type[_StreamT] | None = None,
+    ) -> ResponseT | _StreamT:
+        cast_to = self._maybe_override_cast_to(cast_to, options)
+
+        # create a copy of the options we were given so that if the
+        # options are mutated later & we then retry, the retries are
+        # given the original options
+        input_options = model_copy(options)
+        if input_options.idempotency_key is None and input_options.method.lower() != "get":
+            # ensure the idempotency key is reused between requests
+            input_options.idempotency_key = self._idempotency_key()
+
+        response: httpx.Response | None = None
+        max_retries = input_options.get_max_retries(self.max_retries)
+
+        retries_taken = 0
+        for retries_taken in range(max_retries + 1):
+            options = model_copy(input_options)
+            options = self._prepare_options(options)
+
+            remaining_retries = max_retries - retries_taken
+            request = self._build_request(options, retries_taken=retries_taken)
+            self._prepare_request(request)
+
+            kwargs: HttpxSendArgs = {}
+            if self.custom_auth is not None:
+                kwargs["auth"] = self.custom_auth
+
+            if options.follow_redirects is not None:
+                kwargs["follow_redirects"] = options.follow_redirects
+
+            log.debug("Sending HTTP Request: %s %s", request.method, request.url)
+
+            response = None
+            try:
+                response = self._client.send(
+                    request,
+                    stream=stream or self._should_stream_response_body(request=request),
+                    **kwargs,
+                )
+            except httpx.TimeoutException as err:
+                log.debug("Encountered httpx.TimeoutException", exc_info=True)
+
+                if remaining_retries > 0:
+                    self._sleep_for_retry(
+                        retries_taken=retries_taken,
+                        max_retries=max_retries,
+                        options=input_options,
+                        response=None,
+                    )
+                    continue
+
+                log.debug("Raising timeout error")
+                raise APITimeoutError(request=request) from err
+            except Exception as err:
+                log.debug("Encountered Exception", exc_info=True)
+
+                if remaining_retries > 0:
+                    self._sleep_for_retry(
+                        retries_taken=retries_taken,
+                        max_retries=max_retries,
+                        options=input_options,
+                        response=None,
+                    )
+                    continue
+
+                log.debug("Raising connection error")
+                raise APIConnectionError(request=request) from err
+
+            log.debug(
+                'HTTP Response: %s %s "%i %s" %s',
+                request.method,
+                request.url,
+                response.status_code,
+                response.reason_phrase,
+                response.headers,
+            )
+            log.debug("request_id: %s", response.headers.get("x-request-id"))
+
+            try:
+                response.raise_for_status()
+            except httpx.HTTPStatusError as err:  # thrown on 4xx and 5xx status code
+                log.debug("Encountered httpx.HTTPStatusError", exc_info=True)
+
+                if remaining_retries > 0 and self._should_retry(err.response):
+                    err.response.close()
+                    self._sleep_for_retry(
+                        retries_taken=retries_taken,
+                        max_retries=max_retries,
+                        options=input_options,
+                        response=response,
+                    )
+                    continue
+
+                # If the response is streamed then we need to explicitly read the response
+                # to completion before attempting to access the response text.
+                if not err.response.is_closed:
+                    err.response.read()
+
+                log.debug("Re-raising status error")
+>               raise self._make_status_error_from_response(err.response) from None
+E               openai.RateLimitError: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}
+
+.venv/lib/python3.11/site-packages/openai/_base_client.py:1047: RateLimitError
+---------------------------------------------------------------- Captured stderr call -----------------------------------------------------------------
+Parsing nodes: 100%|██████████| 3/3 [00:00<00:00, 8689.86it/s]
+Parsing nodes:   0%|          | 0/3 [00:00<?, ?it/s]
+------------------------------------------------------------------ Captured log call ------------------------------------------------------------------
+WARNING  llama_index.embeddings.openai.utils:before_sleep.py:65 Retrying llama_index.embeddings.openai.base.OpenAIEmbedding._get_text_embeddings.<locals>._retryable_get_embeddings in 1.0 seconds as it raised RateLimitError: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}.
+______________________________________________________________ test_retrieval_relevance _______________________________________________________________
+
+        # Check that scores are reasonable (should be positive)
+        assert all(result["score"] > 0 for result in results)
+
+
+    def test_retrieval_relevance() -> None:
+        """Test that retrieval returns relevant results."""
+        texts = [
+            "Mutual information measures statistical dependence between variables.",
+            "Entropy is a measure of uncertainty in probability theory.",
+>               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+            "Python is a programming language used for data science.",
+        ]
+
+tests/test_mwe1.py:97:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+evidence/llamaindex_setup.py:46: in create_in_memory_index
+    index = VectorStoreIndex.from_documents(
+.venv/lib/python3.11/site-packages/llama_index/core/indices/base.py:122: in from_documents
+    return cls(
+.venv/lib/python3.11/site-packages/llama_index/core/indices/vector_store/base.py:75: in __init__
+    super().__init__(
+.venv/lib/python3.11/site-packages/llama_index/core/indices/base.py:79: in __init__
+    index_struct = self.build_index_from_nodes(
+.venv/lib/python3.11/site-packages/llama_index/core/indices/vector_store/base.py:309: in build_index_from_nodes
+    return self._build_index_from_nodes(content_nodes, **insert_kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/llama_index/core/indices/vector_store/base.py:278: in _build_index_from_nodes
+    self._add_nodes_to_index(
+.venv/lib/python3.11/site-packages/llama_index/core/indices/vector_store/base.py:231: in _add_nodes_to_index
+    nodes_batch = self._get_node_with_embedding(nodes_batch, show_progress)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/llama_index/core/indices/vector_store/base.py:138: in _get_node_with_embedding
+    id_to_embed_map = embed_nodes(
+.venv/lib/python3.11/site-packages/llama_index/core/indices/utils.py:177: in embed_nodes
+    new_embeddings = embed_model.get_text_embedding_batch(
+.venv/lib/python3.11/site-packages/llama_index_instrumentation/dispatcher.py:335: in wrapper
+    result = func(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/llama_index/core/base/embeddings/base.py:473: in get_text_embedding_batch
+    embeddings = self._get_text_embeddings(cur_batch)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/llama_index/embeddings/openai/base.py:472: in _get_text_embeddings
+    return _retryable_get_embeddings()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/tenacity/__init__.py:338: in wrapped_f
+    return copy(f, *args, **kw)
+           ^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/tenacity/__init__.py:477: in __call__
+    do = self.iter(retry_state=retry_state)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/tenacity/__init__.py:378: in iter
+    result = action(retry_state)
+             ^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/tenacity/__init__.py:420: in exc_check
+    raise retry_exc.reraise()
+          ^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/tenacity/__init__.py:187: in reraise
+    raise self.last_attempt.result()
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/concurrent/futures/_base.py:449: in result
+    return self.__get_result()
+           ^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/concurrent/futures/_base.py:401: in __get_result
+    raise self._exception
+.venv/lib/python3.11/site-packages/tenacity/__init__.py:480: in __call__
+    result = fn(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/llama_index/embeddings/openai/base.py:465: in _retryable_get_embeddings
+    return get_embeddings(
+.venv/lib/python3.11/site-packages/llama_index/embeddings/openai/base.py:172: in get_embeddings
+    data = client.embeddings.create(input=list_of_text, model=engine, **kwargs).data
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/openai/resources/embeddings.py:132: in create
+    return self._post(
+.venv/lib/python3.11/site-packages/openai/_base_client.py:1259: in post
+    return cast(ResponseT, self.request(cast_to, opts, stream=stream, stream_cls=stream_cls))
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <openai.OpenAI object at 0x15bbbe090>, cast_to = <class 'openai.types.create_embedding_response.CreateEmbeddingResponse'>
+options = FinalRequestOptions(method='post', url='/embeddings', params={}, headers=NOT_GIVEN, max_retries=NOT_GIVEN, timeout=NOT...ng language used for data science.'], 'model': 'text-embedding-ada-002', 'encoding_format': 'base64'}, extra_json=None)
+
+    def request(
+        self,
+        cast_to: Type[ResponseT],
+        options: FinalRequestOptions,
+        *,
+        stream: bool = False,
+        stream_cls: type[_StreamT] | None = None,
+    ) -> ResponseT | _StreamT:
+        cast_to = self._maybe_override_cast_to(cast_to, options)
+
+        # create a copy of the options we were given so that if the
+        # options are mutated later & we then retry, the retries are
+        # given the original options
+        input_options = model_copy(options)
+        if input_options.idempotency_key is None and input_options.method.lower() != "get":
+            # ensure the idempotency key is reused between requests
+            input_options.idempotency_key = self._idempotency_key()
+
+        response: httpx.Response | None = None
+        max_retries = input_options.get_max_retries(self.max_retries)
+
+        retries_taken = 0
+        for retries_taken in range(max_retries + 1):
+            options = model_copy(input_options)
+            options = self._prepare_options(options)
+
+            remaining_retries = max_retries - retries_taken
+            request = self._build_request(options, retries_taken=retries_taken)
+            self._prepare_request(request)
+
+            kwargs: HttpxSendArgs = {}
+            if self.custom_auth is not None:
+                kwargs["auth"] = self.custom_auth
+
+            if options.follow_redirects is not None:
+                kwargs["follow_redirects"] = options.follow_redirects
+
+            log.debug("Sending HTTP Request: %s %s", request.method, request.url)
+
+            response = None
+            try:
+                response = self._client.send(
+                    request,
+                    stream=stream or self._should_stream_response_body(request=request),
+                    **kwargs,
+                )
+            except httpx.TimeoutException as err:
+                log.debug("Encountered httpx.TimeoutException", exc_info=True)
+
+                if remaining_retries > 0:
+                    self._sleep_for_retry(
+                        retries_taken=retries_taken,
+                        max_retries=max_retries,
+                        options=input_options,
+                        response=None,
+                    )
+                    continue
+
+                log.debug("Raising timeout error")
+                raise APITimeoutError(request=request) from err
+            except Exception as err:
+                log.debug("Encountered Exception", exc_info=True)
+
+                if remaining_retries > 0:
+                    self._sleep_for_retry(
+                        retries_taken=retries_taken,
+                        max_retries=max_retries,
+                        options=input_options,
+                        response=None,
+                    )
+                    continue
+
+                log.debug("Raising connection error")
+                raise APIConnectionError(request=request) from err
+
+            log.debug(
+                'HTTP Response: %s %s "%i %s" %s',
+                request.method,
+                request.url,
+                response.status_code,
+                response.reason_phrase,
+                response.headers,
+            )
+            log.debug("request_id: %s", response.headers.get("x-request-id"))
+
+            try:
+                response.raise_for_status()
+            except httpx.HTTPStatusError as err:  # thrown on 4xx and 5xx status code
+                log.debug("Encountered httpx.HTTPStatusError", exc_info=True)
+
+                if remaining_retries > 0 and self._should_retry(err.response):
+                    err.response.close()
+                    self._sleep_for_retry(
+                        retries_taken=retries_taken,
+                        max_retries=max_retries,
+                        options=input_options,
+                        response=response,
+                    )
+                    continue
+
+                # If the response is streamed then we need to explicitly read the response
+                # to completion before attempting to access the response text.
+                if not err.response.is_closed:
+                    err.response.read()
+
+                log.debug("Re-raising status error")
+>               raise self._make_status_error_from_response(err.response) from None
+E               openai.RateLimitError: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}
+
+.venv/lib/python3.11/site-packages/openai/_base_client.py:1047: RateLimitError
+---------------------------------------------------------------- Captured stderr call -----------------------------------------------------------------
+Parsing nodes: 100%|██████████| 3/3 [00:00<00:00, 5435.38it/s]
+
+------------------------------------------------------------------ Captured log call ------------------------------------------------------------------
+WARNING  llama_index.embeddings.openai.utils:before_sleep.py:65 Retrying llama_index.embeddings.openai.base.OpenAIEmbedding._get_text_embeddings.<locals>._retryable_get_embeddings in 1.0 seconds as it raised RateLimitError: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}.
+=============================================================== short test summary info ===============================================================
+FAILED tests/test_mwe1.py::test_embedding_configuration - ValueError: 'sentence-transformers/all-MiniLM-L6-v2' is not a valid OpenAIEmbeddingModelType
+FAILED tests/test_mwe1.py::test_index_creation - openai.RateLimitError: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For m...
+FAILED tests/test_mwe1.py::test_query_retrieval - openai.RateLimitError: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For m...
+FAILED tests/test_mwe1.py::test_retrieval_relevance - openai.RateLimitError: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For m...
+======================================================= 4 failed, 3 passed in 309.08s (0:05:09) =======================================================
+Generating embeddings:  67%|██████▋   | 2/3 [05:04<02:32, 152.20s/it]
+Generating embeddings:  67%|██████▋   | 2/3 [03:24<01:42, 102.14s/it]
