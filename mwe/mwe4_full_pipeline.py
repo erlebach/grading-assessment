@@ -17,6 +17,7 @@ Usage:
 
 """
 
+import time
 from pathlib import Path
 
 from config.llm_config import setup_llamaindex_defaults
@@ -125,18 +126,26 @@ def main() -> None:
     print("MWE 4: Full Pipeline Integration")
     print("=" * 70)
 
+    # Initialize timings dictionary
+    timings: dict[str, float] = {}
+
     # Step 1: Setup
     print("\n[Step 1] Configuring system...")
+    start_time = time.time()
     setup_llamaindex_defaults()
+    timings["step_1_setup"] = time.time() - start_time
     print("✓ Configuration loaded")
 
     # Step 2: Create sample evidence index
     print("\n[Step 2] Creating sample evidence index...")
+    start_time = time.time()
     index_path = create_sample_evidence_index()
+    timings["step_2_create_index"] = time.time() - start_time
     print(f"✓ Index created at {index_path}")
 
     # Step 3: Create sample rubric and submission
     print("\n[Step 3] Creating sample rubric and submission...")
+    start_time = time.time()
 
     rubric = create_sample_rubric()
     print(f"✓ Rubric: {rubric['question_text']}")
@@ -151,19 +160,24 @@ def main() -> None:
     """
 
     print(f"\n  Student answer: {student_answer.strip()[:100]}...")
+    timings["step_3_create_rubric"] = time.time() - start_time
 
     # Step 4: Load evidence index and create retrievers
     print("\n[Step 4] Loading evidence index...")
+    start_time = time.time()
     index = load_saved_index(index_path)
     base_retriever = EvidenceRetriever(index)
     grading_retriever = GradingEvidenceRetriever(base_retriever)
+    timings["step_4_load_index"] = time.time() - start_time
     print("✓ Evidence retriever initialized")
 
     # Step 5: Retrieve evidence for rubric
     print("\n[Step 5] Retrieving evidence for rubric criteria...")
+    start_time = time.time()
     evidence_by_criterion = grading_retriever.retrieve_for_rubric(
         rubric, student_answer, top_k_per_criterion=2
     )
+    timings["step_5_retrieve_evidence"] = time.time() - start_time
 
     for criterion_id, evidence_list in evidence_by_criterion.items():
         print(f"  {criterion_id}: {len(evidence_list)} evidence items")
@@ -174,7 +188,9 @@ def main() -> None:
     # Import the scoring function
     from grader.grade_question import apply_rubric_scoring
 
+    start_time = time.time()
     scores = apply_rubric_scoring(rubric, student_answer, evidence_by_criterion)
+    timings["step_6_apply_scoring"] = time.time() - start_time
 
     total_score = sum(s["score"] for s in scores.values())
     max_score = sum(s["max_score"] for s in scores.values())
@@ -187,6 +203,7 @@ def main() -> None:
     print("\n[Step 7] Generating citation-enforced feedback...")
     print("  (This may take 10-30 seconds...)")
 
+    start_time = time.time()
     lmql_grader = LMQLGrader()
     grading_result = lmql_grader.grade_with_feedback(
         rubric=rubric,
@@ -194,6 +211,7 @@ def main() -> None:
         evidence_by_criterion=evidence_by_criterion,
         scores=scores,
     )
+    timings["step_7_generate_feedback"] = time.time() - start_time
 
     print(f"✓ Feedback generated")
     print(f"  Validation passed: {grading_result['validation_passed']}")
@@ -245,11 +263,13 @@ def main() -> None:
         rubric_path = Path(f.name)
 
     # Call grade_question
+    start_time = time.time()
     result = grade_question(
         submission_path=submission_path,
         rubric_path=rubric_path,
         evidence_index_path=index_path,
     )
+    timings["step_9_grade_question"] = time.time() - start_time
 
     print(f"\n✓ Question: {result['question_id']}")
     print(f"  Score: {result['score']}/{result['max_score']}")
@@ -286,6 +306,18 @@ def main() -> None:
     print("  - Grades before feedback: Scores assigned deterministically first")
     print("  - Citation-enforced: Every explanation sentence cites evidence")
     print("  - Bounded variance: Deterministic outcomes with auditability")
+
+    # Print timing summary
+    print("\n" + "=" * 70)
+    print("Timing Summary")
+    print("=" * 70)
+    total_time = sum(timings.values())
+    for step_name, elapsed_time in sorted(timings.items()):
+        percentage = (elapsed_time / total_time * 100) if total_time > 0 else 0
+        print(f"{step_name:30s}: {elapsed_time:8.3f}s ({percentage:5.1f}%)")
+    print("-" * 70)
+    print(f"{'Total time':30s}: {total_time:8.3f}s")
+    print("=" * 70)
 
 
 if __name__ == "__main__":
