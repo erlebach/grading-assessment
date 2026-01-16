@@ -205,5 +205,6 @@ After completing all MWEs:
 
 - [Architecture Design](../docs/DESIGN.md)
 - [ADR: RAG is Authoritative](../docs/adr/0001-rag-is-authoritative.md)
-- [Original MWE Plan](../docs/MWE_PLAN.md)
+- [Original MWE Plan](MWE_PLAN.md)
+- [Implementation Summary](IMPLEMENTATION_SUMMARY.md)
 - [Main README](../README.md)
