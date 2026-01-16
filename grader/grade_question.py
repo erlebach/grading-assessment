@@ -99,14 +99,17 @@ def apply_rubric_scoring(
 def extract_keywords(description: str) -> list[str]:
     """Extract key terms from criterion description.
 
+    Filters out meta-words (instructional words about what students should do)
+    and keeps only substantive keywords related to the subject matter.
+
     Args:
         description: Criterion description text.
 
     Returns:
-        List of keywords.
+        List of keywords related to the subject matter.
 
     """
-    # Simple keyword extraction (remove common words)
+    # Common stop words (articles, prepositions, etc.)
     stop_words = {
         "the",
         "a",
@@ -127,8 +130,44 @@ def extract_keywords(description: str) -> list[str]:
         "were",
     }
 
+    # Meta-words: instructional words that describe the task, not the subject
+    # These should not be required keywords since they're about what to do,
+    # not what the answer should contain
+    meta_words = {
+        "correctly",
+        "defines",
+        "define",
+        "explains",
+        "explain",
+        "relates",
+        "relate",
+        "describes",
+        "describe",
+        "discusses",
+        "discuss",
+        "identifies",
+        "identify",
+        "lists",
+        "list",
+        "properties",  # "key properties" is about structure, not content
+        "property",
+        "concepts",  # "entropy concepts" - "concepts" is meta
+        "concept",
+        "key",  # "key properties" - "key" is meta
+        "like",  # "like X and Y" - "like" is a comparison word
+        "such",  # "such as" - comparison word
+        "should",
+        "must",
+        "needs",
+        "need",
+    }
+
     words = description.lower().split()
-    keywords = [w.strip(",.!?") for w in words if w not in stop_words and len(w) > 3]
+    keywords = [
+        w.strip(",.!?")
+        for w in words
+        if w not in stop_words and w not in meta_words and len(w) > 3
+    ]
 
     return keywords
 
