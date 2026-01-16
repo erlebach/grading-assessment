@@ -896,6 +896,13 @@ Examples:
     mode = args.mode
     num_students = args.num_students
 
+    if mode == "sequential":
+        main_sync(num_students)
+    elif mode == "batched":
+        asyncio.run(main_async(mode, num_students))
+    elif mode == "async":
+        asyncio.run(main_async(mode, num_students))
+
     # Route to appropriate function based on mode
     if mode == "sequential":
         main_sync(mode, num_students)
