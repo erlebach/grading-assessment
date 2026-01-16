@@ -36,6 +36,80 @@ class LMQLGrader:
         else:
             self.llm = llm
 
+    async def generate_explanation_async(
+        self,
+        grading_record: dict[str, Any],
+        evidence_spans: list[dict[str, Any]],
+        student_answer: str,
+        max_retries: int = 3,
+    ) -> dict[str, Any]:
+        """Generate citation-enforced explanation for grading decision (async).
+
+        Args:
+            grading_record: Dictionary mapping criterion_id to score information.
+            evidence_spans: List of evidence dictionaries with source_id and text.
+            student_answer: Student's answer text.
+            max_retries: Maximum number of retry attempts if validation fails.
+
+        Returns:
+            Dictionary containing:
+            - explanation: Structured explanation with sentences and citations
+            - formatted_text: Human-readable explanation with inline citations
+            - valid: Whether explanation passed validation
+
+        """
+        # Get valid evidence IDs
+        valid_evidence_ids = [e["source_id"] for e in evidence_spans]
+
+        # Format prompt
+        prompt = format_grading_prompt(grading_record, evidence_spans, student_answer)
+
+        # Try to generate valid explanation
+        for attempt in range(max_retries):
+            # Generate response using LLM (async)
+            messages = [
+                ChatMessage(role=MessageRole.SYSTEM, content="You are a precise grading assistant that always follows instructions exactly and provides properly cited explanations."),
+                ChatMessage(role=MessageRole.USER, content=prompt),
+            ]
+
+            response = await self.llm.achat(messages)
+            response_text = response.message.content
+
+            # Parse response
+            try:
+                explanation = parse_lmql_response(response_text)
+
+                # Validate citation completeness
+                if validate_explanation(explanation, valid_evidence_ids):
+                    # Success!
+                    formatted_text = format_explanation_text(explanation)
+                    return {
+                        "explanation": explanation,
+                        "formatted_text": formatted_text,
+                        "valid": True,
+                        "attempts": attempt + 1,
+                    }
+                else:
+                    # Validation failed, try again
+                    if attempt < max_retries - 1:
+                        # Add feedback for next attempt
+                        prompt += (
+                            "\n\nPREVIOUS ATTEMPT FAILED VALIDATION. "
+                            "Ensure EVERY sentence has at least one valid citation ID."
+                        )
+            except (ValueError, KeyError) as e:
+                # Parsing failed, try again
+                if attempt < max_retries - 1:
+                    prompt += f"\n\nPREVIOUS ATTEMPT FAILED PARSING: {e}. Please return valid JSON."
+
+        # All attempts failed
+        return {
+            "explanation": None,
+            "formatted_text": "Error: Could not generate valid cited explanation.",
+            "valid": False,
+            "attempts": max_retries,
+        }
+
     def generate_explanation(
         self,
         grading_record: dict[str, Any],
@@ -43,7 +117,7 @@ class LMQLGrader:
         student_answer: str,
         max_retries: int = 3,
     ) -> dict[str, Any]:
-        """Generate citation-enforced explanation for grading decision.
+        """Generate citation-enforced explanation for grading decision (synchronous).
 
         Args:
             grading_record: Dictionary mapping criterion_id to score information.
@@ -144,6 +218,60 @@ class LMQLGrader:
 
         # Generate explanation with citations
         result = self.generate_explanation(
+            grading_record=scores,
+            evidence_spans=unique_evidence,
+            student_answer=student_answer,
+        )
+
+        # Build complete grading result
+        grading_result = {
+            "question_id": rubric.get("question_id", "unknown"),
+            "student_answer": student_answer,
+            "scores": scores,
+            "total_score": sum(s["score"] for s in scores.values()),
+            "max_score": sum(s["max_score"] for s in scores.values()),
+            "explanation": result["explanation"],
+            "feedback": result["formatted_text"],
+            "evidence_used": unique_evidence,
+            "validation_passed": result["valid"],
+        }
+
+        return grading_result
+
+    async def grade_with_feedback_async(
+        self,
+        rubric: dict[str, Any],
+        student_answer: str,
+        evidence_by_criterion: dict[str, list[dict[str, Any]]],
+        scores: dict[str, dict[str, Any]],
+    ) -> dict[str, Any]:
+        """Generate complete grading with citation-enforced feedback (async).
+
+        Args:
+            rubric: Rubric dictionary with criteria.
+            student_answer: Student's answer text.
+            evidence_by_criterion: Evidence retrieved for each criterion.
+            scores: Assigned scores per criterion.
+
+        Returns:
+            Complete grading result with scores and cited feedback.
+
+        """
+        # Flatten evidence spans for prompt
+        all_evidence = []
+        for evidence_list in evidence_by_criterion.values():
+            all_evidence.extend(evidence_list)
+
+        # Remove duplicates (keep first occurrence)
+        seen_ids = set()
+        unique_evidence = []
+        for evidence in all_evidence:
+            if evidence["source_id"] not in seen_ids:
+                unique_evidence.append(evidence)
+                seen_ids.add(evidence["source_id"])
+
+        # Generate explanation with citations (async)
+        result = await self.generate_explanation_async(
             grading_record=scores,
             evidence_spans=unique_evidence,
             student_answer=student_answer,
