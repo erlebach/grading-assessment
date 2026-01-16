@@ -24,7 +24,7 @@ import os
 import tempfile
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from config.llm_config import setup_llamaindex_defaults
 
@@ -132,6 +132,145 @@ def create_sample_rubric() -> dict:
     }
 
 
+def format_grading_result(grading_result: dict, rubric: dict) -> dict:
+    """Format grading result to match grade_question output structure.
+
+    Args:
+        grading_result: Raw grading result from LMQL grader.
+        rubric: The rubric dictionary.
+
+    Returns:
+        Formatted result dictionary matching grade_question output structure.
+
+    """
+    rubric_items = []
+    for cid, info in grading_result["scores"].items():
+        item = {
+            "criterion_id": cid,
+            "score": info["score"],
+            "max_score": info["max_score"],
+            "description": rubric["criteria"][
+                next(
+                    i
+                    for i, c in enumerate(rubric["criteria"])
+                    if c["criterion_id"] == cid
+                )
+            ]["description"],
+        }
+        # Preserve keyword information if available
+        if "keywords" in info:
+            item["keywords"] = info.get("keywords", [])
+            item["found_keywords"] = info.get("found_keywords", [])
+            item["missing_keywords"] = info.get("missing_keywords", [])
+        rubric_items.append(item)
+
+    return {
+        "question_id": grading_result["question_id"],
+        "score": grading_result["total_score"],
+        "max_score": grading_result["max_score"],
+        "rubric_items": rubric_items,
+        "citations": [
+            cit for ev in grading_result["evidence_used"] for cit in [ev["source_id"]]
+        ],
+        "feedback": grading_result["feedback"],
+    }
+
+
+def handle_grading_error(exc: Exception, student_id: str | None = None) -> None:
+    """Handle and print grading errors with user-friendly messages.
+
+    Args:
+        exc: The exception that occurred.
+        student_id: Optional student identifier for context.
+
+    Raises:
+        Re-raises the exception after logging.
+
+    """
+    error_msg = str(exc)
+    error_type = type(exc).__name__
+    student_prefix = f"{student_id}: " if student_id else ""
+
+    if "ResourceExhausted" in error_type or "quota" in error_msg.lower():
+        print(f"  ✗ {student_prefix}API quota/rate limit exceeded")
+        print(f"      Error type: {error_type}")
+        print(f"      Error message: {error_msg[:200]}...")
+        print("      This is likely due to Gemini free tier limits (20 requests/day)")
+        print("      Solution: Switch to Ollama or wait for quota reset")
+    else:
+        error_context = (
+            f"{student_id}: Error during grading"
+            if student_id
+            else "Error during grading"
+        )
+        print(f"  ✗ {error_context}")
+        print(f"      Error type: {error_type}")
+        print(f"      Error message: {error_msg}")
+    raise
+
+
+def print_student_result(
+    result: tuple[str, dict, dict[str, float]],
+) -> None:
+    """Print formatted student grading result with timing breakdown.
+
+    Args:
+        result: Tuple of (student_id, grading_result, step_timings).
+
+    """
+    student_id, grading_result, step_timings = result
+    print(
+        f"  ✓ {student_id}: {grading_result['score']}/{grading_result['max_score']} "
+        f"({step_timings['total']:.2f}s)"
+    )
+    print(f"      - Load index: {step_timings['load_index']:.3f}s")
+    print(f"      - Retrieve evidence: {step_timings['retrieve_evidence']:.3f}s")
+    print(f"      - Apply scoring: {step_timings['apply_scoring']:.3f}s")
+    print(f"      - Generate feedback: {step_timings['generate_feedback']:.3f}s")
+
+    # Print keyword information if available
+    if grading_result.get("rubric_items"):
+        for item in grading_result["rubric_items"]:
+            if "keywords" in item and item["keywords"]:
+                criterion_id = item["criterion_id"]
+                keywords = item["keywords"]
+                found = item.get("found_keywords", [])
+                missing = item.get("missing_keywords", [])
+                print(f"      - {criterion_id} keywords: {', '.join(keywords)}")
+                if found:
+                    print(f"        ✓ Found: {', '.join(found)}")
+                if missing:
+                    print(f"        ✗ Missing: {', '.join(missing)}")
+
+    # Print citations if available
+    if grading_result.get("citations"):
+        citations_str = ", ".join(grading_result["citations"])
+        print(f"      - Citations: {citations_str}")
+
+    # Print feedback if available
+    if grading_result.get("feedback"):
+        print(f"      - Feedback: {grading_result['feedback']}")
+
+
+def print_timing_summary(timings: dict[str, float]) -> None:
+    """Print formatted timing summary table.
+
+    Args:
+        timings: Dictionary of timing information.
+
+    """
+    print("\n" + "=" * 70)
+    print("Complete Timing Summary")
+    print("=" * 70)
+    total_time = sum(timings.values())
+    for step_name, elapsed_time in sorted(timings.items()):
+        percentage = (elapsed_time / total_time * 100) if total_time > 0 else 0
+        print(f"{step_name:30s}: {elapsed_time:8.3f}s ({percentage:5.1f}%)")
+    print("-" * 70)
+    print(f"{'Total time':30s}: {total_time:8.3f}s")
+    print("=" * 70)
+
+
 def setup_grading_environment(
     num_students: int = 4,
 ) -> tuple[Path, dict, list[tuple[str, str]], dict[str, float]]:
@@ -152,12 +291,12 @@ def setup_grading_environment(
     # Check OLLAMA_NUM_PARALLEL (informational - Python process inherits from shell)
     ollama_parallel = os.environ.get("OLLAMA_NUM_PARALLEL", "not set")
     print(f"  OLLAMA_NUM_PARALLEL in Python process: {ollama_parallel}")
-    print(f"  → This is inherited from shell environment (e.g., .zshrc)")
+    print("  → This is inherited from shell environment (e.g., .zshrc)")
     print(
-        f"  → Real verification: Check 'ollama serve' logs for 'OLLAMA_NUM_PARALLEL:4'"
+        "  → Real verification: Check 'ollama serve' logs for 'OLLAMA_NUM_PARALLEL:4'"
     )
     print(
-        f"  → If Ollama logs show OLLAMA_NUM_PARALLEL:4, concurrent requests should work"
+        "  → If Ollama logs show OLLAMA_NUM_PARALLEL:4, concurrent requests should work"
     )
 
     start_time = time.time()
@@ -229,22 +368,26 @@ def setup_grading_environment(
     return index_path, rubric, students, timings
 
 
-def grade_student_sync(
+def _grade_student_core(
     student_id: str,
     student_answer: str,
     rubric: dict,
     index_path: Path,
+    grade_fn: Callable[[LMQLGrader, dict, str, dict, dict], dict],
 ) -> tuple[str, dict, dict[str, float]]:
-    """Grade a single student submission with detailed step timings (synchronous).
+    """Core grading pipeline for a single student (shared by sync and async).
 
     Args:
         student_id: Identifier for the student.
         student_answer: The student's answer text.
         rubric: The rubric dictionary.
         index_path: Path to the evidence index.
+        grade_fn: Callable that performs the LLM grading step. Should accept
+            (lmql_grader, rubric, student_answer, evidence_by_criterion, scores)
+            and return grading_result dict.
 
     Returns:
-        Tuple of (student_id, grading_result, step_timings).
+        Tuple of (student_id, formatted_result, step_timings).
 
     """
     step_timings: dict[str, float] = {}
@@ -269,46 +412,52 @@ def grade_student_sync(
     scores = apply_rubric_scoring(rubric, student_answer, evidence_by_criterion)
     step_timings["apply_scoring"] = time.time() - step_start
 
-    # Step 7: Generate LMQL-constrained feedback (synchronous)
+    # Step 7: Generate LMQL-constrained feedback (via provided function)
     step_start = time.time()
     lmql_grader = LMQLGrader()
-    grading_result = lmql_grader.grade_with_feedback(
-        rubric=rubric,
-        student_answer=student_answer,
-        evidence_by_criterion=evidence_by_criterion,
-        scores=scores,
+    grading_result = grade_fn(
+        lmql_grader, rubric, student_answer, evidence_by_criterion, scores
     )
     step_timings["generate_feedback"] = time.time() - step_start
 
     step_timings["total"] = time.time() - overall_start
 
     # Format result to match grade_question output structure
-    result = {
-        "question_id": grading_result["question_id"],
-        "score": grading_result["total_score"],
-        "max_score": grading_result["max_score"],
-        "rubric_items": [
-            {
-                "criterion_id": cid,
-                "score": info["score"],
-                "max_score": info["max_score"],
-                "description": rubric["criteria"][
-                    next(
-                        i
-                        for i, c in enumerate(rubric["criteria"])
-                        if c["criterion_id"] == cid
-                    )
-                ]["description"],
-            }
-            for cid, info in grading_result["scores"].items()
-        ],
-        "citations": [
-            cit for ev in grading_result["evidence_used"] for cit in [ev["source_id"]]
-        ],
-        "feedback": grading_result["feedback"],
-    }
+    result = format_grading_result(grading_result, rubric)
 
     return (student_id, result, step_timings)
+
+
+def grade_student_sync(
+    student_id: str,
+    student_answer: str,
+    rubric: dict,
+    index_path: Path,
+) -> tuple[str, dict, dict[str, float]]:
+    """Grade a single student submission with detailed step timings (synchronous).
+
+    Args:
+        student_id: Identifier for the student.
+        student_answer: The student's answer text.
+        rubric: The rubric dictionary.
+        index_path: Path to the evidence index.
+
+    Returns:
+        Tuple of (student_id, grading_result, step_timings).
+
+    """
+
+    def sync_grade_fn(grader, rub, answer, evidence, scrs):
+        return grader.grade_with_feedback(
+            rubric=rub,
+            student_answer=answer,
+            evidence_by_criterion=evidence,
+            scores=scrs,
+        )
+
+    return _grade_student_core(
+        student_id, student_answer, rubric, index_path, sync_grade_fn
+    )
 
 
 async def grade_students_batched_async(
@@ -385,35 +534,7 @@ async def grade_students_batched_async(
     results = []
     for student_id, student_answer in students:
         grading_result = batch_results[student_id]
-
-        # Format result to match grade_question output structure
-        result = {
-            "question_id": grading_result["question_id"],
-            "score": grading_result["total_score"],
-            "max_score": grading_result["max_score"],
-            "rubric_items": [
-                {
-                    "criterion_id": cid,
-                    "score": info["score"],
-                    "max_score": info["max_score"],
-                    "description": rubric["criteria"][
-                        next(
-                            i
-                            for i, c in enumerate(rubric["criteria"])
-                            if c["criterion_id"] == cid
-                        )
-                    ]["description"],
-                }
-                for cid, info in grading_result["scores"].items()
-            ],
-            "citations": [
-                cit
-                for ev in grading_result["evidence_used"]
-                for cit in [ev["source_id"]]
-            ],
-            "feedback": grading_result["feedback"],
-        }
-
+        result = format_grading_result(grading_result, rubric)
         # Use the same step_timings for all students (they were graded together)
         results.append((student_id, result, step_timings.copy()))
 
@@ -438,6 +559,17 @@ async def grade_student_async(
         Tuple of (student_id, grading_result, step_timings).
 
     """
+
+    async def async_grade_fn(grader, rub, answer, evidence, scrs):
+        return await grader.grade_with_feedback_async(
+            rubric=rub,
+            student_answer=answer,
+            evidence_by_criterion=evidence,
+            scores=scrs,
+        )
+
+    # Note: _grade_student_core is sync, but we need to await the grade_fn
+    # So we'll inline the core logic here but use the async grade function
     step_timings: dict[str, float] = {}
     overall_start = time.time()
 
@@ -463,41 +595,15 @@ async def grade_student_async(
     # Step 7: Generate LMQL-constrained feedback (async)
     step_start = time.time()
     lmql_grader = LMQLGrader()
-    grading_result = await lmql_grader.grade_with_feedback_async(
-        rubric=rubric,
-        student_answer=student_answer,
-        evidence_by_criterion=evidence_by_criterion,
-        scores=scores,
+    grading_result = await async_grade_fn(
+        lmql_grader, rubric, student_answer, evidence_by_criterion, scores
     )
     step_timings["generate_feedback"] = time.time() - step_start
 
     step_timings["total"] = time.time() - overall_start
 
     # Format result to match grade_question output structure
-    result = {
-        "question_id": grading_result["question_id"],
-        "score": grading_result["total_score"],
-        "max_score": grading_result["max_score"],
-        "rubric_items": [
-            {
-                "criterion_id": cid,
-                "score": info["score"],
-                "max_score": info["max_score"],
-                "description": rubric["criteria"][
-                    next(
-                        i
-                        for i, c in enumerate(rubric["criteria"])
-                        if c["criterion_id"] == cid
-                    )
-                ]["description"],
-            }
-            for cid, info in grading_result["scores"].items()
-        ],
-        "citations": [
-            cit for ev in grading_result["evidence_used"] for cit in [ev["source_id"]]
-        ],
-        "feedback": grading_result["feedback"],
-    }
+    result = format_grading_result(grading_result, rubric)
 
     return (student_id, result, step_timings)
 
@@ -532,35 +638,9 @@ def run_sequential_mode(
         try:
             result = grade_student_sync(student_id, student_answer, rubric, index_path)
             results.append(result)
-            student_timings = result[2]
-            print(
-                f"    ✓ {student_id}: {result[1]['score']}/{result[1]['max_score']} "
-                f"({student_timings['total']:.2f}s)"
-            )
-            print(f"      - Load index: {student_timings['load_index']:.3f}s")
-            print(
-                f"      - Retrieve evidence: {student_timings['retrieve_evidence']:.3f}s"
-            )
-            print(f"      - Apply scoring: {student_timings['apply_scoring']:.3f}s")
-            print(
-                f"      - Generate feedback: {student_timings['generate_feedback']:.3f}s"
-            )
+            print_student_result(result)
         except Exception as e:
-            error_msg = str(e)
-            error_type = type(e).__name__
-            if "ResourceExhausted" in error_type or "quota" in error_msg.lower():
-                print(f"    ✗ {student_id}: API quota/rate limit exceeded")
-                print(f"      Error type: {error_type}")
-                print(f"      Error message: {error_msg[:200]}...")
-                print(
-                    f"      This is likely due to Gemini free tier limits (20 requests/day)"
-                )
-                print(f"      Solution: Switch to Ollama or wait for quota reset")
-            else:
-                print(f"    ✗ {student_id}: Error during grading")
-                print(f"      Error type: {error_type}")
-                print(f"      Error message: {error_msg}")
-            raise
+            handle_grading_error(e, student_id)
 
     total_time = time.time() - start_time
     timings["sequential_total"] = total_time
@@ -603,36 +683,9 @@ async def run_batched_mode(
 
         # Process results
         for result in results:
-            student_id = result[0]
-            student_timings = result[2]
-            print(
-                f"  ✓ {student_id}: {result[1]['score']}/{result[1]['max_score']} "
-                f"({student_timings['total']:.2f}s)"
-            )
-            print(f"      - Load index: {student_timings['load_index']:.3f}s")
-            print(
-                f"      - Retrieve evidence: {student_timings['retrieve_evidence']:.3f}s"
-            )
-            print(f"      - Apply scoring: {student_timings['apply_scoring']:.3f}s")
-            print(
-                f"      - Generate feedback: {student_timings['generate_feedback']:.3f}s"
-            )
+            print_student_result(result)
     except Exception as exc:
-        error_msg = str(exc)
-        error_type = type(exc).__name__
-        if "ResourceExhausted" in error_type or "quota" in error_msg.lower():
-            print(f"  ✗ API quota/rate limit exceeded")
-            print(f"      Error type: {error_type}")
-            print(f"      Error message: {error_msg[:200]}...")
-            print(
-                f"      This is likely due to Gemini free tier limits (20 requests/day)"
-            )
-            print(f"      Solution: Switch to Ollama or wait for quota reset")
-        else:
-            print(f"  ✗ Error during batched grading")
-            print(f"      Error type: {error_type}")
-            print(f"      Error message: {error_msg}")
-        raise
+        handle_grading_error(exc)
 
     total_time = time.time() - start_time
     timings["batched_total"] = total_time
@@ -680,36 +733,9 @@ async def run_async_concurrent_mode(
 
         # Process results as they complete
         for result in results:
-            student_id = result[0]
-            student_timings = result[2]
-            print(
-                f"  ✓ {student_id}: {result[1]['score']}/{result[1]['max_score']} "
-                f"({student_timings['total']:.2f}s)"
-            )
-            print(f"      - Load index: {student_timings['load_index']:.3f}s")
-            print(
-                f"      - Retrieve evidence: {student_timings['retrieve_evidence']:.3f}s"
-            )
-            print(f"      - Apply scoring: {student_timings['apply_scoring']:.3f}s")
-            print(
-                f"      - Generate feedback: {student_timings['generate_feedback']:.3f}s"
-            )
+            print_student_result(result)
     except Exception as exc:
-        error_msg = str(exc)
-        error_type = type(exc).__name__
-        if "ResourceExhausted" in error_type or "quota" in error_msg.lower():
-            print(f"  ✗ API quota/rate limit exceeded")
-            print(f"      Error type: {error_type}")
-            print(f"      Error message: {error_msg[:200]}...")
-            print(
-                f"      This is likely due to Gemini free tier limits (20 requests/day)"
-            )
-            print(f"      Solution: Switch to Ollama or wait for quota reset")
-        else:
-            print(f"  ✗ Error during async concurrent grading")
-            print(f"      Error type: {error_type}")
-            print(f"      Error message: {error_msg}")
-        raise
+        handle_grading_error(exc)
 
     total_time = time.time() - start_time
     timings["async_concurrent_total"] = total_time
@@ -720,11 +746,10 @@ async def run_async_concurrent_mode(
     return results, total_time
 
 
-def main_sync(mode: str = "sequential", num_students: int = 4) -> None:
-    """Run MWE 5 demonstration (synchronous version).
+def main_sync(num_students: int = 4) -> None:
+    """Run MWE 5 demonstration (synchronous version - sequential mode only).
 
     Args:
-        mode: Execution mode - "sequential", "batched", "async", or "all".
         num_students: Number of students to grade (1-4).
 
     """
@@ -735,33 +760,17 @@ def main_sync(mode: str = "sequential", num_students: int = 4) -> None:
     # Setup shared environment
     index_path, rubric, students, timings = setup_grading_environment(num_students)
 
-    if mode == "sequential":
-        # Run sequential mode
-        results, total_time = run_sequential_mode(index_path, rubric, students, timings)
-
-        # Print complete timing summary
-        print("\n" + "=" * 70)
-        print("Complete Timing Summary")
-        print("=" * 70)
-        total_time_all = sum(timings.values())
-        for step_name, elapsed_time in sorted(timings.items()):
-            percentage = (
-                (elapsed_time / total_time_all * 100) if total_time_all > 0 else 0
-            )
-            print(f"{step_name:30s}: {elapsed_time:8.3f}s ({percentage:5.1f}%)")
-        print("-" * 70)
-        print(f"{'Total time':30s}: {total_time_all:8.3f}s")
-        print("=" * 70)
-    else:
-        # Other modes require async, so call async version
-        asyncio.run(main_async(mode))
+    # Run sequential mode
+    results, total_time = run_sequential_mode(index_path, rubric, students, timings)
+    # Print complete timing summary
+    print_timing_summary(timings)
 
 
 async def main_async(mode: str = "batched", num_students: int = 4) -> None:
-    """Run MWE 5 demonstration (async version).
+    """Run MWE 5 demonstration (async version - batched, async, or all modes).
 
     Args:
-        mode: Execution mode - "sequential", "batched", "async", or "all".
+        mode: Execution mode - "batched", "async", or "all".
         num_students: Number of students to grade (1-4).
 
     """
@@ -780,11 +789,7 @@ async def main_async(mode: str = "batched", num_students: int = 4) -> None:
     batched_time = 0.0
     async_time = 0.0
 
-    if mode == "sequential":
-        sequential_results, sequential_time = run_sequential_mode(
-            index_path, rubric, students, timings
-        )
-    elif mode == "batched":
+    if mode == "batched":
         batched_results, batched_time = await run_batched_mode(
             index_path, rubric, students, timings
         )
@@ -798,7 +803,7 @@ async def main_async(mode: str = "batched", num_students: int = 4) -> None:
         print("Running All Execution Modes for Comparison")
         print("=" * 70)
 
-        # Sequential
+        # Sequential (synchronous, called from async context)
         sequential_results, sequential_time = run_sequential_mode(
             index_path, rubric, students, timings
         )
@@ -817,7 +822,7 @@ async def main_async(mode: str = "batched", num_students: int = 4) -> None:
         print("\n" + "=" * 70)
         print("Execution Mode Comparison")
         print("=" * 70)
-        print(f"\n  Overall Timing:")
+        print("\n  Overall Timing:")
         print(f"    Sequential:     {sequential_time:.3f}s (baseline)")
         print(f"    Batched:        {batched_time:.3f}s (single LLM call)")
         print(f"    Async Concurrent: {async_time:.3f}s (parallel LLM calls)")
@@ -825,7 +830,7 @@ async def main_async(mode: str = "batched", num_students: int = 4) -> None:
         if sequential_time > 0:
             batched_speedup = sequential_time / batched_time if batched_time > 0 else 0
             async_speedup = sequential_time / async_time if async_time > 0 else 0
-            print(f"\n  Speedup vs Sequential:")
+            print("\n  Speedup vs Sequential:")
             print(f"    Batched:        {batched_speedup:.2f}x")
             print(f"    Async Concurrent: {async_speedup:.2f}x")
 
@@ -844,16 +849,7 @@ async def main_async(mode: str = "batched", num_students: int = 4) -> None:
             print(f"      Async: {async_scores}")
 
     # Print complete timing summary
-    print("\n" + "=" * 70)
-    print("Complete Timing Summary")
-    print("=" * 70)
-    total_time = sum(timings.values())
-    for step_name, elapsed_time in sorted(timings.items()):
-        percentage = (elapsed_time / total_time * 100) if total_time > 0 else 0
-        print(f"{step_name:30s}: {elapsed_time:8.3f}s ({percentage:5.1f}%)")
-    print("-" * 70)
-    print(f"{'Total time':30s}: {total_time:8.3f}s")
-    print("=" * 70)
+    print_timing_summary(timings)
 
 
 def main() -> None:
@@ -896,19 +892,15 @@ Examples:
     mode = args.mode
     num_students = args.num_students
 
+    # Route to appropriate function based on mode
+    time_start = time.time()
     if mode == "sequential":
         main_sync(num_students)
-    elif mode == "batched":
-        asyncio.run(main_async(mode, num_students))
-    elif mode == "async":
-        asyncio.run(main_async(mode, num_students))
-
-    # Route to appropriate function based on mode
-    if mode == "sequential":
-        main_sync(mode, num_students)
     else:
         # Batched, async, and all require async
         asyncio.run(main_async(mode, num_students))
+    time_end = time.time()
+    print(f"Time taken (main): {time_end - time_start:.2f} seconds")
 
 
 if __name__ == "__main__":

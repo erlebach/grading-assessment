@@ -97,6 +97,16 @@ def test_apply_rubric_scoring() -> None:
     assert "c2" in scores
     assert scores["c1"]["max_score"] == 5
     assert scores["c2"]["max_score"] == 3
+    
+    # Verify keyword tracking is included
+    assert "keywords" in scores["c1"]
+    assert "found_keywords" in scores["c1"]
+    assert "missing_keywords" in scores["c1"]
+    assert "mutual" in scores["c1"]["keywords"]
+    assert "information" in scores["c1"]["keywords"]
+    # "mutual" and "information" should be found in the answer
+    assert "mutual" in scores["c1"]["found_keywords"]
+    assert "information" in scores["c1"]["found_keywords"]
 
 
 def test_generate_simple_feedback() -> None:
