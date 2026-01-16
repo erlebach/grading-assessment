@@ -1,20 +1,20 @@
-"""MWE 5: Batched Grading of Multiple Students.
+"""MWE 5: Multiple Execution Modes for Grading Multiple Students.
 
-This script demonstrates batched execution of the grading pipeline for
-multiple students to show time savings through batching:
-1. Grade four students sequentially (baseline - 4 separate LLM calls)
-2. Grade four students in a batch (optimized - 1 LLM call for all)
-3. Compare timing results
+This script demonstrates different execution modes for grading multiple students:
+1. Sequential: Grade students one at a time (baseline - 4 separate LLM calls)
+2. Batched: Grade all students in a single LLM call (optimized - 1 LLM call)
+3. Async Concurrent: Grade students concurrently using asyncio.gather (parallel - 4 concurrent LLM calls)
 
 Prerequisites:
 - Set environment variables in $HOME/.env (same as previous MWEs)
 - Completed MWE 4
-- For Ollama: Set OLLAMA_NUM_PARALLEL=4 (or higher) in environment
+- For Ollama: Set OLLAMA_NUM_PARALLEL=4 (or higher) in environment for async concurrent mode
 
 Usage:
-    python -m mwe.mwe5_full_pipeline_2students
-    python -m mwe.mwe5_full_pipeline_2students --sequential-only
-    python -m mwe.mwe5_full_pipeline_2students --concurrent-only
+    python -m mwe.mwe5_full_pipeline_2students --mode sequential
+    python -m mwe.mwe5_full_pipeline_2students --mode batched
+    python -m mwe.mwe5_full_pipeline_2students --mode async
+    python -m mwe.mwe5_full_pipeline_2students --mode all  # Run all modes and compare
 
 """
 
@@ -130,6 +130,103 @@ def create_sample_rubric() -> dict:
             },
         ],
     }
+
+
+def setup_grading_environment(
+    num_students: int = 4,
+) -> tuple[Path, dict, list[tuple[str, str]], dict[str, float]]:
+    """Set up the grading environment (shared across all execution modes).
+
+    Args:
+        num_students: Number of students to create (1-4).
+
+    Returns:
+        Tuple of (index_path, rubric, students, timings).
+
+    """
+    timings: dict[str, float] = {}
+
+    # Step 1: Setup
+    print("\n[Step 1] Configuring system...")
+
+    # Check OLLAMA_NUM_PARALLEL (informational - Python process inherits from shell)
+    ollama_parallel = os.environ.get("OLLAMA_NUM_PARALLEL", "not set")
+    print(f"  OLLAMA_NUM_PARALLEL in Python process: {ollama_parallel}")
+    print(f"  → This is inherited from shell environment (e.g., .zshrc)")
+    print(
+        f"  → Real verification: Check 'ollama serve' logs for 'OLLAMA_NUM_PARALLEL:4'"
+    )
+    print(
+        f"  → If Ollama logs show OLLAMA_NUM_PARALLEL:4, concurrent requests should work"
+    )
+
+    start_time = time.time()
+    setup_llamaindex_defaults()
+    timings["step_1_setup"] = time.time() - start_time
+    print("✓ Configuration loaded")
+
+    # Step 2: Create sample evidence index
+    print("\n[Step 2] Creating sample evidence index...")
+    start_time = time.time()
+    index_path = create_sample_evidence_index()
+    timings["step_2_create_index"] = time.time() - start_time
+    print(f"✓ Index created at {index_path}")
+
+    # Step 3: Create sample rubric and student submissions
+    print("\n[Step 3] Creating sample rubric and student submissions...")
+    start_time = time.time()
+
+    rubric = create_sample_rubric()
+    print(f"✓ Rubric: {rubric['question_text']}")
+    print(f"  Criteria: {len(rubric['criteria'])}")
+    print(f"  Total points: {rubric['total_points']}")
+
+    # Create four different student answers
+    student_1_answer = """
+    Mutual information measures how much knowing one variable tells us about
+    another variable. It's always non-negative and is symmetric, meaning
+    I(X;Y) = I(Y;X). It's related to entropy because mutual information
+    equals the entropy of X minus the conditional entropy H(X|Y).
+    """
+
+    student_2_answer = """
+    Mutual information I(X;Y) quantifies the amount of information that one
+    random variable contains about another. It is non-negative and symmetric.
+    The relationship to entropy is that I(X;Y) = H(X) - H(X|Y), where H(X)
+    is the entropy of X and H(X|Y) is the conditional entropy of X given Y.
+    """
+
+    student_3_answer = """
+    Mutual information is a measure of the dependence between two random
+    variables. It tells us how much information we gain about one variable
+    when we observe the other. The key properties are that it's always
+    non-negative, symmetric, and can be expressed in terms of entropy as
+    I(X;Y) = H(X) - H(X|Y) = H(Y) - H(Y|X).
+    """
+
+    student_4_answer = """
+    Mutual information I(X;Y) captures how much one random variable tells
+    us about another. It's a symmetric measure that's always greater than
+    or equal to zero. When X and Y are independent, mutual information is
+    zero. The connection to entropy is through the formula I(X;Y) = H(X) - H(X|Y),
+    showing it's the reduction in uncertainty about X when Y is known.
+    """
+
+    # Create list of all possible student answers
+    all_student_answers = [
+        ("student_1", student_1_answer),
+        ("student_2", student_2_answer),
+        ("student_3", student_3_answer),
+        ("student_4", student_4_answer),
+    ]
+
+    # Select only the requested number of students
+    students = all_student_answers[:num_students]
+
+    print(f"\n  Created {len(students)} student submissions")
+    timings["step_3_create_rubric"] = time.time() - start_time
+
+    return index_path, rubric, students, timings
 
 
 def grade_student_sync(
@@ -405,119 +502,36 @@ async def grade_student_async(
     return (student_id, result, step_timings)
 
 
-def main_sync(run_sequential: bool = True, run_concurrent: bool = True) -> None:
-    """Run MWE 5 demonstration (synchronous version for sequential execution).
+def run_sequential_mode(
+    index_path: Path,
+    rubric: dict,
+    students: list[tuple[str, str]],
+    timings: dict[str, float],
+) -> tuple[list[tuple[str, dict, dict[str, float]]], float]:
+    """Run sequential execution mode (one student at a time).
 
     Args:
-        run_sequential: Whether to run sequential execution (baseline).
-        run_concurrent: Whether to run concurrent execution (optimized).
+        index_path: Path to the evidence index.
+        rubric: The rubric dictionary.
+        students: List of (student_id, student_answer) tuples.
+        timings: Dictionary to store timing information.
+
+    Returns:
+        Tuple of (results, total_time).
 
     """
-    if run_concurrent:
-        # If concurrent is requested, we need async, so call async version
-        asyncio.run(main_async(run_sequential=False, run_concurrent=True))
-        return
-
-    # Sequential-only execution (synchronous)
-    print("=" * 70)
-    print("MWE 5: Sequential Grading of Multiple Students")
-    print("=" * 70)
-
-    timings: dict[str, float] = {}
-
-    # Step 1: Setup
-    print("\n[Step 1] Configuring system...")
-
-    # Check OLLAMA_NUM_PARALLEL (informational - Python process inherits from shell)
-    # Note: The Python process environment is inconclusive - it inherits from your shell (.zshrc).
-    # The real verification is in Ollama server logs (check "ollama serve" output for
-    # "OLLAMA_NUM_PARALLEL:4" in the server config message).
-    ollama_parallel = os.environ.get("OLLAMA_NUM_PARALLEL", "not set")
-    print(f"  OLLAMA_NUM_PARALLEL in Python process: {ollama_parallel}")
-    print(f"  → This is inherited from shell environment (e.g., .zshrc)")
-    print(
-        f"  → Real verification: Check 'ollama serve' logs for 'OLLAMA_NUM_PARALLEL:4'"
-    )
-    print(
-        f"  → If Ollama logs show OLLAMA_NUM_PARALLEL:4, concurrent requests should work"
-    )
-
-    start_time = time.time()
-    setup_llamaindex_defaults()
-    timings["step_1_setup"] = time.time() - start_time
-    print("✓ Configuration loaded")
-
-    # Step 2: Create sample evidence index
-    print("\n[Step 2] Creating sample evidence index...")
-    start_time = time.time()
-    index_path = create_sample_evidence_index()
-    timings["step_2_create_index"] = time.time() - start_time
-    print(f"✓ Index created at {index_path}")
-
-    # Step 3: Create sample rubric and student submissions
-    print("\n[Step 3] Creating sample rubric and student submissions...")
-    start_time = time.time()
-
-    rubric = create_sample_rubric()
-    print(f"✓ Rubric: {rubric['question_text']}")
-    print(f"  Criteria: {len(rubric['criteria'])}")
-    print(f"  Total points: {rubric['total_points']}")
-
-    # Create four different student answers
-    student_1_answer = """
-    Mutual information measures how much knowing one variable tells us about
-    another variable. It's always non-negative and is symmetric, meaning
-    I(X;Y) = I(Y;X). It's related to entropy because mutual information
-    equals the entropy of X minus the conditional entropy H(X|Y).
-    """
-
-    student_2_answer = """
-    Mutual information I(X;Y) quantifies the amount of information that one
-    random variable contains about another. It is non-negative and symmetric.
-    The relationship to entropy is that I(X;Y) = H(X) - H(X|Y), where H(X)
-    is the entropy of X and H(X|Y) is the conditional entropy of X given Y.
-    """
-
-    student_3_answer = """
-    Mutual information is a measure of the dependence between two random
-    variables. It tells us how much information we gain about one variable
-    when we observe the other. The key properties are that it's always
-    non-negative, symmetric, and can be expressed in terms of entropy as
-    I(X;Y) = H(X) - H(X|Y) = H(Y) - H(Y|X).
-    """
-
-    student_4_answer = """
-    Mutual information I(X;Y) captures how much one random variable tells
-    us about another. It's a symmetric measure that's always greater than
-    or equal to zero. When X and Y are independent, mutual information is
-    zero. The connection to entropy is through the formula I(X;Y) = H(X) - H(X|Y),
-    showing it's the reduction in uncertainty about X when Y is known.
-    """
-
-    students = [
-        ("student_1", student_1_answer),
-        ("student_2", student_2_answer),
-        ("student_3", student_3_answer),
-        ("student_4", student_4_answer),
-    ]
-
-    print(f"\n  Created {len(students)} student submissions")
-    timings["step_3_create_rubric"] = time.time() - start_time
-
-    sequential_results: list[tuple[str, dict, dict[str, float]]] = []
-
-    # Step 4: Sequential execution (baseline) - synchronous
     print("\n" + "=" * 70)
-    print("[Step 4] Sequential Execution (Baseline - Synchronous)")
+    print("[Execution Mode] Sequential (One at a Time)")
     print("=" * 70)
 
+    results: list[tuple[str, dict, dict[str, float]]] = []
     start_time = time.time()
 
     for student_id, student_answer in students:
         print(f"\n  Grading {student_id}...")
         try:
             result = grade_student_sync(student_id, student_answer, rubric, index_path)
-            sequential_results.append(result)
+            results.append(result)
             student_timings = result[2]
             print(
                 f"    ✓ {student_id}: {result[1]['score']}/{result[1]['max_score']} "
@@ -542,381 +556,292 @@ def main_sync(run_sequential: bool = True, run_concurrent: bool = True) -> None:
                     f"      This is likely due to Gemini free tier limits (20 requests/day)"
                 )
                 print(f"      Solution: Switch to Ollama or wait for quota reset")
-                raise
             else:
                 print(f"    ✗ {student_id}: Error during grading")
                 print(f"      Error type: {error_type}")
                 print(f"      Error message: {error_msg}")
-                raise
+            raise
 
-    sequential_total_time = time.time() - start_time
-    timings["step_4_sequential_total"] = sequential_total_time
+    total_time = time.time() - start_time
+    timings["sequential_total"] = total_time
 
-    print(f"\n  Sequential total time: {sequential_total_time:.3f}s")
-    print(f"  Average per student: {sequential_total_time / len(students):.3f}s")
+    print(f"\n  Sequential total time: {total_time:.3f}s")
+    print(f"  Average per student: {total_time / len(students):.3f}s")
 
-    # Print complete timing summary
+    return results, total_time
+
+
+async def run_batched_mode(
+    index_path: Path,
+    rubric: dict,
+    students: list[tuple[str, str]],
+    timings: dict[str, float],
+) -> tuple[list[tuple[str, dict, dict[str, float]]], float]:
+    """Run batched execution mode (all students in one LLM call).
+
+    Args:
+        index_path: Path to the evidence index.
+        rubric: The rubric dictionary.
+        students: List of (student_id, student_answer) tuples.
+        timings: Dictionary to store timing information.
+
+    Returns:
+        Tuple of (results, total_time).
+
+    """
     print("\n" + "=" * 70)
-    print("Complete Timing Summary")
+    print("[Execution Mode] Batched (Single LLM Call for All Students)")
     print("=" * 70)
-    total_time = sum(timings.values())
-    for step_name, elapsed_time in sorted(timings.items()):
-        percentage = (elapsed_time / total_time * 100) if total_time > 0 else 0
-        print(f"{step_name:30s}: {elapsed_time:8.3f}s ({percentage:5.1f}%)")
-    print("-" * 70)
-    print(f"{'Total time':30s}: {total_time:8.3f}s")
-    print("=" * 70)
+    print("  Using batched grading: All students in one LLM prompt")
+    print("  This is more efficient than concurrent async calls")
+
+    start_time = time.time()
+
+    try:
+        # Grade all students in a single batched LLM call
+        results = await grade_students_batched_async(students, rubric, index_path)
+
+        # Process results
+        for result in results:
+            student_id = result[0]
+            student_timings = result[2]
+            print(
+                f"  ✓ {student_id}: {result[1]['score']}/{result[1]['max_score']} "
+                f"({student_timings['total']:.2f}s)"
+            )
+            print(f"      - Load index: {student_timings['load_index']:.3f}s")
+            print(
+                f"      - Retrieve evidence: {student_timings['retrieve_evidence']:.3f}s"
+            )
+            print(f"      - Apply scoring: {student_timings['apply_scoring']:.3f}s")
+            print(
+                f"      - Generate feedback: {student_timings['generate_feedback']:.3f}s"
+            )
+    except Exception as exc:
+        error_msg = str(exc)
+        error_type = type(exc).__name__
+        if "ResourceExhausted" in error_type or "quota" in error_msg.lower():
+            print(f"  ✗ API quota/rate limit exceeded")
+            print(f"      Error type: {error_type}")
+            print(f"      Error message: {error_msg[:200]}...")
+            print(
+                f"      This is likely due to Gemini free tier limits (20 requests/day)"
+            )
+            print(f"      Solution: Switch to Ollama or wait for quota reset")
+        else:
+            print(f"  ✗ Error during batched grading")
+            print(f"      Error type: {error_type}")
+            print(f"      Error message: {error_msg}")
+        raise
+
+    total_time = time.time() - start_time
+    timings["batched_total"] = total_time
+
+    print(f"\n  Batched total time: {total_time:.3f}s")
+    print(f"  Average per student: {total_time / len(students):.3f}s")
+    print(f"  ✓ All {len(students)} students graded in a single LLM call")
+
+    return results, total_time
 
 
-async def main_async(run_sequential: bool = True, run_concurrent: bool = True) -> None:
+async def run_async_concurrent_mode(
+    index_path: Path,
+    rubric: dict,
+    students: list[tuple[str, str]],
+    timings: dict[str, float],
+) -> tuple[list[tuple[str, dict, dict[str, float]]], float]:
+    """Run async concurrent execution mode (multiple concurrent LLM calls).
+
+    Args:
+        index_path: Path to the evidence index.
+        rubric: The rubric dictionary.
+        students: List of (student_id, student_answer) tuples.
+        timings: Dictionary to store timing information.
+
+    Returns:
+        Tuple of (results, total_time).
+
+    """
+    print("\n" + "=" * 70)
+    print("[Execution Mode] Async Concurrent (Parallel LLM Calls)")
+    print("=" * 70)
+    print("  Using async/await with asyncio.gather for concurrent execution")
+    print("  Requires OLLAMA_NUM_PARALLEL to be set for Ollama")
+
+    start_time = time.time()
+
+    try:
+        # Run all grading tasks concurrently using asyncio.gather
+        tasks = [
+            grade_student_async(student_id, student_answer, rubric, index_path)
+            for student_id, student_answer in students
+        ]
+        results = await asyncio.gather(*tasks)
+
+        # Process results as they complete
+        for result in results:
+            student_id = result[0]
+            student_timings = result[2]
+            print(
+                f"  ✓ {student_id}: {result[1]['score']}/{result[1]['max_score']} "
+                f"({student_timings['total']:.2f}s)"
+            )
+            print(f"      - Load index: {student_timings['load_index']:.3f}s")
+            print(
+                f"      - Retrieve evidence: {student_timings['retrieve_evidence']:.3f}s"
+            )
+            print(f"      - Apply scoring: {student_timings['apply_scoring']:.3f}s")
+            print(
+                f"      - Generate feedback: {student_timings['generate_feedback']:.3f}s"
+            )
+    except Exception as exc:
+        error_msg = str(exc)
+        error_type = type(exc).__name__
+        if "ResourceExhausted" in error_type or "quota" in error_msg.lower():
+            print(f"  ✗ API quota/rate limit exceeded")
+            print(f"      Error type: {error_type}")
+            print(f"      Error message: {error_msg[:200]}...")
+            print(
+                f"      This is likely due to Gemini free tier limits (20 requests/day)"
+            )
+            print(f"      Solution: Switch to Ollama or wait for quota reset")
+        else:
+            print(f"  ✗ Error during async concurrent grading")
+            print(f"      Error type: {error_type}")
+            print(f"      Error message: {error_msg}")
+        raise
+
+    total_time = time.time() - start_time
+    timings["async_concurrent_total"] = total_time
+
+    print(f"\n  Async concurrent total time: {total_time:.3f}s")
+    print(f"  Average per student: {total_time / len(students):.3f}s")
+
+    return results, total_time
+
+
+def main_sync(mode: str = "sequential", num_students: int = 4) -> None:
+    """Run MWE 5 demonstration (synchronous version).
+
+    Args:
+        mode: Execution mode - "sequential", "batched", "async", or "all".
+        num_students: Number of students to grade (1-4).
+
+    """
+    print("=" * 70)
+    print("MWE 5: Multiple Execution Modes for Grading")
+    print("=" * 70)
+
+    # Setup shared environment
+    index_path, rubric, students, timings = setup_grading_environment(num_students)
+
+    if mode == "sequential":
+        # Run sequential mode
+        results, total_time = run_sequential_mode(index_path, rubric, students, timings)
+
+        # Print complete timing summary
+        print("\n" + "=" * 70)
+        print("Complete Timing Summary")
+        print("=" * 70)
+        total_time_all = sum(timings.values())
+        for step_name, elapsed_time in sorted(timings.items()):
+            percentage = (
+                (elapsed_time / total_time_all * 100) if total_time_all > 0 else 0
+            )
+            print(f"{step_name:30s}: {elapsed_time:8.3f}s ({percentage:5.1f}%)")
+        print("-" * 70)
+        print(f"{'Total time':30s}: {total_time_all:8.3f}s")
+        print("=" * 70)
+    else:
+        # Other modes require async, so call async version
+        asyncio.run(main_async(mode))
+
+
+async def main_async(mode: str = "batched", num_students: int = 4) -> None:
     """Run MWE 5 demonstration (async version).
 
     Args:
-        run_sequential: Whether to run sequential execution (baseline).
-        run_concurrent: Whether to run concurrent execution (optimized).
+        mode: Execution mode - "sequential", "batched", "async", or "all".
+        num_students: Number of students to grade (1-4).
 
     """
     print("=" * 70)
-    print("MWE 5: Concurrent Grading of Multiple Students")
+    print("MWE 5: Multiple Execution Modes for Grading")
     print("=" * 70)
 
-    if not run_sequential and not run_concurrent:
-        print("\nError: At least one execution mode must be enabled")
-        return
-
-    timings: dict[str, float] = {}
-
-    # Step 1: Setup
-    print("\n[Step 1] Configuring system...")
-
-    # Check OLLAMA_NUM_PARALLEL (informational - Python process inherits from shell)
-    # Note: The Python process environment is inconclusive - it inherits from your shell (.zshrc).
-    # The real verification is in Ollama server logs (check "ollama serve" output for
-    # "OLLAMA_NUM_PARALLEL:4" in the server config message).
-    ollama_parallel = os.environ.get("OLLAMA_NUM_PARALLEL", "not set")
-    print(f"  OLLAMA_NUM_PARALLEL in Python process: {ollama_parallel}")
-    print(f"  → This is inherited from shell environment (e.g., .zshrc)")
-    print(
-        f"  → Real verification: Check 'ollama serve' logs for 'OLLAMA_NUM_PARALLEL:4'"
-    )
-    print(
-        f"  → If Ollama logs show OLLAMA_NUM_PARALLEL:4, concurrent requests should work"
-    )
-
-    start_time = time.time()
-    setup_llamaindex_defaults()
-    timings["step_1_setup"] = time.time() - start_time
-    print("✓ Configuration loaded")
-
-    # Step 2: Create sample evidence index
-    print("\n[Step 2] Creating sample evidence index...")
-    start_time = time.time()
-    index_path = create_sample_evidence_index()
-    timings["step_2_create_index"] = time.time() - start_time
-    print(f"✓ Index created at {index_path}")
-
-    # Step 3: Create sample rubric and student submissions
-    print("\n[Step 3] Creating sample rubric and student submissions...")
-    start_time = time.time()
-
-    rubric = create_sample_rubric()
-    print(f"✓ Rubric: {rubric['question_text']}")
-    print(f"  Criteria: {len(rubric['criteria'])}")
-    print(f"  Total points: {rubric['total_points']}")
-
-    # Create four different student answers
-    student_1_answer = """
-    Mutual information measures how much knowing one variable tells us about
-    another variable. It's always non-negative and is symmetric, meaning
-    I(X;Y) = I(Y;X). It's related to entropy because mutual information
-    equals the entropy of X minus the conditional entropy H(X|Y).
-    """
-
-    student_2_answer = """
-    Mutual information I(X;Y) quantifies the amount of information that one
-    random variable contains about another. It is non-negative and symmetric.
-    The relationship to entropy is that I(X;Y) = H(X) - H(X|Y), where H(X)
-    is the entropy of X and H(X|Y) is the conditional entropy of X given Y.
-    """
-
-    student_3_answer = """
-    Mutual information is a measure of the dependence between two random
-    variables. It tells us how much information we gain about one variable
-    when we observe the other. The key properties are that it's always
-    non-negative, symmetric, and can be expressed in terms of entropy as
-    I(X;Y) = H(X) - H(X|Y) = H(Y) - H(Y|X).
-    """
-
-    student_4_answer = """
-    Mutual information I(X;Y) captures how much one random variable tells
-    us about another. It's a symmetric measure that's always greater than
-    or equal to zero. When X and Y are independent, mutual information is
-    zero. The connection to entropy is through the formula I(X;Y) = H(X) - H(X|Y),
-    showing it's the reduction in uncertainty about X when Y is known.
-    """
-
-    students = [
-        ("student_1", student_1_answer),
-        ("student_2", student_2_answer),
-        ("student_3", student_3_answer),
-        ("student_4", student_4_answer),
-    ]
-
-    print(f"\n  Created {len(students)} student submissions")
-    timings["step_3_create_rubric"] = time.time() - start_time
+    # Setup shared environment
+    index_path, rubric, students, timings = setup_grading_environment(num_students)
 
     sequential_results: list[tuple[str, dict, dict[str, float]]] = []
-    concurrent_results: list[tuple[str, dict, dict[str, float]]] = []
+    batched_results: list[tuple[str, dict, dict[str, float]]] = []
+    async_results: list[tuple[str, dict, dict[str, float]]] = []
 
-    # Step 4: Sequential execution (baseline) - synchronous (no async needed)
-    if run_sequential:
-        print("\n" + "=" * 70)
-        print("[Step 4] Sequential Execution (Baseline - Synchronous)")
-        print("=" * 70)
+    sequential_time = 0.0
+    batched_time = 0.0
+    async_time = 0.0
 
-        start_time = time.time()
-
-        for student_id, student_answer in students:
-            print(f"\n  Grading {student_id}...")
-            try:
-                result = grade_student_sync(
-                    student_id, student_answer, rubric, index_path
-                )
-                sequential_results.append(result)
-                student_timings = result[2]
-                print(
-                    f"    ✓ {student_id}: {result[1]['score']}/{result[1]['max_score']} "
-                    f"({student_timings['total']:.2f}s)"
-                )
-                print(f"      - Load index: {student_timings['load_index']:.3f}s")
-                print(
-                    f"      - Retrieve evidence: {student_timings['retrieve_evidence']:.3f}s"
-                )
-                print(f"      - Apply scoring: {student_timings['apply_scoring']:.3f}s")
-                print(
-                    f"      - Generate feedback: {student_timings['generate_feedback']:.3f}s"
-                )
-            except Exception as e:
-                error_msg = str(e)
-                error_type = type(e).__name__
-                if "ResourceExhausted" in error_type or "quota" in error_msg.lower():
-                    print(f"    ✗ {student_id}: API quota/rate limit exceeded")
-                    print(f"      Error type: {error_type}")
-                    print(f"      Error message: {error_msg[:200]}...")
-                    print(
-                        "      This is likely due to Gemini free tier limits (20 requests/day)"
-                    )
-                    print(f"      Solution: Switch to Ollama or wait for quota reset")
-                    raise
-                else:
-                    print(f"    ✗ {student_id}: Error during grading")
-                    print(f"      Error type: {error_type}")
-                    print(f"      Error message: {error_msg}")
-                    raise
-
-        sequential_total_time = time.time() - start_time
-        timings["step_4_sequential_total"] = sequential_total_time
-
-        print(f"\n  Sequential total time: {sequential_total_time:.3f}s")
-        print(f"  Average per student: {sequential_total_time / len(students):.3f}s")
-    else:
-        sequential_total_time = 0.0
-
-    # Step 5: Concurrent execution (optimized) - using async/await with asyncio.gather
-    # OR batched execution (single LLM call for all students)
-    if run_concurrent:
-        print("\n" + "=" * 70)
-        print("[Step 5] Batched Execution (Single LLM Call for All Students)")
-        print("=" * 70)
-        print("  Using batched grading: All 4 students in one LLM prompt")
-        print("  This is more efficient than concurrent async calls")
-
-        start_time = time.time()
-
-        try:
-            # Grade all students in a single batched LLM call
-            results = await grade_students_batched_async(students, rubric, index_path)
-
-            # Process results as they complete
-            for result in results:
-                student_id = result[0]
-                concurrent_results.append(result)
-                student_timings = result[2]
-                print(
-                    f"  ✓ {student_id}: {result[1]['score']}/{result[1]['max_score']} "
-                    f"({student_timings['total']:.2f}s)"
-                )
-                print(f"      - Load index: {student_timings['load_index']:.3f}s")
-                print(
-                    f"      - Retrieve evidence: {student_timings['retrieve_evidence']:.3f}s"
-                )
-                print(f"      - Apply scoring: {student_timings['apply_scoring']:.3f}s")
-                print(
-                    f"      - Generate feedback: {student_timings['generate_feedback']:.3f}s"
-                )
-        except Exception as exc:
-            error_msg = str(exc)
-            error_type = type(exc).__name__
-            if "ResourceExhausted" in error_type or "quota" in error_msg.lower():
-                print(f"  ✗ API quota/rate limit exceeded")
-                print(f"      Error type: {error_type}")
-                print(f"      Error message: {error_msg[:200]}...")
-                print(
-                    f"      This is likely due to Gemini free tier limits (20 requests/day)"
-                )
-                print(f"      Solution: Switch to Ollama or wait for quota reset")
-            else:
-                print(f"  ✗ Error during concurrent grading")
-                print(f"      Error type: {error_type}")
-                print(f"      Error message: {error_msg}")
-            # Re-raise to stop execution
-            raise
-
-        concurrent_total_time = time.time() - start_time
-        timings["step_5_batched_total"] = concurrent_total_time
-
-        print(f"\n  Batched total time: {concurrent_total_time:.3f}s")
-        print(f"  Average per student: {concurrent_total_time / len(students):.3f}s")
-        print(f"  ✓ All {len(students)} students graded in a single LLM call")
-    else:
-        concurrent_total_time = 0.0
-
-    # Step 6: Comparison and analysis (only if both modes were run)
-    if run_sequential and run_concurrent:
-        print("\n" + "=" * 70)
-        print("[Step 6] Timing Comparison")
-        print("=" * 70)
-
-        time_saved = sequential_total_time - concurrent_total_time
-        speedup = (
-            sequential_total_time / concurrent_total_time
-            if concurrent_total_time > 0
-            else 0
+    if mode == "sequential":
+        sequential_results, sequential_time = run_sequential_mode(
+            index_path, rubric, students, timings
         )
-        efficiency = speedup / len(students) * 100
+    elif mode == "batched":
+        batched_results, batched_time = await run_batched_mode(
+            index_path, rubric, students, timings
+        )
+    elif mode == "async":
+        async_results, async_time = await run_async_concurrent_mode(
+            index_path, rubric, students, timings
+        )
+    elif mode == "all":
+        # Run all modes and compare
+        print("\n" + "=" * 70)
+        print("Running All Execution Modes for Comparison")
+        print("=" * 70)
 
-        # Calculate expected concurrent time if perfect parallelization
-        avg_student_time = sequential_total_time / len(students)
-        expected_concurrent_time = avg_student_time  # Perfect parallelization
-        actual_vs_expected = (
-            concurrent_total_time / expected_concurrent_time
-            if expected_concurrent_time > 0
-            else 0
+        # Sequential
+        sequential_results, sequential_time = run_sequential_mode(
+            index_path, rubric, students, timings
         )
 
+        # Batched
+        batched_results, batched_time = await run_batched_mode(
+            index_path, rubric, students, timings
+        )
+
+        # Async concurrent
+        async_results, async_time = await run_async_concurrent_mode(
+            index_path, rubric, students, timings
+        )
+
+        # Comparison
+        print("\n" + "=" * 70)
+        print("Execution Mode Comparison")
+        print("=" * 70)
         print(f"\n  Overall Timing:")
-        print(f"    Sequential execution: {sequential_total_time:.3f}s")
-        print(
-            f"    Batched execution:    {concurrent_total_time:.3f}s (single LLM call)"
-        )
-        print(f"    Average per student:  {avg_student_time:.3f}s")
-        print(
-            f"    Expected batched:     {expected_concurrent_time:.3f}s (if single call = 1x time)"
-        )
-        print(
-            f"    Time saved:          {time_saved:.3f}s ({time_saved/sequential_total_time*100:.1f}%)"
-        )
-        print(f"    Speedup:             {speedup:.2f}x")
-        print(f"    Efficiency:          {efficiency:.1f}% (ideal: 100%)")
-        print(
-            f"    Actual/Expected:     {actual_vs_expected:.2f}x (1.0x = perfect, >1.0x = overhead)"
-        )
+        print(f"    Sequential:     {sequential_time:.3f}s (baseline)")
+        print(f"    Batched:        {batched_time:.3f}s (single LLM call)")
+        print(f"    Async Concurrent: {async_time:.3f}s (parallel LLM calls)")
 
-        # Analysis of batched execution effectiveness
-        print("\n  Batched Execution Analysis:")
-        if actual_vs_expected < 1.1:
-            print("    ✓ Excellent - batched call is as fast as single student")
-        elif actual_vs_expected < 1.5:
-            print("    ⚠ Good - batched call has some overhead but still efficient")
-        elif actual_vs_expected < 1.9:
-            print("    ⚠ Moderate - batched call has significant overhead")
-        else:
-            print(
-                "    ✗ Poor efficiency - batched call takes nearly as long as sequential"
-            )
-            print("      Possible causes:")
-            print("      - LLM processing time scales with prompt length")
-            print("      - Large prompt (4 students) may take longer to process")
-            print("      - Model context limits or processing constraints")
-            if actual_vs_expected > 1.95:
-                print(
-                    f"      - Batched time ({concurrent_total_time:.1f}s) ≈ {len(students)}x single student time"
-                )
-                print(
-                    "        This suggests the LLM processes the batched prompt sequentially"
-                )
+        if sequential_time > 0:
+            batched_speedup = sequential_time / batched_time if batched_time > 0 else 0
+            async_speedup = sequential_time / async_time if async_time > 0 else 0
+            print(f"\n  Speedup vs Sequential:")
+            print(f"    Batched:        {batched_speedup:.2f}x")
+            print(f"    Async Concurrent: {async_speedup:.2f}x")
 
-        # Step-by-step timing comparison
-        print("\n  Step-by-Step Timing Comparison:")
-        steps = [
-            "load_index",
-            "retrieve_evidence",
-            "apply_scoring",
-            "generate_feedback",
-        ]
-        step_labels = {
-            "load_index": "Load index",
-            "retrieve_evidence": "Retrieve evidence",
-            "apply_scoring": "Apply scoring",
-            "generate_feedback": "Generate feedback",
-        }
-
-        # Calculate average times per step for sequential
-        sequential_step_times: dict[str, float] = {}
-        for step in steps:
-            sequential_step_times[step] = sum(
-                r[2][step] for r in sequential_results
-            ) / len(sequential_results)
-
-        # For batched, use the single timing (all students processed together)
-        batched_step_times: dict[str, float] = {}
-        if concurrent_results:
-            # All students have the same timings in batched mode
-            batched_step_times = concurrent_results[0][2].copy()
-            # Remove 'total' from step times
-            batched_step_times.pop("total", None)
-
-        print(f"\n    {'Step':<25} {'Sequential':<15} {'Batched':<15} {'Speedup':<10}")
-        print("    " + "-" * 65)
-        for step in steps:
-            seq_time = sequential_step_times[step]
-            batch_time = batched_step_times.get(step, 0.0)
-            step_speedup = seq_time / batch_time if batch_time > 0 else 0
-            print(
-                f"    {step_labels[step]:<25} {seq_time:>8.3f}s      "
-                f"{batch_time:>8.3f}s      {step_speedup:>6.2f}x"
-            )
-
-        # Individual student timings
-        print("\n  Individual Student Total Timings:")
-        print("    Sequential:")
-        for student_id, result, step_timings in sequential_results:
-            print(f"      {student_id}: {step_timings['total']:.3f}s")
-        print("    Batched:")
-        print(
-            f"      All {len(concurrent_results)} students: {concurrent_total_time:.3f}s (single call)"
-        )
-        for student_id, result, step_timings in concurrent_results:
-            print(f"      {student_id}: {step_timings['total']:.3f}s (shared timing)")
-
-        # Verify results are the same
+        # Verify results are consistent
         print("\n  Result Verification:")
         sequential_scores = {sid: r["score"] for sid, r, _ in sequential_results}
-        batched_scores = {sid: r["score"] for sid, r, _ in concurrent_results}
-        if sequential_scores == batched_scores:
-            print("    ✓ Scores match between sequential and batched execution")
+        batched_scores = {sid: r["score"] for sid, r, _ in batched_results}
+        async_scores = {sid: r["score"] for sid, r, _ in async_results}
+
+        if sequential_scores == batched_scores == async_scores:
+            print("    ✓ Scores match across all execution modes")
         else:
-            print("    ✗ Scores differ between sequential and batched execution")
+            print("    ✗ Scores differ between execution modes")
             print(f"      Sequential: {sequential_scores}")
             print(f"      Batched: {batched_scores}")
-
-    # Step 7: Summary
-    print("\n" + "=" * 70)
-    print("MWE 5 Summary")
-    print("=" * 70)
-    print("✓ Batched execution demonstrated (single LLM call for all students)")
-    print("✓ Time savings through batching confirmed")
-    print("✓ Results verified to be consistent")
+            print(f"      Async: {async_scores}")
 
     # Print complete timing summary
     print("\n" + "=" * 70)
@@ -930,87 +855,53 @@ async def main_async(run_sequential: bool = True, run_concurrent: bool = True) -
     print(f"{'Total time':30s}: {total_time:8.3f}s")
     print("=" * 70)
 
-    print("\nKey Insight:")
-    if time_saved > 0 and speedup > 1.1:
-        print(
-            f"  ✓ Concurrent execution saved {time_saved:.2f}s ({time_saved/sequential_total_time*100:.1f}%)"
-        )
-        print(
-            f"  ✓ This represents a {speedup:.2f}x speedup for {len(students)} students"
-        )
-        print(f"  ✓ Efficiency: {efficiency:.1f}% (closer to 100% is better)")
-    elif actual_vs_expected > 1.9:
-        print("  ✗ No speedup achieved - batched call takes nearly sequential time")
-        print(
-            f"  ✗ Batched time ({concurrent_total_time:.1f}s) ≈ {len(students)}x single student time"
-        )
-        print(
-            f"  ✗ Expected batched time: {expected_concurrent_time:.1f}s (if single call is efficient)"
-        )
-        print("\n  Why this happens:")
-        print(
-            "  - If using local Ollama: OLLAMA_NUM_PARALLEL may not be set (defaults to 1)"
-        )
-        print(
-            "    → Set OLLAMA_NUM_PARALLEL=4 (or higher) in $HOME/.env to enable concurrent requests"
-        )
-        print(
-            "    → Current code uses async/await with llm.achat() for optimal concurrency"
-        )
-        print("  - If using cloud APIs: May have rate limits or sequential processing")
-        print("  - Shared resources: Locks or contention preventing true parallelism")
-        print("\n  Potential solutions:")
-        print("  - For Ollama: Ensure OLLAMA_NUM_PARALLEL is set in $HOME/.env")
-        print("    → OLLAMA_NUM_PARALLEL=4  # or higher based on your GPU/CPU")
-        print("  - Verify Ollama server is running and can handle concurrent requests")
-        print("  - Check GPU/CPU resources - may be saturated with concurrent requests")
-        print("  - Check if LLM provider supports concurrent requests")
-    else:
-        print("  ⚠ Limited speedup achieved")
-        print(
-            f"  ⚠ Time saved: {time_saved:.2f}s ({time_saved/sequential_total_time*100:.1f}%)"
-        )
-        print(
-            f"  ⚠ Speedup: {speedup:.2f}x (expected: ~{len(students)}x if batched call is efficient)"
-        )
-        print("  ⚠ Batched call may have overhead due to larger prompt size")
-
 
 def main() -> None:
-    """Run MWE 5 demonstration (synchronous wrapper)."""
+    """Run MWE 5 demonstration with selectable execution mode."""
     parser = argparse.ArgumentParser(
-        description="MWE 5: Compare sequential vs concurrent grading"
+        description="MWE 5: Multiple execution modes for grading multiple students",
+        epilog="""
+Examples:
+  # Run sequential mode with 4 students (one student at a time)
+  python -m mwe.mwe5_full_pipeline_2students --mode sequential
+
+  # Run batched mode with 2 students (single LLM call for all students)
+  python -m mwe.mwe5_full_pipeline_2students --mode batched --num-students 2
+
+  # Run async concurrent mode with 3 students (parallel LLM calls)
+  python -m mwe.mwe5_full_pipeline_2students --mode async --num-students 3
+
+  # Run all modes with 1 student and compare results
+  python -m mwe.mwe5_full_pipeline_2students --mode all --num-students 1
+        """,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
-        "--sequential-only",
-        action="store_true",
-        help="Run only sequential execution (skip concurrent, no asyncio needed)",
+        "--mode",
+        type=str,
+        choices=["sequential", "batched", "async", "all"],
+        default="batched",
+        help="Execution mode: sequential (one at a time), batched (single LLM call), "
+        "async (concurrent LLM calls), or all (run all modes and compare)",
     )
     parser.add_argument(
-        "--concurrent-only",
-        action="store_true",
-        help="Run only batched execution (single LLM call for all students, uses asyncio)",
+        "--num-students",
+        type=int,
+        choices=[1, 2, 3, 4],
+        default=4,
+        help="Number of students to grade (1-4, default: 4)",
     )
     args = parser.parse_args()
 
-    run_sequential = not args.concurrent_only
-    run_concurrent = not args.sequential_only
+    mode = args.mode
+    num_students = args.num_students
 
-    if args.sequential_only and args.concurrent_only:
-        parser.error("Cannot specify both --sequential-only and --concurrent-only")
-
-    # If only sequential, use sync version (no asyncio needed)
-    # If concurrent is involved, use async version
-    if run_sequential and not run_concurrent:
-        main_sync(run_sequential=True, run_concurrent=False)
-    elif run_concurrent:
-        # Need async for concurrent execution
-        asyncio.run(
-            main_async(run_sequential=run_sequential, run_concurrent=run_concurrent)
-        )
+    # Route to appropriate function based on mode
+    if mode == "sequential":
+        main_sync(mode, num_students)
     else:
-        # Both modes - use async version
-        asyncio.run(main_async(run_sequential=True, run_concurrent=True))
+        # Batched, async, and all require async
+        asyncio.run(main_async(mode, num_students))
 
 
 if __name__ == "__main__":
