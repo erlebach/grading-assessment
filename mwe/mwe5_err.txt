@@ -1,0 +1,149 @@
+/Users/erlebach/src/2026/grading_assessment/autograder/.venv/lib/python3.11/site-packages/llama_index/llms/gemini/base.py:20: FutureWarning: 
+
+All support for the `google.generativeai` package has ended. It will no longer be receiving 
+updates or bug fixes. Please switch to the `google.genai` package as soon as possible.
+See README for more details:
+
+https://github.com/google-gemini/deprecated-generative-ai-python/blob/main/README.md
+
+  import google.generativeai as genai
+======================================================================
+MWE 5: Concurrent Grading of Multiple Students
+======================================================================
+
+[Step 1] Configuring system...
+✓ Configuration loaded
+
+[Step 2] Creating sample evidence index...
+Parsing nodes:   0%|          | 0/5 [00:00<?, ?it/s]Parsing nodes: 100%|██████████| 5/5 [00:00<00:00, 1998.24it/s]
+Generating embeddings:   0%|          | 0/5 [00:00<?, ?it/s]Generating embeddings: 100%|██████████| 5/5 [00:00<00:00, 30.21it/s]Generating embeddings: 100%|██████████| 5/5 [00:00<00:00, 30.18it/s]
+WARNING:root:Removing unpickleable private attribute _chunking_tokenizer_fn
+WARNING:root:Removing unpickleable private attribute _split_fns
+WARNING:root:Removing unpickleable private attribute _sub_sentence_split_fns
+✓ Index created at /var/folders/g_/_bggj09s1z183t3_j5jy1r9c0000gn/T/tmpdcad8bl0
+
+[Step 3] Creating sample rubric and student submissions...
+✓ Rubric: Explain mutual information and its relationship to entropy
+  Criteria: 3
+  Total points: 10
+
+  Created 2 student submissions
+
+======================================================================
+[Step 4] Sequential Execution (Baseline)
+======================================================================
+
+  Grading student_1...
+    ✓ student_1: 4/10 (24.98s)
+      - Load index: 0.109s
+      - Retrieve evidence: 0.112s
+      - Apply scoring: 0.000s
+      - Generate feedback: 24.754s
+
+  Grading student_2...
+    ✓ student_2: 4/10 (21.77s)
+      - Load index: 0.112s
+      - Retrieve evidence: 0.095s
+      - Apply scoring: 0.000s
+      - Generate feedback: 21.558s
+
+  Sequential total time: 46.741s
+  Average per student: 23.370s
+
+======================================================================
+[Step 5] Concurrent Execution (Optimized)
+======================================================================
+  ✓ student_1: 4/10 (22.98s)
+      - Load index: 0.188s
+      - Retrieve evidence: 0.040s
+      - Apply scoring: 0.000s
+      - Generate feedback: 22.755s
+  ✓ student_2: 4/10 (54.87s)
+      - Load index: 0.185s
+      - Retrieve evidence: 0.044s
+      - Apply scoring: 0.000s
+      - Generate feedback: 54.641s
+
+  Concurrent total time: 54.870s
+  Average per student: 27.435s
+
+======================================================================
+[Step 6] Timing Comparison
+======================================================================
+
+  Overall Timing:
+    Sequential execution: 46.741s
+    Concurrent execution: 54.870s
+    Average per student:  23.370s
+    Expected concurrent:  23.370s (perfect parallelization)
+    Time saved:          -8.130s (-17.4%)
+    Speedup:             0.85x
+    Efficiency:          42.6% (ideal: 100%)
+    Actual/Expected:     2.35x (1.0x = perfect, >1.0x = overhead)
+
+  Concurrency Analysis:
+    ✗ No parallelization - operations are running sequentially!
+      Possible causes:
+      - LLM API processes requests sequentially (rate limits)
+      - Local LLM (Ollama) processes requests one at a time
+      - Python GIL preventing true parallelism
+      - Shared resources with locks preventing concurrency
+      - Synchronous blocking I/O not releasing GIL
+      - Concurrent time (54.9s) ≈ 2x single student time
+        This indicates sequential execution, not parallel
+
+  Step-by-Step Timing Comparison:
+
+    Step                      Sequential      Concurrent      Speedup   
+    -----------------------------------------------------------------
+    Load index                   0.110s         0.187s        0.59x
+    Retrieve evidence            0.104s         0.042s        2.47x
+    Apply scoring                0.000s         0.000s        1.29x
+    Generate feedback           23.156s        38.698s        0.60x
+
+  Individual Student Total Timings:
+    Sequential:
+      student_1: 24.975s
+      student_2: 21.765s
+    Concurrent:
+      student_1: 22.983s
+      student_2: 54.869s
+
+  Result Verification:
+    ✓ Scores match between sequential and concurrent execution
+
+======================================================================
+MWE 5 Summary
+======================================================================
+✓ Concurrent execution demonstrated
+✓ Time savings through parallelization confirmed
+✓ Results verified to be consistent
+
+======================================================================
+Complete Timing Summary
+======================================================================
+step_1_setup                  :    1.783s (  1.7%)
+step_2_create_index           :    0.392s (  0.4%)
+step_3_create_rubric          :    0.000s (  0.0%)
+step_4_sequential_total       :   46.741s ( 45.0%)
+step_5_concurrent_total       :   54.870s ( 52.9%)
+----------------------------------------------------------------------
+Total time                    :  103.786s
+======================================================================
+
+Key Insight:
+  ✗ No speedup achieved - operations are running sequentially
+  ✗ Concurrent time (54.9s) ≈ 2x single student time
+  ✗ Expected concurrent time: 23.4s (if perfectly parallelized)
+
+  Why this happens:
+  - If using local Ollama: It processes requests sequentially
+  - If using cloud APIs: May have rate limits or sequential processing
+  - Python ThreadPoolExecutor: May not help if I/O doesn't release GIL
+  - Shared resources: Locks or contention preventing true parallelism
+
+  Potential solutions:
+  - Use ProcessPoolExecutor instead of ThreadPoolExecutor
+  - Use async/await with async HTTP clients for LLM calls
+  - Check if LLM provider supports concurrent requests
+  - Consider batching or queue-based processing
