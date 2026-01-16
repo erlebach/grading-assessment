@@ -90,7 +90,9 @@ class LMQLGrader:
         print(f"    Total tokens:  {total_tokens:,}")
         if mode == "batched":
             # Use a faster method to count students (only count "STUDENT " prefix)
-            num_students = len([line for line in prompt.split("\n") if "STUDENT " in line])
+            num_students = len(
+                [line for line in prompt.split("\n") if "STUDENT " in line]
+            )
             if num_students > 0:
                 print(f"    Avg per student: {total_tokens // num_students:,} tokens")
 
@@ -143,7 +145,9 @@ class LMQLGrader:
                 # Validate citation completeness
                 if validate_explanation(explanation, valid_evidence_ids):
                     # Success! Print token usage only on success
-                    self._print_token_usage(response, prompt, response_text, mode="single")
+                    self._print_token_usage(
+                        response, prompt, response_text, mode="single"
+                    )
                     formatted_text = format_explanation_text(explanation)
                     return {
                         "explanation": explanation,
@@ -221,7 +225,9 @@ class LMQLGrader:
                 # Validate citation completeness
                 if validate_explanation(explanation, valid_evidence_ids):
                     # Success! Print token usage only on success
-                    self._print_token_usage(response, prompt, response_text, mode="single")
+                    self._print_token_usage(
+                        response, prompt, response_text, mode="single"
+                    )
                     formatted_text = format_explanation_text(explanation)
                     return {
                         "explanation": explanation,
@@ -437,7 +443,9 @@ class LMQLGrader:
 
                 if all_valid:
                     # Success! Print token usage only on success
-                    self._print_token_usage(response, prompt, response_text, mode="batched")
+                    self._print_token_usage(
+                        response, prompt, response_text, mode="batched"
+                    )
                     # Build results for each student
                     results: dict[str, dict[str, Any]] = {}
                     for student_data in students_data:
