@@ -132,12 +132,15 @@ def create_sample_rubric() -> dict:
     }
 
 
-def format_grading_result(grading_result: dict, rubric: dict) -> dict:
+def format_grading_result(
+    grading_result: dict, rubric: dict, student_answer: str = ""
+) -> dict:
     """Format grading result to match grade_question output structure.
 
     Args:
         grading_result: Raw grading result from LMQL grader.
         rubric: The rubric dictionary.
+        student_answer: The student's answer text (optional).
 
     Returns:
         Formatted result dictionary matching grade_question output structure.
@@ -166,6 +169,8 @@ def format_grading_result(grading_result: dict, rubric: dict) -> dict:
 
     return {
         "question_id": grading_result["question_id"],
+        "question_text": rubric.get("question_text", ""),
+        "student_answer": student_answer,
         "score": grading_result["total_score"],
         "max_score": grading_result["max_score"],
         "rubric_items": rubric_items,
@@ -219,6 +224,24 @@ def print_student_result(
 
     """
     student_id, grading_result, step_timings = result
+
+    try:
+        student_number = int(student_id.split("_")[1])
+    except (IndexError, ValueError):
+        student_number = student_id
+    print(f"\n  ==> STUDENT {student_number}")
+    # Print question text if available
+    if grading_result.get("question_text"):
+        print(f"  Question: {grading_result['question_text']}")
+
+    # Print student answer if available
+    if grading_result.get("student_answer"):
+        answer_preview = grading_result["student_answer"].strip()
+        # Truncate if too long for display
+        if len(answer_preview) > 500:
+            answer_preview = answer_preview[:500] + "..."
+        print(f"  Student Answer: {answer_preview}")
+
     print(
         f"  ✓ {student_id}: {grading_result['score']}/{grading_result['max_score']} "
         f"({step_timings['total']:.2f}s)"
@@ -228,15 +251,21 @@ def print_student_result(
     print(f"      - Apply scoring: {step_timings['apply_scoring']:.3f}s")
     print(f"      - Generate feedback: {step_timings['generate_feedback']:.3f}s")
 
-    # Print keyword information if available
+    # Print keyword information organized by criterion
     if grading_result.get("rubric_items"):
+        print("\n      Rubric Criteria Evaluation:")
         for item in grading_result["rubric_items"]:
+            criterion_id = item["criterion_id"]
+            score = item["score"]
+            max_score = item["max_score"]
+            description = item.get("description", "")
+            print(f"      - {criterion_id}: {score}/{max_score} - {description}")
+
             if "keywords" in item and item["keywords"]:
-                criterion_id = item["criterion_id"]
                 keywords = item["keywords"]
                 found = item.get("found_keywords", [])
                 missing = item.get("missing_keywords", [])
-                print(f"      - {criterion_id} keywords: {', '.join(keywords)}")
+                print(f"        Keywords: {', '.join(keywords)}")
                 if found:
                     print(f"        ✓ Found: {', '.join(found)}")
                 if missing:
@@ -245,11 +274,11 @@ def print_student_result(
     # Print citations if available
     if grading_result.get("citations"):
         citations_str = ", ".join(grading_result["citations"])
-        print(f"      - Citations: {citations_str}")
+        print(f"\n      Citations: {citations_str}")
 
     # Print feedback if available
     if grading_result.get("feedback"):
-        print(f"      - Feedback: {grading_result['feedback']}")
+        print(f"      Feedback: {grading_result['feedback']}")
 
 
 def print_timing_summary(timings: dict[str, float]) -> None:
@@ -423,7 +452,7 @@ def _grade_student_core(
     step_timings["total"] = time.time() - overall_start
 
     # Format result to match grade_question output structure
-    result = format_grading_result(grading_result, rubric)
+    result = format_grading_result(grading_result, rubric, student_answer)
 
     return (student_id, result, step_timings)
 
@@ -534,7 +563,7 @@ async def grade_students_batched_async(
     results = []
     for student_id, student_answer in students:
         grading_result = batch_results[student_id]
-        result = format_grading_result(grading_result, rubric)
+        result = format_grading_result(grading_result, rubric, student_answer)
         # Use the same step_timings for all students (they were graded together)
         results.append((student_id, result, step_timings.copy()))
 
@@ -603,7 +632,7 @@ async def grade_student_async(
     step_timings["total"] = time.time() - overall_start
 
     # Format result to match grade_question output structure
-    result = format_grading_result(grading_result, rubric)
+    result = format_grading_result(grading_result, rubric, student_answer)
 
     return (student_id, result, step_timings)
 

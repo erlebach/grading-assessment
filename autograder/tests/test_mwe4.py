@@ -59,8 +59,10 @@ def test_extract_keywords() -> None:
 
     keywords = extract_keywords(description)
 
-    assert "correctly" in keywords
-    assert "defines" in keywords
+    # Meta-words (instructional words) should be excluded
+    assert "correctly" not in keywords
+    assert "defines" not in keywords
+    # Only substantive keywords should be included
     assert "mutual" in keywords
     assert "information" in keywords
     assert "entropy" in keywords
@@ -68,6 +70,16 @@ def test_extract_keywords() -> None:
     # Stop words should be excluded
     assert "and" not in keywords
     assert "the" not in keywords
+
+    # Test with another example containing meta-words
+    description2 = "Explains key properties like non-negative and symmetric"
+    keywords2 = extract_keywords(description2)
+    assert "explains" not in keywords2
+    assert "properties" not in keywords2
+    assert "like" not in keywords2
+    assert "key" not in keywords2
+    assert "non-negative" in keywords2
+    assert "symmetric" in keywords2
 
 
 def test_apply_rubric_scoring() -> None:
