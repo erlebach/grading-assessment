@@ -23,12 +23,21 @@ from llama_index.llms.openai import OpenAI
 def load_env_config() -> dict[str, str]:
     """Load configuration from $HOME/.env file.
 
+    Also exports Ollama-specific environment variables (like OLLAMA_NUM_PARALLEL)
+    to the current process environment so Ollama server can read them.
+
     Returns:
         Dictionary containing configuration values.
 
     """
     env_path = Path.home() / ".env"
-    load_dotenv(env_path)
+    load_dotenv(env_path)  # This loads all variables from .env into os.environ
+
+    # Note: OLLAMA_NUM_PARALLEL is read by the Ollama server process, not this Python code.
+    # It must be set before Ollama starts, or Ollama must be restarted after setting it.
+    # load_dotenv() above already makes it available in os.environ, but we check it here
+    # to include it in the returned config dict for reference.
+    ollama_num_parallel = os.getenv("OLLAMA_NUM_PARALLEL")
 
     return {
         "openai_api_key": os.getenv("OPENAI_API_KEY", ""),
@@ -37,6 +46,7 @@ def load_env_config() -> dict[str, str]:
         "lmql_backend": os.getenv("LMQL_BACKEND", "ollama"),
         "lmql_model": os.getenv("LMQL_MODEL", "gpt-oss:20b"),
         "ollama_base_url": os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
+        "ollama_num_parallel": ollama_num_parallel or "",
         "embedding_provider": os.getenv("EMBEDDING_PROVIDER", "sentence-transformer"),
         "embedding_model": os.getenv(
             "EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2"

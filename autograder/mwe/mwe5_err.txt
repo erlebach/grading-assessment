@@ -12,74 +12,102 @@ MWE 5: Concurrent Grading of Multiple Students
 ======================================================================
 
 [Step 1] Configuring system...
+  OLLAMA_NUM_PARALLEL in Python process: 4
+  ✓ OLLAMA_NUM_PARALLEL is set to 4 in this process
+    → Note: Ollama server reads its own environment at startup
+    → If Ollama was started before setting this, restart Ollama to apply
 ✓ Configuration loaded
 
 [Step 2] Creating sample evidence index...
-Parsing nodes:   0%|          | 0/5 [00:00<?, ?it/s]Parsing nodes: 100%|██████████| 5/5 [00:00<00:00, 1998.24it/s]
-Generating embeddings:   0%|          | 0/5 [00:00<?, ?it/s]Generating embeddings: 100%|██████████| 5/5 [00:00<00:00, 30.21it/s]Generating embeddings: 100%|██████████| 5/5 [00:00<00:00, 30.18it/s]
+Parsing nodes:   0%|          | 0/5 [00:00<?, ?it/s]Parsing nodes: 100%|██████████| 5/5 [00:00<00:00, 2918.79it/s]
+Generating embeddings:   0%|          | 0/5 [00:00<?, ?it/s]Generating embeddings: 100%|██████████| 5/5 [00:00<00:00, 38.96it/s]Generating embeddings: 100%|██████████| 5/5 [00:00<00:00, 38.92it/s]
 WARNING:root:Removing unpickleable private attribute _chunking_tokenizer_fn
 WARNING:root:Removing unpickleable private attribute _split_fns
 WARNING:root:Removing unpickleable private attribute _sub_sentence_split_fns
-✓ Index created at /var/folders/g_/_bggj09s1z183t3_j5jy1r9c0000gn/T/tmpdcad8bl0
+✓ Index created at /var/folders/g_/_bggj09s1z183t3_j5jy1r9c0000gn/T/tmpo5z3aqmg
 
 [Step 3] Creating sample rubric and student submissions...
 ✓ Rubric: Explain mutual information and its relationship to entropy
   Criteria: 3
   Total points: 10
 
-  Created 2 student submissions
+  Created 4 student submissions
 
 ======================================================================
-[Step 4] Sequential Execution (Baseline)
+[Step 4] Sequential Execution (Baseline - Synchronous)
 ======================================================================
 
   Grading student_1...
-    ✓ student_1: 4/10 (24.98s)
-      - Load index: 0.109s
-      - Retrieve evidence: 0.112s
+    ✓ student_1: 4/10 (13.85s)
+      - Load index: 0.104s
+      - Retrieve evidence: 0.071s
       - Apply scoring: 0.000s
-      - Generate feedback: 24.754s
+      - Generate feedback: 13.678s
 
   Grading student_2...
-    ✓ student_2: 4/10 (21.77s)
-      - Load index: 0.112s
-      - Retrieve evidence: 0.095s
+    ✓ student_2: 4/10 (26.24s)
+      - Load index: 0.140s
+      - Retrieve evidence: 0.071s
       - Apply scoring: 0.000s
-      - Generate feedback: 21.558s
+      - Generate feedback: 26.032s
 
-  Sequential total time: 46.741s
-  Average per student: 23.370s
+  Grading student_3...
+    ✓ student_3: 4/10 (19.06s)
+      - Load index: 0.173s
+      - Retrieve evidence: 0.098s
+      - Apply scoring: 0.000s
+      - Generate feedback: 18.789s
+
+  Grading student_4...
+    ✓ student_4: 3/10 (25.46s)
+      - Load index: 0.126s
+      - Retrieve evidence: 0.055s
+      - Apply scoring: 0.000s
+      - Generate feedback: 25.277s
+
+  Sequential total time: 84.614s
+  Average per student: 21.153s
 
 ======================================================================
-[Step 5] Concurrent Execution (Optimized)
+[Step 5] Concurrent Execution (Optimized with async/await)
 ======================================================================
-  ✓ student_1: 4/10 (22.98s)
-      - Load index: 0.188s
-      - Retrieve evidence: 0.040s
+  ✓ student_1: 4/10 (54.93s)
+      - Load index: 0.126s
+      - Retrieve evidence: 0.027s
       - Apply scoring: 0.000s
-      - Generate feedback: 22.755s
-  ✓ student_2: 4/10 (54.87s)
-      - Load index: 0.185s
-      - Retrieve evidence: 0.044s
+      - Generate feedback: 54.776s
+  ✓ student_2: 4/10 (68.02s)
+      - Load index: 0.085s
+      - Retrieve evidence: 0.022s
       - Apply scoring: 0.000s
-      - Generate feedback: 54.641s
+      - Generate feedback: 67.910s
+  ✓ student_3: 4/10 (33.42s)
+      - Load index: 0.091s
+      - Retrieve evidence: 0.023s
+      - Apply scoring: 0.000s
+      - Generate feedback: 33.307s
+  ✓ student_4: 3/10 (17.35s)
+      - Load index: 0.084s
+      - Retrieve evidence: 0.023s
+      - Apply scoring: 0.000s
+      - Generate feedback: 17.242s
 
-  Concurrent total time: 54.870s
-  Average per student: 27.435s
+  Concurrent total time: 68.276s
+  Average per student: 17.069s
 
 ======================================================================
 [Step 6] Timing Comparison
 ======================================================================
 
   Overall Timing:
-    Sequential execution: 46.741s
-    Concurrent execution: 54.870s
-    Average per student:  23.370s
-    Expected concurrent:  23.370s (perfect parallelization)
-    Time saved:          -8.130s (-17.4%)
-    Speedup:             0.85x
-    Efficiency:          42.6% (ideal: 100%)
-    Actual/Expected:     2.35x (1.0x = perfect, >1.0x = overhead)
+    Sequential execution: 84.614s
+    Concurrent execution: 68.276s
+    Average per student:  21.153s
+    Expected concurrent:  21.153s (perfect parallelization)
+    Time saved:          16.338s (19.3%)
+    Speedup:             1.24x
+    Efficiency:          31.0% (ideal: 100%)
+    Actual/Expected:     3.23x (1.0x = perfect, >1.0x = overhead)
 
   Concurrency Analysis:
     ✗ No parallelization - operations are running sequentially!
@@ -89,25 +117,29 @@ WARNING:root:Removing unpickleable private attribute _sub_sentence_split_fns
       - Python GIL preventing true parallelism
       - Shared resources with locks preventing concurrency
       - Synchronous blocking I/O not releasing GIL
-      - Concurrent time (54.9s) ≈ 2x single student time
+      - Concurrent time (68.3s) ≈ 4x single student time
         This indicates sequential execution, not parallel
 
   Step-by-Step Timing Comparison:
 
     Step                      Sequential      Concurrent      Speedup   
     -----------------------------------------------------------------
-    Load index                   0.110s         0.187s        0.59x
-    Retrieve evidence            0.104s         0.042s        2.47x
-    Apply scoring                0.000s         0.000s        1.29x
-    Generate feedback           23.156s        38.698s        0.60x
+    Load index                   0.136s         0.096s        1.41x
+    Retrieve evidence            0.074s         0.024s        3.12x
+    Apply scoring                0.000s         0.000s        1.63x
+    Generate feedback           20.944s        43.309s        0.48x
 
   Individual Student Total Timings:
     Sequential:
-      student_1: 24.975s
-      student_2: 21.765s
+      student_1: 13.854s
+      student_2: 26.242s
+      student_3: 19.060s
+      student_4: 25.458s
     Concurrent:
-      student_1: 22.983s
-      student_2: 54.869s
+      student_1: 54.928s
+      student_2: 68.017s
+      student_3: 33.421s
+      student_4: 17.349s
 
   Result Verification:
     ✓ Scores match between sequential and concurrent execution
@@ -122,28 +154,16 @@ MWE 5 Summary
 ======================================================================
 Complete Timing Summary
 ======================================================================
-step_1_setup                  :    1.783s (  1.7%)
-step_2_create_index           :    0.392s (  0.4%)
+step_1_setup                  :    1.570s (  1.0%)
+step_2_create_index           :    0.312s (  0.2%)
 step_3_create_rubric          :    0.000s (  0.0%)
-step_4_sequential_total       :   46.741s ( 45.0%)
-step_5_concurrent_total       :   54.870s ( 52.9%)
+step_4_sequential_total       :   84.614s ( 54.7%)
+step_5_concurrent_total       :   68.276s ( 44.1%)
 ----------------------------------------------------------------------
-Total time                    :  103.786s
+Total time                    :  154.773s
 ======================================================================
 
 Key Insight:
-  ✗ No speedup achieved - operations are running sequentially
-  ✗ Concurrent time (54.9s) ≈ 2x single student time
-  ✗ Expected concurrent time: 23.4s (if perfectly parallelized)
-
-  Why this happens:
-  - If using local Ollama: It processes requests sequentially
-  - If using cloud APIs: May have rate limits or sequential processing
-  - Python ThreadPoolExecutor: May not help if I/O doesn't release GIL
-  - Shared resources: Locks or contention preventing true parallelism
-
-  Potential solutions:
-  - Use ProcessPoolExecutor instead of ThreadPoolExecutor
-  - Use async/await with async HTTP clients for LLM calls
-  - Check if LLM provider supports concurrent requests
-  - Consider batching or queue-based processing
+  ✓ Concurrent execution saved 16.34s (19.3%)
+  ✓ This represents a 1.24x speedup for 4 students
+  ✓ Efficiency: 31.0% (closer to 100% is better)
