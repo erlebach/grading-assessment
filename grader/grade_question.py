@@ -41,7 +41,9 @@ def load_submission(submission_path: Path) -> str:
 
 
 def apply_rubric_scoring(
-    rubric: dict[str, Any], student_answer: str, evidence_by_criterion: dict[str, list[dict[str, Any]]]
+    rubric: dict[str, Any],
+    student_answer: str,
+    evidence_by_criterion: dict[str, list[dict[str, Any]]],
 ) -> dict[str, dict[str, Any]]:
     """Apply rubric criteria to assign scores.
 
@@ -55,7 +57,8 @@ def apply_rubric_scoring(
         evidence_by_criterion: Evidence retrieved for each criterion.
 
     Returns:
-        Dictionary mapping criterion_id to score information.
+        Dictionary mapping criterion_id to score information, including
+        keyword tracking for feedback purposes.
 
     """
     scores = {}
@@ -69,7 +72,11 @@ def apply_rubric_scoring(
         # Simple heuristic scoring based on keyword presence
         # In production, this would be more sophisticated
         keywords = extract_keywords(description)
-        matches = sum(1 for keyword in keywords if keyword in answer_lower)
+
+        # Track which keywords were found and which were missing
+        found_keywords = [kw for kw in keywords if kw in answer_lower]
+        missing_keywords = [kw for kw in keywords if kw not in answer_lower]
+        matches = len(found_keywords)
 
         # Score proportionally to keyword matches
         if keywords:
@@ -78,7 +85,13 @@ def apply_rubric_scoring(
             # If no keywords, check if evidence was found
             score = max_points if criterion_id in evidence_by_criterion else 0
 
-        scores[criterion_id] = {"score": score, "max_score": max_points}
+        scores[criterion_id] = {
+            "score": score,
+            "max_score": max_points,
+            "keywords": keywords,
+            "found_keywords": found_keywords,
+            "missing_keywords": missing_keywords,
+        }
 
     return scores
 
@@ -201,14 +214,20 @@ def grade_question(
     for criterion in rubric.get("criteria", []):
         criterion_id = criterion["criterion_id"]
         if criterion_id in scores:
-            rubric_items.append(
-                {
-                    "criterion_id": criterion_id,
-                    "description": criterion["description"],
-                    "score": scores[criterion_id]["score"],
-                    "max_score": scores[criterion_id]["max_score"],
-                }
-            )
+            item = {
+                "criterion_id": criterion_id,
+                "description": criterion["description"],
+                "score": scores[criterion_id]["score"],
+                "max_score": scores[criterion_id]["max_score"],
+            }
+            # Preserve keyword information if available
+            if "keywords" in scores[criterion_id]:
+                item["keywords"] = scores[criterion_id].get("keywords", [])
+                item["found_keywords"] = scores[criterion_id].get("found_keywords", [])
+                item["missing_keywords"] = scores[criterion_id].get(
+                    "missing_keywords", []
+                )
+            rubric_items.append(item)
 
     return {
         "question_id": rubric.get("question_id", "unknown"),
@@ -220,7 +239,9 @@ def grade_question(
     }
 
 
-def generate_simple_feedback(rubric: dict[str, Any], scores: dict[str, dict[str, Any]]) -> str:
+def generate_simple_feedback(
+    rubric: dict[str, Any], scores: dict[str, dict[str, Any]]
+) -> str:
     """Generate simple feedback without evidence citations.
 
     Args:
@@ -228,7 +249,7 @@ def generate_simple_feedback(rubric: dict[str, Any], scores: dict[str, dict[str,
         scores: Score information per criterion.
 
     Returns:
-        Feedback text.
+        Feedback text with keyword information.
 
     """
     lines = ["Grading Summary:\n"]
@@ -241,5 +262,19 @@ def generate_simple_feedback(rubric: dict[str, Any], scores: dict[str, dict[str,
                 f"- {criterion['description']}: "
                 f"{score_info['score']}/{score_info['max_score']} points"
             )
+
+            # Add keyword information if available
+            if "keywords" in score_info:
+                keywords = score_info.get("keywords", [])
+                found_keywords = score_info.get("found_keywords", [])
+                missing_keywords = score_info.get("missing_keywords", [])
+
+                if keywords:
+                    lines.append(f"  Keywords checked: {', '.join(keywords)}")
+                    if found_keywords:
+                        lines.append(f"  ✓ Found: {', '.join(found_keywords)}")
+                    if missing_keywords:
+                        lines.append(f"  ✗ Missing: {', '.join(missing_keywords)}")
+                    lines.append("")  # Empty line for spacing
 
     return "\n".join(lines)

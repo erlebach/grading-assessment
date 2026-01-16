@@ -9,7 +9,9 @@ import json
 from typing import Any
 
 
-def validate_explanation(explanation: dict[str, Any], valid_evidence_ids: list[str]) -> bool:
+def validate_explanation(
+    explanation: dict[str, Any], valid_evidence_ids: list[str]
+) -> bool:
     """Validate that an explanation meets citation requirements.
 
     Args:
@@ -69,13 +71,30 @@ def format_grading_prompt(
 
     evidence_text = "\n".join(evidence_lines)
 
-    # Format grading record
+    # Format grading record with keyword information
     criteria_lines = []
+    keyword_sections = []
     for criterion_id, score_info in grading_record.items():
         criteria_lines.append(
             f"- {criterion_id}: {score_info['score']}/{score_info['max_score']} points"
         )
+
+        # Add keyword information if available
+        if "keywords" in score_info:
+            keywords = score_info.get("keywords", [])
+            found_keywords = score_info.get("found_keywords", [])
+            missing_keywords = score_info.get("missing_keywords", [])
+
+            if keywords:
+                keyword_info = f"  Keywords checked: {', '.join(keywords)}\n"
+                if found_keywords:
+                    keyword_info += f"  ✓ Found: {', '.join(found_keywords)}\n"
+                if missing_keywords:
+                    keyword_info += f"  ✗ Missing: {', '.join(missing_keywords)}"
+                keyword_sections.append(f"{criterion_id}:\n{keyword_info}")
+
     criteria_text = "\n".join(criteria_lines)
+    keyword_text = "\n\n".join(keyword_sections) if keyword_sections else ""
 
     prompt = f"""You are generating an explanation for a grade that has already been assigned.
 
@@ -84,9 +103,13 @@ You MUST:
 - Use only the provided evidence spans
 - Attach citations to every sentence using evidence IDs in [brackets]
 - Never introduce new facts or information not in the evidence
+- Include information about which keywords were found and which were missing
 
 GRADING RECORD (already decided):
 {criteria_text}
+
+KEYWORD ANALYSIS:
+{keyword_text}
 
 AVAILABLE EVIDENCE:
 {evidence_text}
@@ -105,6 +128,7 @@ Generate a JSON explanation with this exact structure:
 }}
 
 CRITICAL: Every sentence MUST include at least one citation from the available evidence.
+Include information about keyword matches in your explanation to help the student understand what was checked.
 """
 
     return prompt
@@ -143,18 +167,38 @@ def format_batched_grading_prompt(
         grading_record = student_data["grading_record"]
         student_answer = student_data["student_answer"]
 
-        # Format grading record
+        # Format grading record with keyword information
         criteria_lines = []
+        keyword_sections = []
         for criterion_id, score_info in grading_record.items():
             criteria_lines.append(
                 f"  - {criterion_id}: {score_info['score']}/{score_info['max_score']} points"
             )
+
+            # Add keyword information if available
+            if "keywords" in score_info:
+                keywords = score_info.get("keywords", [])
+                found_keywords = score_info.get("found_keywords", [])
+                missing_keywords = score_info.get("missing_keywords", [])
+
+                if keywords:
+                    keyword_info = f"    Keywords checked: {', '.join(keywords)}\n"
+                    if found_keywords:
+                        keyword_info += f"    ✓ Found: {', '.join(found_keywords)}\n"
+                    if missing_keywords:
+                        keyword_info += f"    ✗ Missing: {', '.join(missing_keywords)}"
+                    keyword_sections.append(f"  {criterion_id}:\n{keyword_info}")
+
         criteria_text = "\n".join(criteria_lines)
+        keyword_text = "\n\n".join(keyword_sections) if keyword_sections else ""
 
         student_section = f"""
 STUDENT {i} ({student_id}):
 GRADING RECORD (already decided):
 {criteria_text}
+
+KEYWORD ANALYSIS:
+{keyword_text}
 
 STUDENT ANSWER:
 {student_answer}
@@ -171,6 +215,7 @@ You MUST:
 - Attach citations to every sentence using evidence IDs in [brackets]
 - Never introduce new facts or information not in the evidence
 - Generate separate explanations for each student
+- Include information about which keywords were found and which were missing for each student
 
 AVAILABLE EVIDENCE (shared across all students):
 {evidence_text}
@@ -205,6 +250,7 @@ CRITICAL:
 - Generate explanations for ALL {len(students_data)} students
 - Every sentence MUST include at least one citation from the available evidence
 - Each student's explanation must be in a separate object in the "students" array
+- Include keyword match information in your explanations to help students understand what was checked
 """
     return prompt
 
@@ -252,7 +298,9 @@ def parse_batched_lmql_response(
         if "student_id" not in student_data:
             raise ValueError("Student data missing 'student_id'")
         if "sentences" not in student_data:
-            raise ValueError(f"Student {student_data['student_id']} missing 'sentences'")
+            raise ValueError(
+                f"Student {student_data['student_id']} missing 'sentences'"
+            )
 
         student_id = student_data["student_id"]
         explanations[student_id] = {
@@ -395,7 +443,10 @@ if __name__ == "__main__":
     print("\n[Test 3] Invalid explanation (unknown citation):")
     invalid_explanation_2 = {
         "sentences": [
-            {"text": "The answer is correct.", "citations": ["slide_99"]},  # Unknown ID!
+            {
+                "text": "The answer is correct.",
+                "citations": ["slide_99"],
+            },  # Unknown ID!
         ]
     }
 
