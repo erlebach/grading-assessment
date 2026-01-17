@@ -1,4 +1,4 @@
-# Version 1: Dual-Index Chroma RAG with Reranking
+# Retrieval Core: Dual-Index Chroma RAG with Reranking
 
 This version extends the MWE 5 pipeline with advanced retrieval capabilities:
 
@@ -91,7 +91,7 @@ OLLAMA_NUM_PARALLEL=4
 
 ### Source Configuration
 
-Edit `version1/config/sources.yaml`:
+Edit `retrieval_core/config/sources.yaml`:
 
 ```yaml
 sources:
@@ -129,14 +129,14 @@ reranker:
 ```python
 from pathlib import Path
 from config.llm_config import setup_llamaindex_defaults
-from version1.index_builder import build_dual_indexes
+from retrieval_core.index_builder import build_dual_indexes
 
 # Setup
 setup_llamaindex_defaults()
 
 # Build indexes from YAML config
-config_path = Path("version1/config/sources.yaml")
-persist_dir = Path("version1/chroma_db")
+config_path = Path("retrieval_core/config/sources.yaml")
+persist_dir = Path("retrieval_core/chroma_db")
 
 word_index, sentence_index = build_dual_indexes(config_path, persist_dir)
 print(f"✓ Dual indexes built and persisted to {persist_dir}")
@@ -145,16 +145,16 @@ print(f"✓ Dual indexes built and persisted to {persist_dir}")
 ### Loading Existing Indexes
 
 ```python
-from version1.index_builder import load_dual_indexes
+from retrieval_core.index_builder import load_dual_indexes
 
-persist_dir = Path("version1/chroma_db")
+persist_dir = Path("retrieval_core/chroma_db")
 word_index, sentence_index = load_dual_indexes(persist_dir)
 ```
 
 ### Retrieval with Reranking
 
 ```python
-from version1.retriever import DualIndexRetriever
+from retrieval_core.retriever import DualIndexRetriever
 
 # Create retriever
 retriever = DualIndexRetriever(word_index, sentence_index)
@@ -176,22 +176,22 @@ for result in results:
 
 ```bash
 # Sequential mode (one student at a time)
-python -m version1.pipeline --mode sequential --num-students 4
+python -m retrieval_core.pipeline --mode sequential --num-students 4
 
 # Batched mode (single LLM call for all students)
-python -m version1.pipeline --mode batched --num-students 4
+python -m retrieval_core.pipeline --mode batched --num-students 4
 
 # Async concurrent mode (parallel LLM calls)
-python -m version1.pipeline --mode async --num-students 4
+python -m retrieval_core.pipeline --mode async --num-students 4
 
 # Run all modes and compare
-python -m version1.pipeline --mode all --num-students 2
+python -m retrieval_core.pipeline --mode all --num-students 2
 ```
 
 ## File Structure
 
 ```
-version1/
+retrieval_core/
 ├── __init__.py              # Package initialization
 ├── config/
 │   ├── __init__.py
@@ -271,7 +271,7 @@ Popular cross-encoder models:
 
 ## Comparison with MWE 5
 
-| Feature | MWE 5 | Version 1 |
+| Feature | MWE 5 | Retrieval Core |
 |---------|-------|-----------|
 | Vector Store | In-memory (SimpleVectorStore) | Persistent (Chroma) |
 | Chunking | Single strategy (512 chars) | Dual strategy (word + sentence) |
@@ -286,13 +286,13 @@ Test individual components:
 
 ```bash
 # Test index builder
-python -m version1.index_builder
+python -m retrieval_core.index_builder
 
 # Test retriever
-python -m version1.retriever
+python -m retrieval_core.retriever
 
 # Test full pipeline
-python -m version1.pipeline --mode batched --num-students 1
+python -m retrieval_core.pipeline --mode batched --num-students 1
 ```
 
 ## Troubleshooting

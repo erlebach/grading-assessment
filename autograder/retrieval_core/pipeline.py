@@ -1,4 +1,4 @@
-"""Version 1 Pipeline: Dual-index Chroma RAG with reranking.
+"""Retrieval Core Pipeline: Dual-index Chroma RAG with reranking.
 
 This script extends MWE 5 with:
 - Chroma vector database (persistent storage)
@@ -11,10 +11,10 @@ Prerequisites:
 - Optional: Set RERANKER_MODEL env var (defaults to ms-marco-MiniLM-L-6-v2)
 
 Usage:
-    python -m version1.pipeline --mode sequential
-    python -m version1.pipeline --mode batched
-    python -m version1.pipeline --mode async
-    python -m version1.pipeline --mode all  # Run all modes and compare
+    python -m retrieval_core.pipeline --mode sequential
+    python -m retrieval_core.pipeline --mode batched
+    python -m retrieval_core.pipeline --mode async
+    python -m retrieval_core.pipeline --mode all  # Run all modes and compare
 
 """
 
@@ -29,8 +29,8 @@ from config.llm_config import setup_llamaindex_defaults
 from evidence.index_builder import create_documents_with_metadata
 from grader.grade_question import apply_rubric_scoring
 from grader.lmql_grading import LMQLGrader
-from version1.index_builder import build_dual_indexes, load_dual_indexes
-from version1.retriever import DualIndexRetriever
+from retrieval_core.index_builder import build_dual_indexes, load_dual_indexes
+from retrieval_core.retriever import DualIndexRetriever
 
 
 def create_sample_dual_index() -> tuple[Path, DualIndexRetriever]:
@@ -69,11 +69,11 @@ def create_sample_dual_index() -> tuple[Path, DualIndexRetriever]:
         {"source_id": "slide_21", "source_type": "slide", "page_number": 21},
     ]
 
-    from version1.index_builder import build_sentence_index, build_word_index
+    from retrieval_core.index_builder import build_sentence_index, build_word_index
 
     documents = create_documents_with_metadata(evidence_texts, evidence_sources)
 
-    # Create directory in version1/tmp/ for Chroma persistence
+    # Create directory in retrieval_core/tmp/ for Chroma persistence
     persist_dir = Path(__file__).parent / "tmp" / f"test_pipeline_{int(time.time())}"
     persist_dir.mkdir(parents=True, exist_ok=True)
 
@@ -896,16 +896,16 @@ def main() -> None:
         epilog="""
 Examples:
   # Run sequential mode with 4 students
-  python -m version1.pipeline --mode sequential
+  python -m retrieval_core.pipeline --mode sequential
 
   # Run batched mode with 2 students
-  python -m version1.pipeline --mode batched --num-students 2
+  python -m retrieval_core.pipeline --mode batched --num-students 2
 
   # Run async concurrent mode with 3 students
-  python -m version1.pipeline --mode async --num-students 3
+  python -m retrieval_core.pipeline --mode async --num-students 3
 
   # Run all modes with 1 student and compare
-  python -m version1.pipeline --mode all --num-students 1
+  python -m retrieval_core.pipeline --mode all --num-students 1
         """,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )

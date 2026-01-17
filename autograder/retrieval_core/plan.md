@@ -8,7 +8,7 @@ todos: []
 
 ## Overview
 
-Create `version1/` folder extending mwe5 pipeline with:
+Create `retrieval_core/` folder extending mwe5 pipeline with:
 
 - Chroma vector database (replacing in-memory SimpleVectorStore)
 - Dual embedding indexes: word-based (512 chars, 50 overlap) + sentence-based (pure sentence splitting)
@@ -36,7 +36,7 @@ flowchart TD
 ## File Structure
 
 ```
-version1/
+retrieval_core/
 ├── __init__.py
 ├── config/
 │   ├── __init__.py

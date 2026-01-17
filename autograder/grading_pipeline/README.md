@@ -1,10 +1,10 @@
-# Version 2: YAML Source Loading with PDF Support and Incremental Indexing
+# Grading Pipeline: YAML Source Loading with PDF Support and Incremental Indexing
 
-Version 2 extends version1 with PDF file support and smart incremental indexing while reusing all existing functionality from version1.
+Grading Pipeline extends retrieval_core with PDF file support and smart incremental indexing while reusing all existing functionality from retrieval_core.
 
 ## Core Principles
 
-1. **Import and reuse version1** - No code duplication
+1. **Import and reuse retrieval_core** - No code duplication
 2. **Extend for PDF only** - PDF-specific loading capabilities
 3. **Smart incremental indexing** - Only process new or changed sources
 
@@ -17,7 +17,7 @@ Version 2 extends version1 with PDF file support and smart incremental indexing 
 - ✅ Cross-encoder reranking support
 - ✅ URL loading with caching
 
-### New in Version2
+### New in Grading Pipeline
 - ✅ **PDF text extraction** using pypdf
 - ✅ **PDF-aware file loading** in YAML configuration
 - ✅ **Incremental indexing** - Only process new/changed sources
@@ -46,7 +46,7 @@ Version 2 extends version1 with PDF file support and smart incremental indexing 
 
 ```bash
 cd autograder
-uv sync  # Installs pypdf>=3.0.0 and all version1 dependencies
+uv sync  # Installs pypdf>=3.0.0 and all retrieval_core dependencies
 ```
 
 ### 2. Build or Update Indexes (Incremental)
@@ -54,27 +54,27 @@ uv sync  # Installs pypdf>=3.0.0 and all version1 dependencies
 ```bash
 # First run: builds fresh indexes
 # Subsequent runs: only processes changes
-uv run python -m version2.index_builder
+uv run python -m grading_pipeline.index_builder
 ```
 
 ### 3. Run Comprehensive Tests
 
 ```bash
 # Test all incremental indexing scenarios
-uv run python version2/test_incremental_indexing.py
+uv run python grading_pipeline/test_incremental_indexing.py
 ```
 
-**Test Design**: Global cleanup at start ensures all tests begin with a clean slate. All test artifacts are stored in `version2/test_tmp/` (separate from production `tmp/`), making it clear what's test-related and easy to clean up. 
+**Test Design**: Global cleanup at start ensures all tests begin with a clean slate. All test artifacts are stored in `grading_pipeline/test_tmp/` (separate from production `tmp/`), making it clear what's test-related and easy to clean up. 
 
 ### 4. Use in Code
 
 ```python
 from pathlib import Path
-from version2.index_builder import build_or_update_dual_indexes
+from grading_pipeline.index_builder import build_or_update_dual_indexes
 
 # Build or update indexes incrementally
-config_path = Path("version2/config/sources.yaml")
-persist_dir = Path("version2/tmp/chroma_db")
+config_path = Path("grading_pipeline/config/sources.yaml")
+persist_dir = Path("grading_pipeline/tmp/chroma_db")
 
 # Automatically detects what needs indexing:
 # - Fresh build if no indexes exist
@@ -92,7 +92,7 @@ results = retriever.retrieve(query)
 
 ## Incremental Indexing
 
-The key feature of version2 is **smart incremental indexing**:
+The key feature of grading_pipeline is **smart incremental indexing**:
 
 ### How It Works
 
@@ -144,7 +144,7 @@ sources:
 ## File Structure
 
 ```
-version2/
+grading_pipeline/
 ├── __init__.py                    # Module marker
 ├── manifest.py                    # Source manifest tracking
 ├── index_builder.py               # PDF extensions + incremental indexing
@@ -166,7 +166,7 @@ version2/
 
 ## Configuration
 
-Edit `version2/config/sources.yaml` to configure PDF sources:
+Edit `grading_pipeline/config/sources.yaml` to configure PDF sources:
 
 ```yaml
 sources:
@@ -187,7 +187,7 @@ The test suite verifies all incremental indexing scenarios:
 4. **Modified Source**: Change detection and re-indexing
 
 ```bash
-uv run python version2/test_incremental_indexing.py
+uv run python grading_pipeline/test_incremental_indexing.py
 ```
 
 **Architecture**: Each test is independent and uses its own subdirectory in `test_tmp/`. Global cleanup at the start ensures a clean slate for every run.
@@ -205,17 +205,17 @@ Expected output:
 
 | Function | Source | Action |
 |----------|--------|--------|
-| `_load_url_source()` | version1 | ✓ Imported directly |
-| `build_word_index()` | version1 | ✓ Imported directly |
-| `build_sentence_index()` | version1 | ✓ Imported directly |
-| `build_dual_indexes()` | version1 | ✓ Imported directly |
-| `load_dual_indexes()` | version1 | ✓ Imported directly |
-| `_extract_text_from_pdf()` | NEW | Created in version2 |
-| `_load_file_source_with_pdf()` | NEW | Created in version2 |
-| `load_sources_from_yaml_with_pdf()` | NEW | Created in version2 |
+| `_load_url_source()` | retrieval_core | ✓ Imported directly |
+| `build_word_index()` | retrieval_core | ✓ Imported directly |
+| `build_sentence_index()` | retrieval_core | ✓ Imported directly |
+| `build_dual_indexes()` | retrieval_core | ✓ Imported directly |
+| `load_dual_indexes()` | retrieval_core | ✓ Imported directly |
+| `_extract_text_from_pdf()` | NEW | Created in grading_pipeline |
+| `_load_file_source_with_pdf()` | NEW | Created in grading_pipeline |
+| `load_sources_from_yaml_with_pdf()` | NEW | Created in grading_pipeline |
 
 **Total new code**: ~100 lines (PDF-specific only)
-**Reused from version1**: All index building, persistence, and URL loading
+**Reused from retrieval_core**: All index building, persistence, and URL loading
 
 ## Persistent Storage Benefits
 
@@ -228,16 +228,16 @@ This means when grading students again, the indexes can be loaded instantly with
 
 ## Dependencies
 
-- All version1 dependencies (inherited)
+- All retrieval_core dependencies (inherited)
 - **New**: `pypdf>=3.0.0` for PDF text extraction
 
 ## Next Steps
 
-Version2 is ready for integration with the grading pipeline:
+Grading Pipeline is ready for integration with the grading pipeline:
 
 1. Use `load_sources_from_yaml_with_pdf()` to load PDF lecture materials
-2. Build persistent indexes once with version1's `build_dual_indexes()`
+2. Build persistent indexes once with retrieval_core's `build_dual_indexes()`
 3. Reload indexes instantly for each grading run with `load_dual_indexes()`
-4. Use version1's `DualIndexRetriever` for evidence retrieval
+4. Use retrieval_core's `DualIndexRetriever` for evidence retrieval
 
-All version1 functionality (dual indexes, reranking, retrieval) works seamlessly with PDF-loaded documents.
+All retrieval_core functionality (dual indexes, reranking, retrieval) works seamlessly with PDF-loaded documents.
