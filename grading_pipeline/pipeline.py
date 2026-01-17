@@ -77,6 +77,7 @@ def setup_grading_environment(
 def _grade_student_core(
     student_id: str,
     student_answer: str,
+    question_text: str,
     rubric: dict[str, Any],
     retriever: DualIndexRetriever,
 ) -> dict[str, Any]:
@@ -91,6 +92,7 @@ def _grade_student_core(
     Args:
         student_id: Student identifier.
         student_answer: Student's answer text.
+        question_text: The question text that was asked.
         rubric: Rubric dictionary.
         retriever: DualIndexRetriever instance.
 
@@ -160,6 +162,8 @@ def _grade_student_core(
     result = {
         "student_id": student_id,
         "question_id": grading_result["question_id"],
+        "question_text": question_text,
+        "answer": student_answer,
         "score": grading_result["total_score"],
         "max_score": grading_result["max_score"],
         "rubric_items": rubric_items,
@@ -226,12 +230,13 @@ def grade_question_batch(
     for submission in submissions:
         student_id = submission["student_id"]
         student_answer = submission["answer"]
+        question_text = submission.get("question_text", rubric.get("question_text", ""))
 
         log_print(f"[Grading] Processing {student_id}...")
 
         try:
             result = _grade_student_core(
-                student_id, student_answer, rubric, retriever
+                student_id, student_answer, question_text, rubric, retriever
             )
             results.append(result)
             log_print(f"[Grading] ✓ {student_id} completed")

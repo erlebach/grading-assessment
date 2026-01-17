@@ -60,17 +60,29 @@ def prepare_submissions(
 
 def main() -> None:
     """Example usage of prepare_submissions."""
-    # Example student data
+    # Student data for factorial question (q01)
     students_data = [
         {
             "student_id": "student_001",
             "question_id": "q01",
-            "answer": "Mutual information measures the reduction in uncertainty...",
+            "answer": """def factorial(n):
+    if n < 0:
+        raise ValueError("Factorial is not defined for negative numbers")
+    if n == 0 or n == 1:
+        return 1
+    result = 1
+    for i in range(2, n + 1):
+        result *= i
+    return result""",
         },
         {
             "student_id": "student_002",
             "question_id": "q01",
-            "answer": "I think mutual information is related to entropy...",
+            "answer": """def factorial(n):
+    result = 1
+    for i in range(1, n + 1):
+        result = result * i
+    return result""",
         },
     ]
 
