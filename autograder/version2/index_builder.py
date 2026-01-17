@@ -415,18 +415,18 @@ def build_or_update_dual_indexes(
     elif not new_docs and not changed_docs:
         # All sources unchanged - just load existing
         print(f"\nAll sources unchanged - loading existing indexes...")
-        
+
         # For loading only, we need minimal embedding setup (but won't use it)
         if lazy_load_embeddings:
             # Set a lightweight placeholder - won't be used for loading
             from llama_index.core import Settings
             from llama_index.embeddings.huggingface import HuggingFaceEmbedding
-            
+
             # Directly set without checking (checking triggers initialization)
             Settings.embed_model = HuggingFaceEmbedding(
                 model_name="sentence-transformers/all-MiniLM-L6-v2"
             )
-        
+
         word_index, sentence_index = load_dual_indexes(persist_dir)
 
     else:

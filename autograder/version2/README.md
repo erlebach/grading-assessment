@@ -64,6 +64,8 @@ uv run python -m version2.index_builder
 uv run python version2/test_incremental_indexing.py
 ```
 
+**Test Design**: Global cleanup at start ensures all tests begin with a clean slate. All test artifacts are stored in `version2/test_tmp/` (separate from production `tmp/`), making it clear what's test-related and easy to clean up. 
+
 ### 4. Use in Code
 
 ```python
@@ -144,17 +146,21 @@ sources:
 ```
 version2/
 ├── __init__.py                    # Module marker
-├── index_builder.py               # PDF extensions + version1 imports
+├── manifest.py                    # Source manifest tracking
+├── index_builder.py               # PDF extensions + incremental indexing
+├── test_incremental_indexing.py  # Comprehensive test suite
 ├── config/
 │   ├── __init__.py
 │   └── sources.yaml               # YAML config for PDF sources
 ├── tmp/
 │   ├── .gitignore
-│   ├── test_yaml_loading.py       # Test suite
-│   └── chroma_db_test_*/          # Persistent indexes (created by tests)
+│   └── chroma_db/                 # Production persistent indexes
+├── test_tmp/                      # Test artifacts (gitignored)
+│   └── */                         # Per-test subdirectories
 ├── sources/
 │   └── slides_data_type_quality.pdf
-├── IMPLEMENTATION_SUMMARY.md      # Detailed implementation notes
+├── IMPLEMENTATION_SUMMARY.md      # Initial implementation notes
+├── INCREMENTAL_INDEXING_SUMMARY.md # Incremental indexing details
 └── README.md                      # This file
 ```
 
@@ -173,21 +179,26 @@ sources:
 
 ## Testing
 
-The test suite verifies:
+The test suite verifies all incremental indexing scenarios:
 
-1. **YAML Source Loading**: PDF files are loaded and text extracted
-2. **Persistent Index Building**: Indexes are built and stored in ChromaDB
-3. **Index Reloading**: Indexes can be reloaded instantly without rebuilding
+1. **Fresh Build**: Build indexes when none exist
+2. **No Changes**: Fast reload when sources unchanged
+3. **Add New Source**: Incremental indexing of new sources only
+4. **Modified Source**: Change detection and re-indexing
 
 ```bash
-uv run python -m version2.tmp.test_yaml_loading
+uv run python version2/test_incremental_indexing.py
 ```
+
+**Architecture**: Each test is independent and uses its own subdirectory in `test_tmp/`. Global cleanup at the start ensures a clean slate for every run.
 
 Expected output:
 ```
-✓ Test 1: YAML source loading with PDF - PASSED
-✓ Test 2: Persistent index building - PASSED  
-✓ Test 3: Index reload from ChromaDB - PASSED
+[Cleanup] Removing all test artifacts...
+✓ Test 1: Fresh Build - PASSED
+✓ Test 2: Reload with No Changes - PASSED
+✓ Test 3: Add New Source - PASSED
+✓ Test 4: Modify Existing Source - PASSED
 ```
 
 ## Code Reuse Summary
