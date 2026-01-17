@@ -8,19 +8,19 @@ All components of the dual-index Chroma RAG pipeline with reranking have been su
 
 ### Core Implementation (7 files)
 
-1. **`version1/__init__.py`**
+1. **`retrieval_core/__init__.py`**
    - Package initialization
    - Version: 1.0.0
 
-2. **`version1/config/__init__.py`**
+2. **`retrieval_core/config/__init__.py`**
    - Configuration module initialization
 
-3. **`version1/config/sources.yaml`**
+3. **`retrieval_core/config/sources.yaml`**
    - YAML configuration for evidence sources
    - Supports both local files and URLs
    - Configurable retrieval and reranker settings
 
-4. **`version1/index_builder.py`** (377 lines)
+4. **`retrieval_core/index_builder.py`** (377 lines)
    - `load_sources_from_yaml()`: Load documents from YAML config
    - `_load_file_source()`: Load from local files with glob patterns
    - `_load_url_source()`: Load from URLs with caching
@@ -30,7 +30,7 @@ All components of the dual-index Chroma RAG pipeline with reranking have been su
    - `load_dual_indexes()`: Load existing indexes from Chroma
    - Includes test code in `__main__`
 
-5. **`version1/retriever.py`** (258 lines)
+5. **`retrieval_core/retriever.py`** (258 lines)
    - `DualIndexRetriever`: Main retriever class
    - `retrieve()`: Retrieve from both indexes with reranking
    - `_union_and_deduplicate()`: Smart deduplication (exact duplicates only)
@@ -39,7 +39,7 @@ All components of the dual-index Chroma RAG pipeline with reranking have been su
    - `format_evidence_for_grading()`: Format evidence for prompts
    - Includes test code in `__main__`
 
-6. **`version1/pipeline.py`** (815 lines)
+6. **`retrieval_core/pipeline.py`** (815 lines)
    - Complete pipeline extending MWE 5
    - `create_sample_dual_index()`: Create test indexes
    - `setup_grading_environment()`: Setup with dual indexes
@@ -52,7 +52,7 @@ All components of the dual-index Chroma RAG pipeline with reranking have been su
    - `run_async_concurrent_mode()`: Async concurrent execution
    - All execution modes from MWE 5 preserved
 
-7. **`version1/README.md`**
+7. **`retrieval_core/README.md`**
    - Comprehensive documentation
    - Architecture overview
    - Installation and configuration
@@ -67,7 +67,7 @@ All components of the dual-index Chroma RAG pipeline with reranking have been su
 - Added `llama-index-vector-stores-chroma>=0.1.0`
 - Added `chromadb>=0.4.0` (moved from optional to main dependencies)
 - Added `sentence-transformers>=2.2.0`
-- Added `version1` to build packages
+- Added `retrieval_core` to build packages
 
 ## Key Features Implemented
 
@@ -156,13 +156,13 @@ All modules include test code in `__main__` blocks:
 
 ```bash
 # Test index builder
-python -m version1.index_builder
+python -m retrieval_core.index_builder
 
 # Test retriever
-python -m version1.retriever
+python -m retrieval_core.retriever
 
 # Test full pipeline
-python -m version1.pipeline --mode batched --num-students 1
+python -m retrieval_core.pipeline --mode batched --num-students 1
 ```
 
 ## Usage Example
@@ -170,15 +170,15 @@ python -m version1.pipeline --mode batched --num-students 1
 ```python
 from pathlib import Path
 from config.llm_config import setup_llamaindex_defaults
-from version1.index_builder import build_dual_indexes, load_dual_indexes
-from version1.retriever import DualIndexRetriever
+from retrieval_core.index_builder import build_dual_indexes, load_dual_indexes
+from retrieval_core.retriever import DualIndexRetriever
 
 # Setup
 setup_llamaindex_defaults()
 
 # Build indexes (first time)
-config_path = Path("version1/config/sources.yaml")
-persist_dir = Path("version1/chroma_db")
+config_path = Path("retrieval_core/config/sources.yaml")
+persist_dir = Path("retrieval_core/chroma_db")
 word_index, sentence_index = build_dual_indexes(config_path, persist_dir)
 
 # Or load existing indexes (subsequent times)
@@ -240,7 +240,7 @@ Potential improvements for Version 2:
 ## Verification
 
 All todos completed:
-- ✅ Create version1/ folder structure
+- ✅ Create retrieval_core/ folder structure
 - ✅ Create config/sources.yaml
 - ✅ Implement load_sources_from_yaml()
 - ✅ Implement dual index builder
@@ -262,11 +262,11 @@ To use Version 1:
    uv sync
    ```
 
-2. Configure sources in `version1/config/sources.yaml`
+2. Configure sources in `retrieval_core/config/sources.yaml`
 
 3. Run the pipeline:
    ```bash
-   python -m version1.pipeline --mode batched --num-students 4
+   python -m retrieval_core.pipeline --mode batched --num-students 4
    ```
 
 ## Notes

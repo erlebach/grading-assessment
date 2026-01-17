@@ -355,7 +355,7 @@ if __name__ == "__main__":
 
     documents = create_documents_with_metadata(sample_texts, sample_sources)
 
-    # Build indexes in version1/tmp/
+    # Build indexes in retrieval_core/tmp/
     temp_dir = Path(__file__).parent / "tmp" / f"test_index_{int(time.time())}"
     temp_dir.mkdir(parents=True, exist_ok=True)
     print(f"\nBuilding indexes in {temp_dir}")

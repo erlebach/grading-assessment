@@ -237,7 +237,7 @@ if __name__ == "__main__":
 
     from config.llm_config import setup_llamaindex_defaults
     from evidence.index_builder import create_documents_with_metadata
-    from version1.index_builder import build_sentence_index, build_word_index
+    from retrieval_core.index_builder import build_sentence_index, build_word_index
 
     print("Testing DualIndexRetriever with reranking...")
 
@@ -274,7 +274,7 @@ if __name__ == "__main__":
 
     documents = create_documents_with_metadata(texts, sources)
 
-    # Build dual indexes in version1/tmp/
+    # Build dual indexes in retrieval_core/tmp/
     temp_dir = Path(__file__).parent / "tmp" / f"test_retriever_{int(time.time())}"
     temp_dir.mkdir(parents=True, exist_ok=True)
     print(f"\nBuilding indexes in {temp_dir}")

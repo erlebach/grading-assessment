@@ -1,6 +1,6 @@
-"""Version 2: Extends version1 with PDF support and incremental indexing.
+"""Grading Pipeline: Extends retrieval_core with PDF support and incremental indexing.
 
-This module imports and reuses all version1 functionality,
+This module imports and reuses all retrieval_core functionality,
 adding PDF-specific file loading and incremental indexing capabilities.
 
 Key Functions:
@@ -9,7 +9,7 @@ Key Functions:
     - load_sources_from_yaml_with_pdf(): YAML loader with PDF support
     - build_or_update_dual_indexes(): Incremental indexing (NEW)
 
-Imported from version1 (reused as-is):
+Imported from retrieval_core (reused as-is):
     - build_word_index(): Word-based index building
     - build_sentence_index(): Sentence-based index building
     - build_dual_indexes(): Build both indexes from config
@@ -37,8 +37,8 @@ except ImportError:
         "pypdf is required for PDF support. Install with: pip install pypdf"
     )
 
-# Import from version1 - REUSE AS-IS
-from version1.index_builder import (
+# Import from retrieval_core - REUSE AS-IS
+from retrieval_core.index_builder import (
     _load_url_source,  # URL loading with caching
     build_dual_indexes,  # Build both indexes from config
     build_sentence_index,  # Sentence index building
@@ -47,7 +47,7 @@ from version1.index_builder import (
 )
 
 # Import manifest management
-from version2.manifest import (
+from grading_pipeline.manifest import (
     create_manifest_entry,
     get_source_info,
     has_source_changed,
@@ -96,10 +96,10 @@ def _load_file_source_with_pdf(
 ) -> list[Document]:
     """Load file sources with PDF support.
 
-    Extends version1's _load_file_source() logic:
+    Extends retrieval_core's _load_file_source() logic:
     - For .pdf files: Use _extract_text_from_pdf()
-    - For .txt, .md files: Use same logic as version1 (reimplemented inline)
-    - Same metadata structure as version1
+    - For .txt, .md files: Use same logic as retrieval_core (reimplemented inline)
+    - Same metadata structure as retrieval_core
 
     Args:
         source: Source configuration dictionary with 'path' and 'patterns' keys.
@@ -159,9 +159,9 @@ def _load_file_source_with_pdf(
 def load_sources_from_yaml_with_pdf(config_path: Path) -> list[Document]:
     """Load documents from sources specified in YAML configuration with PDF support.
 
-    Similar structure to version1's load_sources_from_yaml():
+    Similar structure to retrieval_core's load_sources_from_yaml():
     - For 'file' sources: Use _load_file_source_with_pdf() (handles PDF, TXT, MD)
-    - For 'url' sources: Import and use version1's _load_url_source()
+    - For 'url' sources: Import and use retrieval_core's _load_url_source()
 
     Args:
         config_path: Path to the YAML configuration file.
@@ -185,7 +185,7 @@ def load_sources_from_yaml_with_pdf(config_path: Path) -> list[Document]:
             docs = _load_file_source_with_pdf(source, metadata)
             all_documents.extend(docs)
         elif source_type == "url":
-            # Load from URL using version1's function
+            # Load from URL using retrieval_core's function
             docs = _load_url_source(source, metadata)
             all_documents.extend(docs)
         else:
@@ -472,20 +472,20 @@ def build_or_update_dual_indexes(
     return word_index, sentence_index
 
 
-# Re-export version1 functions for convenience
+# Re-export retrieval_core functions for convenience
 __all__ = [
     "load_sources_from_yaml_with_pdf",  # NEW: PDF-aware YAML loader
     "build_or_update_dual_indexes",  # NEW: Incremental indexing
-    "build_word_index",  # From version1
-    "build_sentence_index",  # From version1
-    "build_dual_indexes",  # From version1
-    "load_dual_indexes",  # From version1
+    "build_word_index",  # From retrieval_core
+    "build_sentence_index",  # From retrieval_core
+    "build_dual_indexes",  # From retrieval_core
+    "load_dual_indexes",  # From retrieval_core
 ]
 
 
 if __name__ == "__main__":
     # Test incremental indexing functionality with lazy loading
-    print("Testing version2 incremental indexing with lazy embedding loading...")
+    print("Testing grading_pipeline incremental indexing with lazy embedding loading...")
 
     # NOTE: We do NOT call setup_llamaindex_defaults() here!
     # It will be called lazily inside build_or_update_dual_indexes()
@@ -528,6 +528,6 @@ if __name__ == "__main__":
         print(f"  Sentence-based retrieval: {len(sentence_nodes)} results")
     else:
         print(f"Config file not found: {config_path}")
-        print("Create version2/config/sources.yaml to test")
+        print("Create grading_pipeline/config/sources.yaml to test")
 
-    print("\n✓ Version2 incremental indexing test complete")
+    print("\n✓ Grading pipeline incremental indexing test complete")
