@@ -6,15 +6,16 @@ This script tests the smart incremental indexing functionality that:
 3. Adds only new sources incrementally
 4. Detects changes and re-indexes only modified sources
 
-All tests use version2/tmp/ for temporary artifacts.
+All tests use version2/test_tmp/ for temporary artifacts.
+Global cleanup ensures each test run starts with a clean slate.
 
 """
 
 import shutil
+import sys
 import time
 from pathlib import Path
 
-import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from config.llm_config import setup_llamaindex_defaults
@@ -22,11 +23,19 @@ from version2.index_builder import build_or_update_dual_indexes
 from version2.manifest import get_manifest_summary, load_manifest
 
 
-def cleanup_test_data(persist_dir: Path) -> None:
-    """Remove test ChromaDB and manifest."""
-    if persist_dir.exists():
-        shutil.rmtree(persist_dir)
-        print(f"  Cleaned up {persist_dir}")
+def cleanup_all_test_artifacts() -> Path:
+    """Remove all test artifacts and create fresh test_tmp directory.
+
+    Returns:
+        Path to the cleaned test_tmp directory.
+
+    """
+    test_tmp = Path("version2/test_tmp")
+    if test_tmp.exists():
+        shutil.rmtree(test_tmp)
+        print(f"✓ Cleaned up all test artifacts: {test_tmp}")
+    test_tmp.mkdir(parents=True, exist_ok=True)
+    return test_tmp
 
 
 def test_fresh_build():
@@ -43,10 +52,7 @@ def test_fresh_build():
     print("=" * 70)
 
     config_path = Path("version2/config/sources.yaml")
-    persist_dir = Path("version2/tmp/test_fresh_build")
-
-    # Ensure clean start
-    cleanup_test_data(persist_dir)
+    persist_dir = Path("version2/test_tmp/fresh_build")
 
     print(f"\nBuilding indexes for the first time...")
     start_time = time.time()
@@ -74,14 +80,14 @@ def test_fresh_build():
     return persist_dir
 
 
-def test_no_changes(persist_dir: Path):
+def test_no_changes():
     """Test 2: Reload when no sources have changed.
 
     Expected:
     - Detects all sources as UNCHANGED
     - Skips indexing entirely
     - Loads existing indexes
-    - Very fast (< 1 second)
+    - Very fast (< 5 seconds due to LlamaIndex overhead)
 
     """
     print("\n" + "=" * 70)
@@ -89,8 +95,14 @@ def test_no_changes(persist_dir: Path):
     print("=" * 70)
 
     config_path = Path("version2/config/sources.yaml")
+    persist_dir = Path("version2/test_tmp/no_changes")
 
-    print(f"\nReloading with no changes...")
+    # Build initial indexes
+    print(f"\nStep 1: Building initial indexes...")
+    word_index, sentence_index = build_or_update_dual_indexes(config_path, persist_dir)
+
+    # Now reload - should detect no changes
+    print(f"\nStep 2: Reloading with no changes...")
     start_time = time.time()
 
     word_index, sentence_index = build_or_update_dual_indexes(config_path, persist_dir)
@@ -123,11 +135,8 @@ def test_add_new_source():
     print("Test 3: Add New Source")
     print("=" * 70)
 
-    config_path = Path("version2/tmp/test_add_source_config.yaml")
-    persist_dir = Path("version2/tmp/test_add_source")
-
-    # Start fresh
-    cleanup_test_data(persist_dir)
+    config_path = Path("version2/test_tmp/add_source_config.yaml")
+    persist_dir = Path("version2/test_tmp/add_source")
 
     # Create initial config with one source
     initial_config = {
@@ -222,7 +231,7 @@ def test_changed_source():
     print("=" * 70)
 
     # Create a test file we can modify
-    test_dir = Path("version2/tmp/test_changed_source")
+    test_dir = Path("version2/test_tmp/changed_source")
     test_sources_dir = test_dir / "sources"
     test_sources_dir.mkdir(parents=True, exist_ok=True)
 
@@ -280,9 +289,6 @@ def test_changed_source():
 
     assert updated_mtime == new_mtime, "Manifest should reflect new mtime"
 
-    # Cleanup
-    cleanup_test_data(test_dir)
-
     print(f"\n✓ Test 4 PASSED")
 
 
@@ -292,6 +298,10 @@ def main():
     print("Version 2: Incremental Indexing Test Suite")
     print("=" * 70)
 
+    # Global cleanup - start with clean slate
+    print("\n[Cleanup] Removing all test artifacts...")
+    cleanup_all_test_artifacts()
+
     # Setup
     print("\n[Setup] Configuring LlamaIndex...")
     setup_llamaindex_defaults()
@@ -299,10 +309,10 @@ def main():
 
     try:
         # Test 1: Fresh build
-        persist_dir = test_fresh_build()
+        test_fresh_build()
 
         # Test 2: No changes
-        test_no_changes(persist_dir)
+        test_no_changes()
 
         # Test 3: Add new source
         test_add_new_source()
