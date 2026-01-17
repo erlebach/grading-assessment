@@ -1,0 +1,25 @@
+# Test configuration for grading pipeline tests
+# Controls test behavior and cleanup
+
+# Cleanup behavior
+cleanup:
+  # If true, remove all test artifacts after tests complete
+  # If false, leave artifacts for debugging
+  remove_artifacts: true
+  
+  # Directories to clean up (relative to tests/)
+  artifact_dirs:
+    - tmp_chroma_indexes
+    - tmp_test_data
+    - tmp_results
+
+# Test paths (relative to tests/)
+paths:
+  # ChromaDB indexes for testing
+  chroma_indexes: tmp_chroma_indexes
+  
+  # Temporary test data
+  test_data: tmp_test_data
+  
+  # Test results
+  results: tmp_results

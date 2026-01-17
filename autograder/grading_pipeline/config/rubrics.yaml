@@ -1,0 +1,10 @@
+# Rubric path configuration
+# Maps question IDs to their rubric file paths
+
+rubrics:
+  q01:
+    path: "../../rubrics/q01.yaml"
+    description: "Question 1: Mutual Information"
+  q02:
+    path: "../../rubrics/q02.yaml"
+    description: "Question 2: Data Quality"

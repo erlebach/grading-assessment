@@ -64,7 +64,7 @@ uv run python -m grading_pipeline.index_builder
 uv run python grading_pipeline/test_incremental_indexing.py
 ```
 
-**Test Design**: Global cleanup at start ensures all tests begin with a clean slate. All test artifacts are stored in `grading_pipeline/test_tmp/` (separate from production `tmp/`), making it clear what's test-related and easy to clean up. 
+**Test Design**: Global cleanup at start ensures all tests begin with a clean slate. All test artifacts are stored in `tests/tmp_chroma_indexes/` (separate from production `grading_pipeline/tmp/`), making it clear what's test-related and easy to clean up. Cleanup behavior is controlled by `tests/test_config.yaml`. 
 
 ### 4. Use in Code
 
@@ -155,8 +155,8 @@ grading_pipeline/
 ├── tmp/
 │   ├── .gitignore
 │   └── chroma_db/                 # Production persistent indexes
-├── test_tmp/                      # Test artifacts (gitignored)
-│   └── */                         # Per-test subdirectories
+├── tmp/
+│   └── chroma_db/                 # Production persistent indexes
 ├── sources/
 │   └── slides_data_type_quality.pdf
 ├── IMPLEMENTATION_SUMMARY.md      # Initial implementation notes
@@ -241,3 +241,130 @@ Grading Pipeline is ready for integration with the grading pipeline:
 4. Use retrieval_core's `DualIndexRetriever` for evidence retrieval
 
 All retrieval_core functionality (dual indexes, reranking, retrieval) works seamlessly with PDF-loaded documents.
+
+## Batch-by-Question Grading Pipeline
+
+The grading pipeline implements a batch-by-question architecture for efficient grading of student submissions.
+
+### Architecture Overview
+
+- **Self-contained submissions**: Each submission file contains all necessary information (student_id, question_id, question_text, answer)
+- **Batch processing**: Process all students for one question at a time
+- **Optimized loading**: Rubric and indexes loaded once per question batch
+- **Error handling**: Continue on error, don't stop batch on single failure
+- **Unbuffered output**: Real-time logging to stdout or log files
+
+### Key Components
+
+1. **config_loader.py**: Loads and validates rubric configuration from YAML
+2. **submission_loader.py**: Loads self-contained submissions and groups by question_id
+3. **submission_converter.py**: Utility functions for creating self-contained submissions
+4. **pipeline.py**: Core grading pipeline with batch processing
+5. **cli.py**: Command-line interface for grading
+6. **prepare_submissions.py**: Example driving script for submission conversion
+
+### Quick Start
+
+#### 1. Create Rubric Configuration
+
+Create `grading_pipeline/config/rubrics.yaml`:
+
+```yaml
+rubrics:
+  q01:
+    path: "../../rubrics/q01.yaml"
+    description: "Question 1: Mutual Information"
+```
+
+#### 2. Prepare Submissions
+
+Use the example driving script or create self-contained submissions manually:
+
+```bash
+python -m grading_pipeline.prepare_submissions
+```
+
+#### 3. Grade a Question Batch
+
+```bash
+python -m grading_pipeline.cli grade-question \
+  --question q01 \
+  --rubrics-config grading_pipeline/config/rubrics.yaml \
+  --submissions-dir grading_pipeline/submissions \
+  --sources-config grading_pipeline/config/sources.yaml \
+  --index-dir grading_pipeline/tmp/chroma_db \
+  --output results/q01_results.json
+```
+
+#### 4. Grade a Single Student
+
+```bash
+python -m grading_pipeline.cli grade-student \
+  --rubrics-config grading_pipeline/config/rubrics.yaml \
+  --submission grading_pipeline/submissions/student_001_q01.yaml \
+  --sources-config grading_pipeline/config/sources.yaml \
+  --index-dir grading_pipeline/tmp/chroma_db \
+  --output results/student_001_q01.json
+```
+
+### Submission Format
+
+Self-contained submissions are YAML files with the following structure:
+
+```yaml
+student_id: "student_001"
+question_id: "q01"
+question_text: "Explain mutual information and its relationship to entropy"
+rubric_version: "1.0"
+answer: |
+  [Student's answer text - can be multi-line]
+metadata:
+  created_at: "2026-01-17T10:30:00"
+  rubric_path: "grading_pipeline/rubrics/q01.yaml"
+```
+
+### Results Format
+
+Results are written as JSON files with the following structure:
+
+```json
+{
+  "question_id": "q01",
+  "graded_at": "2026-01-17T10:30:00",
+  "total_students": 10,
+  "successful": 9,
+  "failed": 1,
+  "students": [
+    {
+      "student_id": "student_001",
+      "question_id": "q01",
+      "score": 8,
+      "max_score": 10,
+      "feedback": "...",
+      "citations": [...],
+      "rubric_items": [...]
+    }
+  ]
+}
+```
+
+### Error Handling
+
+The pipeline continues processing even if individual students fail:
+
+- Failed students are marked with an `"error"` field in results
+- Error messages are logged to stdout or log file
+- Batch processing continues for remaining students
+
+### Testing
+
+Run unit tests for individual components:
+
+```bash
+python grading_pipeline/test_config_loader.py
+python grading_pipeline/test_submission_loader.py
+python grading_pipeline/test_submission_converter.py
+python grading_pipeline/test_pipeline.py
+```
+
+See `EXAMPLES.md` for detailed usage examples and workflows.

@@ -493,7 +493,16 @@ if __name__ == "__main__":
 
     # Test YAML loading and incremental indexing
     config_path = Path(__file__).parent / "config" / "sources.yaml"
-    persist_dir = Path(__file__).parent / "tmp" / "chroma_db"
+    
+    # Use test directory if running from test script, otherwise use production tmp
+    # Check if we're in a test environment by looking for tests/ directory
+    tests_dir = Path(__file__).parent.parent / "tests"
+    if tests_dir.exists():
+        # Running from test - use test directory
+        persist_dir = tests_dir / "tmp_chroma_indexes" / "index_builder_test"
+    else:
+        # Production use - use production tmp
+        persist_dir = Path(__file__).parent / "tmp" / "chroma_db"
 
     if config_path.exists():
         print(f"\nBuilding or updating indexes from {config_path}")
