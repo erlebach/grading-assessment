@@ -10,6 +10,7 @@ Both indexes use Chroma for persistent storage.
 
 import os
 import tempfile
+import time
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
@@ -240,9 +241,12 @@ def build_sentence_index(
     storage_context = StorageContext.from_defaults(vector_store=vector_store)
 
     # Configure node parser for sentence-based chunking (no size limit)
+    # Note: Use a very large chunk_size to effectively get pure sentence splitting
+    # SentenceSplitter doesn't support chunk_size=None
     node_parser = SentenceSplitter(
-        chunk_size=None,  # No size limit for pure sentence splitting
+        chunk_size=10000,  # Very large chunk to get full sentences
         chunk_overlap=0,
+        separator=" ",  # Split on sentences (default behavior)
     )
 
     # Create index
@@ -351,8 +355,9 @@ if __name__ == "__main__":
 
     documents = create_documents_with_metadata(sample_texts, sample_sources)
 
-    # Build indexes
-    temp_dir = Path(tempfile.mkdtemp())
+    # Build indexes in version1/tmp/
+    temp_dir = Path(__file__).parent / "tmp" / f"test_index_{int(time.time())}"
+    temp_dir.mkdir(parents=True, exist_ok=True)
     print(f"\nBuilding indexes in {temp_dir}")
 
     word_index = build_word_index(documents, temp_dir, "test_word_index")

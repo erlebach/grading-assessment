@@ -73,10 +73,9 @@ def create_sample_dual_index() -> tuple[Path, DualIndexRetriever]:
 
     documents = create_documents_with_metadata(evidence_texts, evidence_sources)
 
-    # Create temporary directory for Chroma persistence
-    import tempfile
-
-    persist_dir = Path(tempfile.mkdtemp())
+    # Create directory in version1/tmp/ for Chroma persistence
+    persist_dir = Path(__file__).parent / "tmp" / f"test_pipeline_{int(time.time())}"
+    persist_dir.mkdir(parents=True, exist_ok=True)
 
     # Build dual indexes
     word_index = build_word_index(documents, persist_dir, "word_index")
