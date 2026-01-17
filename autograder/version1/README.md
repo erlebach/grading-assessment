@@ -32,7 +32,7 @@ YAML Config → Load Sources → Dual Indexes (Word + Sentence)
    - Best for: Capturing context around keywords
 
 2. **Sentence-Based Index**
-   - Pure sentence splitting (no size limit)
+   - Large chunk size (10,000 characters) for sentence-level chunking
    - No overlap
    - Best for: Semantic coherence and complete thoughts
 

@@ -232,7 +232,7 @@ class DualIndexRetriever:
 
 if __name__ == "__main__":
     # Test dual retriever with reranking
-    import tempfile
+    import time
     from pathlib import Path
 
     from config.llm_config import setup_llamaindex_defaults
@@ -274,8 +274,9 @@ if __name__ == "__main__":
 
     documents = create_documents_with_metadata(texts, sources)
 
-    # Build dual indexes
-    temp_dir = Path(tempfile.mkdtemp())
+    # Build dual indexes in version1/tmp/
+    temp_dir = Path(__file__).parent / "tmp" / f"test_retriever_{int(time.time())}"
+    temp_dir.mkdir(parents=True, exist_ok=True)
     print(f"\nBuilding indexes in {temp_dir}")
 
     word_index = build_word_index(documents, temp_dir, "test_word_index")

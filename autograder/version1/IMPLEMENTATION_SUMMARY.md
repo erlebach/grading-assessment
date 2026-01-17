@@ -73,7 +73,7 @@ All components of the dual-index Chroma RAG pipeline with reranking have been su
 
 ### 1. Dual-Index Architecture
 - ✅ Word-based index: 512 character chunks, 50 character overlap
-- ✅ Sentence-based index: Pure sentence splitting (no size limit)
+- ✅ Sentence-based index: Large chunk size (10,000 chars) for sentence-level chunking
 - ✅ Separate Chroma collections for each index
 - ✅ Metadata preservation for citations
 
