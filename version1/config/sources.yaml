@@ -1,0 +1,51 @@
+# Source Configuration for Evidence Index
+# Supports both local files and URLs
+
+sources:
+  # Local file sources
+  - type: "file"
+    path: "../../evidence/sources/"
+    patterns: ["*.md", "*.txt", "*.pdf"]
+    metadata:
+      source_type: "course_material"
+  
+  # Example: Lecture slides
+  - type: "file"
+    path: "../../slides/"
+    patterns: ["*.pdf"]
+    metadata:
+      source_type: "slide"
+  
+  # Example: Textbook chapters
+  - type: "file"
+    path: "../../textbook/"
+    patterns: ["*.pdf", "*.md"]
+    metadata:
+      source_type: "textbook"
+  
+  # URL sources (web documentation)
+  - type: "url"
+    url: "https://docs.python.org/3/tutorial/"
+    cache_dir: "../../evidence/cache/python_docs/"
+    metadata:
+      source_type: "documentation"
+      source_id: "python_docs"
+  
+  # Example: Course website
+  - type: "url"
+    url: "https://example.com/course/materials"
+    cache_dir: "../../evidence/cache/course_website/"
+    metadata:
+      source_type: "course_website"
+      source_id: "course_web"
+
+# Retrieval configuration
+retrieval:
+  top_k_per_index: 10  # Number of results to retrieve from each index
+  final_top_k: 5       # Number of results after reranking
+  similarity_threshold: 0.0  # Minimum similarity score
+
+# Reranker configuration
+reranker:
+  model: "cross-encoder/ms-marco-MiniLM-L-6-v2"  # Default cross-encoder model
+  batch_size: 32  # Batch size for reranking
