@@ -286,7 +286,14 @@ def add_documents_to_indexes(
         docs_by_type[source_type].append(doc)
 
     # Add to word index with source-type-aware chunking
-    word_collection = chroma_client.get_or_create_collection(word_collection_name)
+    # https://cookbook.chromadb.dev/core/configuration/
+    word_collection = chroma_client.get_or_create_collection(word_collection_name,
+       metadata={
+          "hnsw:space": "cosine", 
+          "hnsw:search_ef": 1000,  # larger than nb of chunks for deterministic search, much higher recall
+          "hnsw:construction_ef": 200,  # better graph quality
+          "hnsw:M": 32, # denser graph (more memory)
+       })
     word_vector_store = ChromaVectorStore(chroma_collection=word_collection)
     word_storage_context = StorageContext.from_defaults(vector_store=word_vector_store)
 
