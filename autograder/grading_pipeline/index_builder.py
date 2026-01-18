@@ -266,7 +266,8 @@ def add_documents_to_indexes(
     word_storage_context = StorageContext.from_defaults(vector_store=word_vector_store)
 
     # Configure word-based chunking
-    word_parser = SentenceSplitter(chunk_size=512, chunk_overlap=50)
+    # word_parser = SentenceSplitter(chunk_size=512, chunk_overlap=50)
+    word_parser = SentenceSplitter(chunk_size=128, chunk_overlap=25)
 
     # Create index and insert documents
     word_index = VectorStoreIndex.from_documents(
