@@ -48,12 +48,12 @@ from grading_pipeline.manifest import (
     save_manifest,
 )
 from retrieval_core.index_builder import (
-    split_text_by_characters,  # Character-based text splitter function
     _load_url_source,  # URL loading with caching
     build_dual_indexes,  # Build both indexes from config
     build_sentence_index,  # Sentence index building
     build_word_index,  # Word index building
     load_dual_indexes,  # Load persistent indexes
+    split_text_by_characters,  # Character-based text splitter function
 )
 
 
@@ -294,7 +294,7 @@ def add_documents_to_indexes(
     word_index = None
     for idx, (source_type, type_docs) in enumerate(docs_by_type.items()):
         chunk_size = _get_chunk_size_for_source(source_type)
-        
+
         if len(docs_by_type) > 1:
             print(
                 f"  Processing {len(type_docs)} {source_type} document(s) with chunk_size={chunk_size}...",
@@ -304,7 +304,9 @@ def add_documents_to_indexes(
         # Manually chunk documents using character-based splitting
         nodes = []
         for doc in type_docs:
-            chunks = split_text_by_characters(doc.text, chunk_size=chunk_size, chunk_overlap=50)
+            chunks = split_text_by_characters(
+                doc.text, chunk_size=chunk_size, chunk_overlap=50
+            )
             for chunk in chunks:
                 node = TextNode(text=chunk, metadata=doc.metadata.copy())
                 nodes.append(node)
@@ -450,12 +452,17 @@ def build_or_update_dual_indexes(
         word_index, sentence_index = load_dual_indexes(persist_dir)
 
         # Create manifest entries for all sources
+        sentence_parser = SentenceSplitter(
+            chunk_size=10000, chunk_overlap=0, separator=" "
+        )
         for doc in documents:
             source_id = doc.metadata.get("source_id")
             source_type = doc.metadata.get("source_type", "file")
             # Estimate chunk counts with source-type-aware chunking
             chunk_size = _get_chunk_size_for_source(source_type)
-            chunks = split_text_by_characters(doc.text, chunk_size=chunk_size, chunk_overlap=50)
+            chunks = split_text_by_characters(
+                doc.text, chunk_size=chunk_size, chunk_overlap=50
+            )
             num_chunks_word = len(chunks)
             num_chunks_sentence = len(sentence_parser.get_nodes_from_documents([doc]))
 
@@ -502,10 +509,14 @@ def build_or_update_dual_indexes(
                 source_type = doc.metadata.get("source_type", "file")
                 # Estimate chunk counts with source-type-aware chunking
                 chunk_size = _get_chunk_size_for_source(source_type)
-                chunks = split_text_by_characters(doc.text, chunk_size=chunk_size, chunk_overlap=50)
+                chunks = split_text_by_characters(
+                    doc.text, chunk_size=chunk_size, chunk_overlap=50
+                )
                 num_chunks_word = len(chunks)
-                
-                sentence_parser = SentenceSplitter(chunk_size=10000, chunk_overlap=0, separator=" ")
+
+                sentence_parser = SentenceSplitter(
+                    chunk_size=10000, chunk_overlap=0, separator=" "
+                )
                 num_chunks_sentence = len(
                     sentence_parser.get_nodes_from_documents([doc])
                 )

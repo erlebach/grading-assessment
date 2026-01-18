@@ -29,15 +29,15 @@ except ImportError:
 
 
 def split_text_by_characters(text: str, chunk_size: int, chunk_overlap: int) -> list[str]:
-    """Split text into fixed-size character chunks.
+    """Split text into fixed-size character chunks with HARD size limit.
     
     Args:
         text: Text to split.
-        chunk_size: Maximum characters per chunk.
+        chunk_size: Maximum characters per chunk (HARD LIMIT - never exceeded).
         chunk_overlap: Characters to overlap between chunks.
         
     Returns:
-        List of text chunks.
+        List of text chunks, each guaranteed to be <= chunk_size characters.
     """
     if not text:
         return []
@@ -47,15 +47,22 @@ def split_text_by_characters(text: str, chunk_size: int, chunk_overlap: int) -> 
     i = 0
     
     while i < text_len:
+        # Hard limit: never exceed chunk_size
         end = min(i + chunk_size, text_len)
         chunk_text = text[i:end]
         
-        # Try to break at word boundary if not at end
+        # Try to break at word boundary if not at end, but NEVER exceed chunk_size
         if end < text_len and ' ' in chunk_text:
             last_space = chunk_text.rfind(' ')
             if last_space > chunk_size // 2:  # Only break if we're past halfway
+                # Use word boundary but ensure we stay within chunk_size
                 end = i + last_space + 1
                 chunk_text = text[i:end]
+        
+        # ENFORCE HARD LIMIT: truncate if somehow exceeded
+        if len(chunk_text) > chunk_size:
+            chunk_text = chunk_text[:chunk_size]
+            end = i + chunk_size
         
         chunks.append(chunk_text)
         
