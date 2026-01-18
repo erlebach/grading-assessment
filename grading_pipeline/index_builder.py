@@ -331,19 +331,9 @@ def add_documents_to_indexes(
         show_progress=True,
     )
 
-    # Count chunks from actual documents
-    num_chunks_word = sum(
-        len(
-            SentenceSplitter(
-                chunk_size=_get_chunk_size_for_source(
-                    doc.metadata.get("source_type", "file")
-                ),
-                chunk_overlap=50,
-            ).get_nodes_from_documents([doc])
-        )
-        for doc in documents
-    )
-    num_chunks_sentence = len(sentence_parser.get_nodes_from_documents(documents))
+    # Get actual chunk counts from ChromaDB collections
+    num_chunks_word = word_collection.count()
+    num_chunks_sentence = sentence_collection.count()
 
     return (num_chunks_word, num_chunks_sentence)
 
