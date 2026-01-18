@@ -52,9 +52,171 @@ from retrieval_core.index_builder import (
     build_dual_indexes,  # Build both indexes from config
     build_sentence_index,  # Sentence index building
     build_word_index,  # Word index building
-    load_dual_indexes,  # Load persistent indexes
+    load_dual_indexes as _load_dual_indexes,  # Load persistent indexes (internal)
     split_text_by_characters,  # Character-based text splitter function
 )
+
+
+def get_embedding_model_info() -> dict[str, str]:
+    """Get current embedding model information.
+
+    Returns:
+        Dictionary with embedding model type and name.
+
+    """
+    from llama_index.core import Settings
+
+    embed_model = Settings.embed_model
+    if embed_model is None:
+        raise ValueError(
+            "Embedding model not set. Call setup_llamaindex_defaults() first."
+        )
+
+    info = {
+        "embedding_type": type(embed_model).__name__,
+    }
+
+    # Try to get model name from various attributes
+    if hasattr(embed_model, "model_name"):
+        info["embedding_model"] = embed_model.model_name
+    elif hasattr(embed_model, "model"):
+        info["embedding_model"] = embed_model.model
+    elif hasattr(embed_model, "_model_name"):
+        info["embedding_model"] = embed_model._model_name
+    else:
+        info["embedding_model"] = "unknown"
+
+    return info
+
+
+def create_text_node_with_embed_text_only(
+    text: str, metadata: dict[str, Any]
+) -> TextNode:
+    """Create TextNode that excludes metadata from embeddings.
+
+    Args:
+        text: Chunk text for the node.
+        metadata: Metadata dictionary for the node.
+
+    Returns:
+        TextNode configured to exclude metadata from embeddings.
+
+    """
+    metadata_keys = list(metadata.keys())
+    return TextNode(
+        text=text,
+        metadata=metadata,
+        excluded_embed_metadata_keys=metadata_keys,
+    )
+
+
+def save_embedding_metadata(persist_dir: Path, metadata: dict[str, str]) -> None:
+    """Save embedding model metadata to YAML file.
+
+    Args:
+        persist_dir: Directory where metadata should be saved.
+        metadata: Dictionary with embedding model information.
+
+    """
+    persist_dir.mkdir(parents=True, exist_ok=True)
+    metadata_path = persist_dir / "embedding_metadata.yaml"
+
+    with open(metadata_path, "w") as f:
+        yaml.dump(metadata, f, default_flow_style=False, sort_keys=False)
+
+
+def load_embedding_metadata(persist_dir: Path) -> dict[str, str] | None:
+    """Load embedding model metadata from YAML file.
+
+    Args:
+        persist_dir: Directory containing the metadata file.
+
+    Returns:
+        Dictionary with embedding model information, or None if not found.
+
+    """
+    metadata_path = persist_dir / "embedding_metadata.yaml"
+    if not metadata_path.exists():
+        return None
+
+    with open(metadata_path, "r") as f:
+        return yaml.safe_load(f)
+
+
+def verify_embedding_model(persist_dir: Path) -> None:
+    """Verify that current embedding model matches the one used to build the index.
+
+    Args:
+        persist_dir: Directory containing the index and metadata.
+
+    Raises:
+        ValueError: If embedding models don't match.
+
+    """
+    stored_metadata = load_embedding_metadata(persist_dir)
+    if stored_metadata is None:
+        # No metadata found - might be an old index, warn but don't fail
+        print(
+            "⚠ Warning: No embedding metadata found. Index may have been built "
+            "with a different embedding model."
+        )
+        return
+
+    current_metadata = get_embedding_model_info()
+
+    # Compare embedding model names
+    stored_model = stored_metadata.get("embedding_model", "unknown")
+    current_model = current_metadata.get("embedding_model", "unknown")
+
+    if stored_model != current_model:
+        raise ValueError(
+            f"Embedding model mismatch!\n"
+            f"  Index was built with: {stored_model}\n"
+            f"  Current embedding model: {current_model}\n"
+            f"  This will cause incorrect similarity scores.\n"
+            f"  Please rebuild the index with the current embedding model."
+        )
+
+    # Also check embedding type for extra safety
+    stored_type = stored_metadata.get("embedding_type", "unknown")
+    current_type = current_metadata.get("embedding_type", "unknown")
+
+    if stored_type != current_type:
+        raise ValueError(
+            f"Embedding type mismatch!\n"
+            f"  Index was built with: {stored_type}\n"
+            f"  Current embedding type: {current_type}\n"
+            f"  This will cause incorrect similarity scores.\n"
+            f"  Please rebuild the index with the current embedding model."
+        )
+
+
+def load_dual_indexes(persist_dir: Path) -> tuple[VectorStoreIndex, VectorStoreIndex]:
+    """Load existing dual indexes from persistent storage with embedding model verification.
+
+    This wrapper verifies that the current embedding model matches the one used
+    to build the index before loading. Raises ValueError if they don't match.
+
+    Args:
+        persist_dir: Directory containing the persisted Chroma databases.
+
+    Returns:
+        Tuple of (word_index, sentence_index).
+
+    Raises:
+        ValueError: If embedding model doesn't match the one used to build the index.
+
+    """
+    # Show stored embedding model and verify it matches
+    stored_metadata = load_embedding_metadata(persist_dir)
+    if stored_metadata:
+        print(
+            f"  Using embedding model: {stored_metadata.get('embedding_type')} "
+            f"({stored_metadata.get('embedding_model')})"
+        )
+    # Verify embedding model matches before loading
+    verify_embedding_model(persist_dir)
+    return _load_dual_indexes(persist_dir)
 
 
 def _get_chunk_size_for_source(source_type: str | None) -> int:
@@ -315,7 +477,10 @@ def add_documents_to_indexes(
                 doc.text, chunk_size=chunk_size, chunk_overlap=50
             )
             for chunk in chunks:
-                node = TextNode(text=chunk, metadata=doc.metadata.copy())
+                node = create_text_node_with_embed_text_only(
+                    text=chunk,
+                    metadata=doc.metadata.copy(),
+                )
                 nodes.append(node)
 
         if idx == 0:
@@ -455,6 +620,14 @@ def build_or_update_dual_indexes(
         num_word, num_sentence = add_documents_to_indexes(documents, persist_dir)
         print(f"  ✓ Created {num_word} word chunks, {num_sentence} sentence chunks")
 
+        # Save embedding model metadata
+        embedding_metadata = get_embedding_model_info()
+        save_embedding_metadata(persist_dir, embedding_metadata)
+        print(
+            f"  ✓ Saved embedding model metadata: {embedding_metadata.get('embedding_type')} "
+            f"({embedding_metadata.get('embedding_model')})"
+        )
+
         # Load the indexes we just created
         word_index, sentence_index = load_dual_indexes(persist_dir)
 
@@ -480,17 +653,13 @@ def build_or_update_dual_indexes(
         # All sources unchanged - just load existing
         print(f"\nAll sources unchanged - loading existing indexes...")
 
-        # For loading only, we need minimal embedding setup (but won't use it)
+        # Load embedding model to verify it matches stored metadata
         if lazy_load_embeddings:
-            # Set a lightweight placeholder - won't be used for loading
-            from llama_index.core import Settings
-            from llama_index.embeddings.huggingface import HuggingFaceEmbedding
+            from config.llm_config import setup_llamaindex_defaults
 
-            # Directly set without checking (checking triggers initialization)
-            Settings.embed_model = HuggingFaceEmbedding(
-                model_name="sentence-transformers/all-MiniLM-L6-v2"
-            )
+            setup_llamaindex_defaults()
 
+        # Load indexes (wrapper verifies embedding model)
         word_index, sentence_index = load_dual_indexes(persist_dir)
 
     else:
@@ -509,6 +678,14 @@ def build_or_update_dual_indexes(
             print(f"  Adding {len(docs_to_add)} documents to indexes...")
             num_word, num_sentence = add_documents_to_indexes(docs_to_add, persist_dir)
             print(f"  ✓ Added {num_word} word chunks, {num_sentence} sentence chunks")
+
+            # Save embedding model metadata (update if already exists)
+            embedding_metadata = get_embedding_model_info()
+            save_embedding_metadata(persist_dir, embedding_metadata)
+            print(
+                f"  ✓ Saved embedding model metadata: {embedding_metadata.get('embedding_type')} "
+                f"({embedding_metadata.get('embedding_model')})"
+            )
 
             # Update manifest for new and changed sources
             for doc in docs_to_add:
@@ -531,7 +708,7 @@ def build_or_update_dual_indexes(
                 entry = create_manifest_entry(doc, num_chunks_word, num_chunks_sentence)
                 manifest["sources"][source_id] = entry
 
-        # Load the updated indexes
+        # Load the updated indexes (wrapper verifies embedding model)
         word_index, sentence_index = load_dual_indexes(persist_dir)
 
     # Save updated manifest

@@ -109,7 +109,20 @@ def configure_embedding(
         return OpenAIEmbedding(model=model_name, api_key=api_key)
     elif provider in ("sentence-transformer", "huggingface"):
         model_name = model or config["embedding_model"]
-        return HuggingFaceEmbedding(model_name=model_name)
+        default_embed = HuggingFaceEmbedding(model_name=model_name)
+        text_instruction = getattr(default_embed, "text_instruction", None)
+        query_instruction = getattr(default_embed, "query_instruction", None)
+        print(
+            "Default embedding instructions for HuggingFaceEmbedding:",
+            flush=True,
+        )
+        print(f"  text_instruction: {text_instruction!r}", flush=True)
+        print(f"  query_instruction: {query_instruction!r}", flush=True)
+        return HuggingFaceEmbedding(
+            model_name=model_name,
+            text_instruction="",
+            query_instruction="",
+        )
     else:
         raise ValueError(f"Unknown embedding provider: {provider}")
 
