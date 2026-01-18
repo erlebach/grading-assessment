@@ -13,6 +13,8 @@ import random
 import shutil
 from pathlib import Path
 
+import numpy as np
+
 from config.llm_config import setup_llamaindex_defaults
 from grading_pipeline.index_builder_in_memory import (
     InMemoryVectorStore,
@@ -486,6 +488,68 @@ def test_chunk_retrieval_verification() -> None:
     print("✓ Chunk retrieval verification test complete\n")
 
 
+def test_metadata_excluded_from_embeddings() -> None:
+    """Test that metadata does not affect embeddings.
+
+    This verifies that embeddings are computed from text only, even when
+    metadata fields are present.
+
+    """
+    print("Testing metadata exclusion from embeddings...")
+
+    setup_llamaindex_defaults()
+
+    test_dir = Path(__file__).parent / "tmp_in_memory_test" / "metadata_embed_test"
+    test_dir.mkdir(parents=True, exist_ok=True)
+
+    documents = [
+        Document(
+            text="Metadata should not affect text embeddings.",
+            metadata={
+                "source_id": "meta_test_1",
+                "source_type": "file",
+                "lecture": "Unit 7",
+                "page": 42,
+                "tags": ["grading", "rag"],
+            },
+        )
+    ]
+
+    index = build_word_index_in_memory(documents, test_dir, "test_metadata_embed")
+
+    # Load stored embedding
+    word_store = InMemoryVectorStore.load_from_pickle(
+        test_dir / "test_metadata_embed.pkl"
+    )
+    node_ids = list(word_store.nodes.keys())
+    assert len(node_ids) == 1
+    node_id = node_ids[0]
+    stored_embedding = word_store.embeddings[node_id]
+    chunk_text = word_store.nodes[node_id].text
+
+    # Re-embed text only
+    from llama_index.core import Settings
+
+    embed_model = Settings.embed_model
+    assert embed_model is not None, "Embedding model should be set"
+
+    new_embedding = np.array(
+        embed_model.get_text_embedding(chunk_text), dtype=np.float32
+    )
+
+    stored_norm = stored_embedding / np.linalg.norm(stored_embedding)
+    new_norm = new_embedding / np.linalg.norm(new_embedding)
+    cosine_sim = float(np.dot(stored_norm, new_norm))
+
+    print(f"  Cosine similarity (stored vs new): {cosine_sim:.6f}")
+    assert cosine_sim > 0.99
+    print("✓ Metadata excluded from embeddings")
+
+    # Cleanup
+    shutil.rmtree(test_dir.parent, ignore_errors=True)
+    print("✓ Metadata exclusion test complete\n")
+
+
 def test_compatibility_with_existing_interface() -> None:
     """Test that in-memory indexes work with existing retrieval interface."""
     print("Testing compatibility with existing interface...")
@@ -535,6 +599,7 @@ def main() -> None:
         test_cosine_similarity()
         test_deterministic_retrieval()
         test_chunk_retrieval_verification()
+        test_metadata_excluded_from_embeddings()
         test_compatibility_with_existing_interface()
 
         print("=" * 80)
