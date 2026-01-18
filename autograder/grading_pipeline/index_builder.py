@@ -38,14 +38,6 @@ except ImportError:
     )
 
 # Import from retrieval_core - REUSE AS-IS
-from retrieval_core.index_builder import (
-    _load_url_source,  # URL loading with caching
-    build_dual_indexes,  # Build both indexes from config
-    build_sentence_index,  # Sentence index building
-    build_word_index,  # Word index building
-    load_dual_indexes,  # Load persistent indexes
-)
-
 # Import manifest management
 from grading_pipeline.manifest import (
     create_manifest_entry,
@@ -54,6 +46,29 @@ from grading_pipeline.manifest import (
     load_manifest,
     save_manifest,
 )
+from retrieval_core.index_builder import (
+    _load_url_source,  # URL loading with caching
+    build_dual_indexes,  # Build both indexes from config
+    build_sentence_index,  # Sentence index building
+    build_word_index,  # Word index building
+    load_dual_indexes,  # Load persistent indexes
+)
+
+
+def _get_chunk_size_for_source(source_type: str | None) -> int:
+    """Get appropriate chunk size based on source type.
+
+    Args:
+        source_type: Type of source document (e.g., "slide", "textbook", "file").
+
+    Returns:
+        Chunk size in characters (128 for slides, 512 for others).
+
+    """
+    if source_type == "slide":
+        return 128  # Smaller chunks for slides
+    else:
+        return 512  # Default for other sources
 
 
 def _extract_text_from_pdf(file_path: Path) -> str:
@@ -260,22 +275,39 @@ def add_documents_to_indexes(
 
     chroma_client = chromadb.PersistentClient(path=str(persist_dir))
 
-    # Add to word index
+    # Group documents by source_type for source-aware chunking
+    from collections import defaultdict
+
+    docs_by_type = defaultdict(list)
+    for doc in documents:
+        source_type = doc.metadata.get("source_type", "file")
+        docs_by_type[source_type].append(doc)
+
+    # Add to word index with source-type-aware chunking
     word_collection = chroma_client.get_or_create_collection(word_collection_name)
     word_vector_store = ChromaVectorStore(chroma_collection=word_collection)
     word_storage_context = StorageContext.from_defaults(vector_store=word_vector_store)
 
-    # Configure word-based chunking
-    # word_parser = SentenceSplitter(chunk_size=512, chunk_overlap=50)
-    word_parser = SentenceSplitter(chunk_size=128, chunk_overlap=25)
+    # Process each source type group with appropriate chunk size
+    word_index = None
+    for idx, (source_type, type_docs) in enumerate(docs_by_type.items()):
+        chunk_size = _get_chunk_size_for_source(source_type)
+        word_parser = SentenceSplitter(chunk_size=chunk_size, chunk_overlap=50)
+        
+        if len(docs_by_type) > 1:
+            print(f"  Processing {len(type_docs)} {source_type} document(s) with chunk_size={chunk_size}...", flush=True)
 
-    # Create index and insert documents
-    word_index = VectorStoreIndex.from_documents(
-        documents,
-        storage_context=word_storage_context,
-        transformations=[word_parser],
-        show_progress=False,
-    )
+        if idx == 0:
+            # First group: create index
+            word_index = VectorStoreIndex.from_documents(
+                type_docs,
+                storage_context=word_storage_context,
+                transformations=[word_parser],
+                show_progress=True,
+            )
+        else:
+            # Subsequent groups: insert into existing index
+            word_index.insert(type_docs, transformations=[word_parser])
 
     # Add to sentence index
     sentence_collection = chroma_client.get_or_create_collection(
@@ -289,16 +321,28 @@ def add_documents_to_indexes(
     # Configure sentence-based chunking
     sentence_parser = SentenceSplitter(chunk_size=10000, chunk_overlap=0, separator=" ")
 
+    print(f"  Building sentence index...", flush=True)
+    
     # Create index and insert documents
     sentence_index = VectorStoreIndex.from_documents(
         documents,
         storage_context=sentence_storage_context,
         transformations=[sentence_parser],
-        show_progress=False,
+        show_progress=True,
     )
 
-    # Count chunks (approximate from collection count)
-    num_chunks_word = len(word_parser.get_nodes_from_documents(documents))
+    # Count chunks from actual documents
+    num_chunks_word = sum(
+        len(
+            SentenceSplitter(
+                chunk_size=_get_chunk_size_for_source(
+                    doc.metadata.get("source_type", "file")
+                ),
+                chunk_overlap=50,
+            ).get_nodes_from_documents([doc])
+        )
+        for doc in documents
+    )
     num_chunks_sentence = len(sentence_parser.get_nodes_from_documents(documents))
 
     return (num_chunks_word, num_chunks_sentence)
@@ -394,16 +438,23 @@ def build_or_update_dual_indexes(
     if not indexes_exist:
         # No indexes exist - do fresh build
         print(f"\nNo existing indexes found - building fresh indexes...")
-        print(f"Building word-based index (512 chars, 50 overlap)...")
-        word_index = build_word_index(documents, persist_dir, "word_index")
-        print(f"Building sentence-based index (pure sentence splitting)...")
-        sentence_index = build_sentence_index(documents, persist_dir, "sentence_index")
+        print(
+            f"Building word-based index (source-aware chunking: 128 for slides, 512 for others)..."
+        )
+        # Use add_documents_to_indexes for source-aware chunking (builds both indexes)
+        num_word, num_sentence = add_documents_to_indexes(documents, persist_dir)
+        print(f"  ✓ Created {num_word} word chunks, {num_sentence} sentence chunks")
+        
+        # Load the indexes we just created
+        word_index, sentence_index = load_dual_indexes(persist_dir)
 
         # Create manifest entries for all sources
         for doc in documents:
             source_id = doc.metadata.get("source_id")
-            # Estimate chunk counts (not exact but close)
-            word_parser = SentenceSplitter(chunk_size=512, chunk_overlap=50)
+            source_type = doc.metadata.get("source_type", "file")
+            # Estimate chunk counts with source-type-aware chunking
+            chunk_size = _get_chunk_size_for_source(source_type)
+            word_parser = SentenceSplitter(chunk_size=chunk_size, chunk_overlap=50)
             sentence_parser = SentenceSplitter(
                 chunk_size=10000, chunk_overlap=0, separator=" "
             )
@@ -450,8 +501,12 @@ def build_or_update_dual_indexes(
             # Update manifest for new and changed sources
             for doc in docs_to_add:
                 source_id = doc.metadata.get("source_id")
-                # Estimate chunk counts
-                word_parser = SentenceSplitter(chunk_size=512, chunk_overlap=50)
+                source_type = doc.metadata.get("source_type", "file")
+                # Estimate chunk counts with source-type-aware chunking
+                chunk_size = _get_chunk_size_for_source(source_type)
+                word_parser = SentenceSplitter(
+                    chunk_size=chunk_size, chunk_overlap=50
+                )
                 sentence_parser = SentenceSplitter(
                     chunk_size=10000, chunk_overlap=0, separator=" "
                 )
@@ -486,7 +541,9 @@ __all__ = [
 
 if __name__ == "__main__":
     # Test incremental indexing functionality with lazy loading
-    print("Testing grading_pipeline incremental indexing with lazy embedding loading...")
+    print(
+        "Testing grading_pipeline incremental indexing with lazy embedding loading..."
+    )
 
     # NOTE: We do NOT call setup_llamaindex_defaults() here!
     # It will be called lazily inside build_or_update_dual_indexes()
@@ -494,7 +551,7 @@ if __name__ == "__main__":
 
     # Test YAML loading and incremental indexing
     config_path = Path(__file__).parent / "config" / "sources.yaml"
-    
+
     # Use test directory if running from test script, otherwise use production tmp
     # Check if we're in a test environment by looking for tests/ directory
     tests_dir = Path(__file__).parent.parent / "tests"

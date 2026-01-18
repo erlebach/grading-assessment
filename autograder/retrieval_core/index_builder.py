@@ -24,9 +24,7 @@ from llama_index.vector_stores.chroma import ChromaVectorStore
 try:
     import chromadb
 except ImportError:
-    raise ImportError(
-        "chromadb is required. Install with: pip install chromadb"
-    )
+    raise ImportError("chromadb is required. Install with: pip install chromadb")
 
 
 def load_sources_from_yaml(config_path: Path) -> list[Document]:
@@ -63,7 +61,9 @@ def load_sources_from_yaml(config_path: Path) -> list[Document]:
     return all_documents
 
 
-def _load_file_source(source: dict[str, Any], metadata: dict[str, Any]) -> list[Document]:
+def _load_file_source(
+    source: dict[str, Any], metadata: dict[str, Any]
+) -> list[Document]:
     """Load documents from file source.
 
     Args:
@@ -109,7 +109,9 @@ def _load_file_source(source: dict[str, Any], metadata: dict[str, Any]) -> list[
     return documents
 
 
-def _load_url_source(source: dict[str, Any], metadata: dict[str, Any]) -> list[Document]:
+def _load_url_source(
+    source: dict[str, Any], metadata: dict[str, Any]
+) -> list[Document]:
     """Load documents from URL source.
 
     Args:
