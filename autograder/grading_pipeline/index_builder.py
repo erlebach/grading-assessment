@@ -23,6 +23,7 @@ from typing import Any
 import yaml
 from llama_index.core import Document, StorageContext, VectorStoreIndex
 from llama_index.core.node_parser import SentenceSplitter
+from llama_index.core.schema import TextNode
 from llama_index.vector_stores.chroma import ChromaVectorStore
 
 try:
@@ -47,6 +48,7 @@ from grading_pipeline.manifest import (
     save_manifest,
 )
 from retrieval_core.index_builder import (
+    split_text_by_characters,  # Character-based text splitter function
     _load_url_source,  # URL loading with caching
     build_dual_indexes,  # Build both indexes from config
     build_sentence_index,  # Sentence index building
@@ -56,7 +58,7 @@ from retrieval_core.index_builder import (
 
 
 def _get_chunk_size_for_source(source_type: str | None) -> int:
-    """Get appropriate chunk size based on source type.
+    """Get appropriate chunk size in characters based on source type.
 
     Args:
         source_type: Type of source document (e.g., "slide", "textbook", "file").
@@ -68,7 +70,7 @@ def _get_chunk_size_for_source(source_type: str | None) -> int:
     if source_type == "slide":
         return 128  # Smaller chunks for slides
     else:
-        return 512  # Default for other sources
+        return 512  # Standard for other sources
 
 
 def _extract_text_from_pdf(file_path: Path) -> str:
@@ -292,22 +294,31 @@ def add_documents_to_indexes(
     word_index = None
     for idx, (source_type, type_docs) in enumerate(docs_by_type.items()):
         chunk_size = _get_chunk_size_for_source(source_type)
-        word_parser = SentenceSplitter(chunk_size=chunk_size, chunk_overlap=50)
         
         if len(docs_by_type) > 1:
-            print(f"  Processing {len(type_docs)} {source_type} document(s) with chunk_size={chunk_size}...", flush=True)
+            print(
+                f"  Processing {len(type_docs)} {source_type} document(s) with chunk_size={chunk_size}...",
+                flush=True,
+            )
+
+        # Manually chunk documents using character-based splitting
+        nodes = []
+        for doc in type_docs:
+            chunks = split_text_by_characters(doc.text, chunk_size=chunk_size, chunk_overlap=50)
+            for chunk in chunks:
+                node = TextNode(text=chunk, metadata=doc.metadata.copy())
+                nodes.append(node)
 
         if idx == 0:
-            # First group: create index
-            word_index = VectorStoreIndex.from_documents(
-                type_docs,
+            # First group: create index from nodes
+            word_index = VectorStoreIndex(
+                nodes=nodes,
                 storage_context=word_storage_context,
-                transformations=[word_parser],
                 show_progress=True,
             )
         else:
-            # Subsequent groups: insert into existing index
-            word_index.insert(type_docs, transformations=[word_parser])
+            # Subsequent groups: insert nodes
+            word_index.insert_nodes(nodes)
 
     # Add to sentence index
     sentence_collection = chroma_client.get_or_create_collection(
@@ -322,7 +333,7 @@ def add_documents_to_indexes(
     sentence_parser = SentenceSplitter(chunk_size=10000, chunk_overlap=0, separator=" ")
 
     print(f"  Building sentence index...", flush=True)
-    
+
     # Create index and insert documents
     sentence_index = VectorStoreIndex.from_documents(
         documents,
@@ -429,12 +440,12 @@ def build_or_update_dual_indexes(
         # No indexes exist - do fresh build
         print(f"\nNo existing indexes found - building fresh indexes...")
         print(
-            f"Building word-based index (source-aware chunking: 128 for slides, 512 for others)..."
+            f"Building word-based index (source-aware chunking: 128 chars for slides, 512 chars for others)..."
         )
         # Use add_documents_to_indexes for source-aware chunking (builds both indexes)
         num_word, num_sentence = add_documents_to_indexes(documents, persist_dir)
         print(f"  ✓ Created {num_word} word chunks, {num_sentence} sentence chunks")
-        
+
         # Load the indexes we just created
         word_index, sentence_index = load_dual_indexes(persist_dir)
 
@@ -444,11 +455,8 @@ def build_or_update_dual_indexes(
             source_type = doc.metadata.get("source_type", "file")
             # Estimate chunk counts with source-type-aware chunking
             chunk_size = _get_chunk_size_for_source(source_type)
-            word_parser = SentenceSplitter(chunk_size=chunk_size, chunk_overlap=50)
-            sentence_parser = SentenceSplitter(
-                chunk_size=10000, chunk_overlap=0, separator=" "
-            )
-            num_chunks_word = len(word_parser.get_nodes_from_documents([doc]))
+            chunks = split_text_by_characters(doc.text, chunk_size=chunk_size, chunk_overlap=50)
+            num_chunks_word = len(chunks)
             num_chunks_sentence = len(sentence_parser.get_nodes_from_documents([doc]))
 
             entry = create_manifest_entry(doc, num_chunks_word, num_chunks_sentence)
@@ -494,13 +502,10 @@ def build_or_update_dual_indexes(
                 source_type = doc.metadata.get("source_type", "file")
                 # Estimate chunk counts with source-type-aware chunking
                 chunk_size = _get_chunk_size_for_source(source_type)
-                word_parser = SentenceSplitter(
-                    chunk_size=chunk_size, chunk_overlap=50
-                )
-                sentence_parser = SentenceSplitter(
-                    chunk_size=10000, chunk_overlap=0, separator=" "
-                )
-                num_chunks_word = len(word_parser.get_nodes_from_documents([doc]))
+                chunks = split_text_by_characters(doc.text, chunk_size=chunk_size, chunk_overlap=50)
+                num_chunks_word = len(chunks)
+                
+                sentence_parser = SentenceSplitter(chunk_size=10000, chunk_overlap=0, separator=" ")
                 num_chunks_sentence = len(
                     sentence_parser.get_nodes_from_documents([doc])
                 )

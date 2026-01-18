@@ -19,12 +19,53 @@ import requests
 import yaml
 from llama_index.core import Document, StorageContext, VectorStoreIndex
 from llama_index.core.node_parser import SentenceSplitter
+from llama_index.core.schema import TextNode
 from llama_index.vector_stores.chroma import ChromaVectorStore
 
 try:
     import chromadb
 except ImportError:
     raise ImportError("chromadb is required. Install with: pip install chromadb")
+
+
+def split_text_by_characters(text: str, chunk_size: int, chunk_overlap: int) -> list[str]:
+    """Split text into fixed-size character chunks.
+    
+    Args:
+        text: Text to split.
+        chunk_size: Maximum characters per chunk.
+        chunk_overlap: Characters to overlap between chunks.
+        
+    Returns:
+        List of text chunks.
+    """
+    if not text:
+        return []
+    
+    chunks = []
+    text_len = len(text)
+    i = 0
+    
+    while i < text_len:
+        end = min(i + chunk_size, text_len)
+        chunk_text = text[i:end]
+        
+        # Try to break at word boundary if not at end
+        if end < text_len and ' ' in chunk_text:
+            last_space = chunk_text.rfind(' ')
+            if last_space > chunk_size // 2:  # Only break if we're past halfway
+                end = i + last_space + 1
+                chunk_text = text[i:end]
+        
+        chunks.append(chunk_text)
+        
+        # Move to next chunk with overlap
+        if chunk_overlap > 0 and end < text_len:
+            i = end - chunk_overlap
+        else:
+            i = end
+    
+    return chunks
 
 
 def load_sources_from_yaml(config_path: Path) -> list[Document]:
@@ -201,17 +242,23 @@ def build_word_index(
     vector_store = ChromaVectorStore(chroma_collection=chroma_collection)
     storage_context = StorageContext.from_defaults(vector_store=vector_store)
 
-    # Configure node parser for word-based chunking
-    node_parser = SentenceSplitter(
-        chunk_size=512,
-        chunk_overlap=50,
-    )
+    # Manually chunk documents using character-based splitting
+    all_nodes = []
+    for doc in documents:
+        text = doc.text
+        chunks = split_text_by_characters(text, chunk_size=512, chunk_overlap=50)
+        
+        for chunk in chunks:
+            node = TextNode(
+                text=chunk,
+                metadata=doc.metadata.copy(),
+            )
+            all_nodes.append(node)
 
-    # Create index
-    index = VectorStoreIndex.from_documents(
-        documents,
+    # Create index from nodes
+    index = VectorStoreIndex(
+        nodes=all_nodes,
         storage_context=storage_context,
-        transformations=[node_parser],
         show_progress=True,
     )
 
