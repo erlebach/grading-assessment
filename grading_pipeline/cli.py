@@ -70,6 +70,36 @@ def grade_question_command(args: argparse.Namespace) -> None:
     index_dir = Path(args.index_dir)
     output_path = Path(args.output)
 
+    # Ensure output filename matches question_id
+    # If output is a directory, create filename; otherwise validate filename contains question_id
+    if output_path.is_dir() or (not output_path.suffix and not output_path.exists()):
+        # Output is a directory or path without extension - create proper filename
+        output_path = output_path / f"{args.question}_results.json"
+    else:
+        # Validate that filename contains the question_id
+        expected_filename = f"{args.question}_results.json"
+        if output_path.name != expected_filename:
+            # Auto-correct: use the directory from provided path but fix the filename
+            print(
+                f"Warning: Output filename '{output_path.name}' does not match question_id '{args.question}'. "
+                f"Using '{expected_filename}' instead.",
+                flush=True,
+            )
+            output_path = output_path.parent / expected_filename
+
+    # Clear results directory at the beginning of the run
+    results_dir = output_path.parent
+    if results_dir.exists() and results_dir.is_dir():
+        print(f"Clearing results directory: {results_dir}", flush=True)
+        # Remove all files in the results directory
+        for file_path in results_dir.glob("*"):
+            if file_path.is_file():
+                file_path.unlink()
+                print(f"  Removed: {file_path.name}", flush=True)
+    else:
+        # Create directory if it doesn't exist
+        results_dir.mkdir(parents=True, exist_ok=True)
+
     validate_paths(
         rubrics_config=rubrics_config,
         submissions_dir=submissions_dir,
@@ -108,9 +138,10 @@ def grade_question_command(args: argparse.Namespace) -> None:
             index_backend=args.index_backend,
             execution_mode=args.mode,
             log_file=log_file,
+            output_path=output_path,  # Pass output_path for incremental writes
         )
 
-        # Write results
+        # Final write (in case output_path wasn't provided, or as a safety net)
         write_results(results, args.question, output_path, per_student=False)
 
         successful = len([r for r in results if "error" not in r])
@@ -186,10 +217,11 @@ def grade_student_command(args: argparse.Namespace) -> None:
         else:
             # Write single result as JSON
             output_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(output_path, "w") as f:
+            with open(output_path, "w", buffering=1) as f:
                 import json
 
                 json.dump(result, f, indent=2)
+                f.flush()  # Ensure unbuffered write
             print("✓ Grading complete", flush=True)
             print(
                 f"  Score: {result.get('score', 0)}/{result.get('max_score', 0)}",

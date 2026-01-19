@@ -8,3 +8,6 @@ rubrics:
   q02:
     path: "../../rubrics/q02.yaml"
     description: "Question 2: Data Quality"
+  q03:
+    path: "../../rubrics/q03.yaml"
+    description: "Question 3: Data Quality"

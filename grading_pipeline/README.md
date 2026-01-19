@@ -1,10 +1,10 @@
-# Grading Pipeline: YAML Source Loading with PDF Support and Incremental Indexing
+# Version 2: YAML Source Loading with PDF Support and Incremental Indexing
 
-Grading Pipeline extends retrieval_core with PDF file support and smart incremental indexing while reusing all existing functionality from retrieval_core.
+Version 2 extends version1 with PDF file support and smart incremental indexing while reusing all existing functionality from version1.
 
 ## Core Principles
 
-1. **Import and reuse retrieval_core** - No code duplication
+1. **Import and reuse version1** - No code duplication
 2. **Extend for PDF only** - PDF-specific loading capabilities
 3. **Smart incremental indexing** - Only process new or changed sources
 
@@ -17,7 +17,7 @@ Grading Pipeline extends retrieval_core with PDF file support and smart incremen
 - ✅ Cross-encoder reranking support
 - ✅ URL loading with caching
 
-### New in Grading Pipeline
+### New in Version2
 - ✅ **PDF text extraction** using pypdf
 - ✅ **PDF-aware file loading** in YAML configuration
 - ✅ **Incremental indexing** - Only process new/changed sources
@@ -46,7 +46,7 @@ Grading Pipeline extends retrieval_core with PDF file support and smart incremen
 
 ```bash
 cd autograder
-uv sync  # Installs pypdf>=3.0.0 and all retrieval_core dependencies
+uv sync  # Installs pypdf>=3.0.0 and all version1 dependencies
 ```
 
 ### 2. Build or Update Indexes (Incremental)
@@ -54,27 +54,27 @@ uv sync  # Installs pypdf>=3.0.0 and all retrieval_core dependencies
 ```bash
 # First run: builds fresh indexes
 # Subsequent runs: only processes changes
-uv run python -m grading_pipeline.index_builder
+uv run python -m version2.index_builder
 ```
 
 ### 3. Run Comprehensive Tests
 
 ```bash
 # Test all incremental indexing scenarios
-uv run python grading_pipeline/test_incremental_indexing.py
+uv run python version2/test_incremental_indexing.py
 ```
 
-**Test Design**: Global cleanup at start ensures all tests begin with a clean slate. All test artifacts are stored in `tests/tmp_chroma_indexes/` (separate from production `grading_pipeline/tmp/`), making it clear what's test-related and easy to clean up. Cleanup behavior is controlled by `tests/test_config.yaml`. 
+**Test Design**: Global cleanup at start ensures all tests begin with a clean slate. All test artifacts are stored in `version2/test_tmp/` (separate from production `tmp/`), making it clear what's test-related and easy to clean up. 
 
 ### 4. Use in Code
 
 ```python
 from pathlib import Path
-from grading_pipeline.index_builder import build_or_update_dual_indexes
+from version2.index_builder import build_or_update_dual_indexes
 
 # Build or update indexes incrementally
-config_path = Path("grading_pipeline/config/sources.yaml")
-persist_dir = Path("grading_pipeline/tmp/chroma_db")
+config_path = Path("version2/config/sources.yaml")
+persist_dir = Path("version2/tmp/chroma_db")
 
 # Automatically detects what needs indexing:
 # - Fresh build if no indexes exist
@@ -92,7 +92,7 @@ results = retriever.retrieve(query)
 
 ## Incremental Indexing
 
-The key feature of grading_pipeline is **smart incremental indexing**:
+The key feature of version2 is **smart incremental indexing**:
 
 ### How It Works
 
@@ -144,7 +144,7 @@ sources:
 ## File Structure
 
 ```
-grading_pipeline/
+version2/
 ├── __init__.py                    # Module marker
 ├── manifest.py                    # Source manifest tracking
 ├── index_builder.py               # PDF extensions + incremental indexing
@@ -155,8 +155,8 @@ grading_pipeline/
 ├── tmp/
 │   ├── .gitignore
 │   └── chroma_db/                 # Production persistent indexes
-├── tmp/
-│   └── chroma_db/                 # Production persistent indexes
+├── test_tmp/                      # Test artifacts (gitignored)
+│   └── */                         # Per-test subdirectories
 ├── sources/
 │   └── slides_data_type_quality.pdf
 ├── IMPLEMENTATION_SUMMARY.md      # Initial implementation notes
@@ -166,7 +166,7 @@ grading_pipeline/
 
 ## Configuration
 
-Edit `grading_pipeline/config/sources.yaml` to configure PDF sources:
+Edit `version2/config/sources.yaml` to configure PDF sources:
 
 ```yaml
 sources:
@@ -187,7 +187,7 @@ The test suite verifies all incremental indexing scenarios:
 4. **Modified Source**: Change detection and re-indexing
 
 ```bash
-uv run python grading_pipeline/test_incremental_indexing.py
+uv run python version2/test_incremental_indexing.py
 ```
 
 **Architecture**: Each test is independent and uses its own subdirectory in `test_tmp/`. Global cleanup at the start ensures a clean slate for every run.
@@ -205,17 +205,17 @@ Expected output:
 
 | Function | Source | Action |
 |----------|--------|--------|
-| `_load_url_source()` | retrieval_core | ✓ Imported directly |
-| `build_word_index()` | retrieval_core | ✓ Imported directly |
-| `build_sentence_index()` | retrieval_core | ✓ Imported directly |
-| `build_dual_indexes()` | retrieval_core | ✓ Imported directly |
-| `load_dual_indexes()` | retrieval_core | ✓ Imported directly |
-| `_extract_text_from_pdf()` | NEW | Created in grading_pipeline |
-| `_load_file_source_with_pdf()` | NEW | Created in grading_pipeline |
-| `load_sources_from_yaml_with_pdf()` | NEW | Created in grading_pipeline |
+| `_load_url_source()` | version1 | ✓ Imported directly |
+| `build_word_index()` | version1 | ✓ Imported directly |
+| `build_sentence_index()` | version1 | ✓ Imported directly |
+| `build_dual_indexes()` | version1 | ✓ Imported directly |
+| `load_dual_indexes()` | version1 | ✓ Imported directly |
+| `_extract_text_from_pdf()` | NEW | Created in version2 |
+| `_load_file_source_with_pdf()` | NEW | Created in version2 |
+| `load_sources_from_yaml_with_pdf()` | NEW | Created in version2 |
 
 **Total new code**: ~100 lines (PDF-specific only)
-**Reused from retrieval_core**: All index building, persistence, and URL loading
+**Reused from version1**: All index building, persistence, and URL loading
 
 ## Persistent Storage Benefits
 
@@ -228,143 +228,16 @@ This means when grading students again, the indexes can be loaded instantly with
 
 ## Dependencies
 
-- All retrieval_core dependencies (inherited)
+- All version1 dependencies (inherited)
 - **New**: `pypdf>=3.0.0` for PDF text extraction
 
 ## Next Steps
 
-Grading Pipeline is ready for integration with the grading pipeline:
+Version2 is ready for integration with the grading pipeline:
 
 1. Use `load_sources_from_yaml_with_pdf()` to load PDF lecture materials
-2. Build persistent indexes once with retrieval_core's `build_dual_indexes()`
+2. Build persistent indexes once with version1's `build_dual_indexes()`
 3. Reload indexes instantly for each grading run with `load_dual_indexes()`
-4. Use retrieval_core's `DualIndexRetriever` for evidence retrieval
+4. Use version1's `DualIndexRetriever` for evidence retrieval
 
-All retrieval_core functionality (dual indexes, reranking, retrieval) works seamlessly with PDF-loaded documents.
-
-## Batch-by-Question Grading Pipeline
-
-The grading pipeline implements a batch-by-question architecture for efficient grading of student submissions.
-
-### Architecture Overview
-
-- **Self-contained submissions**: Each submission file contains all necessary information (student_id, question_id, question_text, answer)
-- **Batch processing**: Process all students for one question at a time
-- **Optimized loading**: Rubric and indexes loaded once per question batch
-- **Error handling**: Continue on error, don't stop batch on single failure
-- **Unbuffered output**: Real-time logging to stdout or log files
-
-### Key Components
-
-1. **config_loader.py**: Loads and validates rubric configuration from YAML
-2. **submission_loader.py**: Loads self-contained submissions and groups by question_id
-3. **submission_converter.py**: Utility functions for creating self-contained submissions
-4. **pipeline.py**: Core grading pipeline with batch processing
-5. **cli.py**: Command-line interface for grading
-6. **prepare_submissions.py**: Example driving script for submission conversion
-
-### Quick Start
-
-#### 1. Create Rubric Configuration
-
-Create `grading_pipeline/config/rubrics.yaml`:
-
-```yaml
-rubrics:
-  q01:
-    path: "../../rubrics/q01.yaml"
-    description: "Question 1: Mutual Information"
-```
-
-#### 2. Prepare Submissions
-
-Use the example driving script or create self-contained submissions manually:
-
-```bash
-python -m grading_pipeline.prepare_submissions
-```
-
-#### 3. Grade a Question Batch
-
-```bash
-python -m grading_pipeline.cli grade-question \
-  --question q01 \
-  --rubrics-config grading_pipeline/config/rubrics.yaml \
-  --submissions-dir grading_pipeline/submissions \
-  --sources-config grading_pipeline/config/sources.yaml \
-  --index-dir grading_pipeline/tmp/chroma_db \
-  --output results/q01_results.json
-```
-
-#### 4. Grade a Single Student
-
-```bash
-python -m grading_pipeline.cli grade-student \
-  --rubrics-config grading_pipeline/config/rubrics.yaml \
-  --submission grading_pipeline/submissions/student_001_q01.yaml \
-  --sources-config grading_pipeline/config/sources.yaml \
-  --index-dir grading_pipeline/tmp/chroma_db \
-  --output results/student_001_q01.json
-```
-
-### Submission Format
-
-Self-contained submissions are YAML files with the following structure:
-
-```yaml
-student_id: "student_001"
-question_id: "q01"
-question_text: "Explain mutual information and its relationship to entropy"
-rubric_version: "1.0"
-answer: |
-  [Student's answer text - can be multi-line]
-metadata:
-  created_at: "2026-01-17T10:30:00"
-  rubric_path: "grading_pipeline/rubrics/q01.yaml"
-```
-
-### Results Format
-
-Results are written as JSON files with the following structure:
-
-```json
-{
-  "question_id": "q01",
-  "graded_at": "2026-01-17T10:30:00",
-  "total_students": 10,
-  "successful": 9,
-  "failed": 1,
-  "students": [
-    {
-      "student_id": "student_001",
-      "question_id": "q01",
-      "score": 8,
-      "max_score": 10,
-      "feedback": "...",
-      "citations": [...],
-      "rubric_items": [...]
-    }
-  ]
-}
-```
-
-### Error Handling
-
-The pipeline continues processing even if individual students fail:
-
-- Failed students are marked with an `"error"` field in results
-- Error messages are logged to stdout or log file
-- Batch processing continues for remaining students
-
-### Testing
-
-Run unit tests for individual components:
-
-```bash
-python grading_pipeline/test_config_loader.py
-python grading_pipeline/test_submission_loader.py
-python grading_pipeline/test_submission_converter.py
-python grading_pipeline/test_pipeline.py
-```
-
-See `EXAMPLES.md` for detailed usage examples and workflows.
+All version1 functionality (dual indexes, reranking, retrieval) works seamlessly with PDF-loaded documents.
