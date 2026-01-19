@@ -85,9 +85,7 @@ def grade_question_command(args: argparse.Namespace) -> None:
 
     # Load all submissions for this question
     try:
-        submissions = load_all_submissions_for_question(
-            submissions_dir, args.question
-        )
+        submissions = load_all_submissions_for_question(submissions_dir, args.question)
         print(
             f"Loaded {len(submissions)} submissions for question {args.question}",
             flush=True,
@@ -107,6 +105,7 @@ def grade_question_command(args: argparse.Namespace) -> None:
             submissions=submissions,
             persist_dir=index_dir,
             config_path=sources_config,
+            index_backend=args.index_backend,
             execution_mode=args.mode,
             log_file=log_file,
         )
@@ -151,7 +150,10 @@ def grade_student_command(args: argparse.Namespace) -> None:
     try:
         submission = load_submission(submission_path)
         question_id = submission["question_id"]
-        print(f"Loaded submission for {submission['student_id']}, question {question_id}", flush=True)
+        print(
+            f"Loaded submission for {submission['student_id']}, question {question_id}",
+            flush=True,
+        )
     except Exception as e:
         print(f"Error loading submission: {e}", flush=True)
         return
@@ -174,6 +176,8 @@ def grade_student_command(args: argparse.Namespace) -> None:
             submission=submission,
             persist_dir=index_dir,
             config_path=sources_config,
+            index_backend=args.index_backend,
+            log_file=log_file,
         )
 
         # Write result
@@ -186,8 +190,11 @@ def grade_student_command(args: argparse.Namespace) -> None:
                 import json
 
                 json.dump(result, f, indent=2)
-            print(f"✓ Grading complete", flush=True)
-            print(f"  Score: {result.get('score', 0)}/{result.get('max_score', 0)}", flush=True)
+            print("✓ Grading complete", flush=True)
+            print(
+                f"  Score: {result.get('score', 0)}/{result.get('max_score', 0)}",
+                flush=True,
+            )
             print(f"  Results written to: {output_path}", flush=True)
 
     except Exception as e:
@@ -231,7 +238,13 @@ def main() -> None:
     grade_question_parser.add_argument(
         "--index-dir",
         required=True,
-        help="Directory for persistent ChromaDB indexes",
+        help="Directory for persistent indexes",
+    )
+    grade_question_parser.add_argument(
+        "--index-backend",
+        default="chromadb",
+        choices=["chromadb", "in-memory"],
+        help="Index backend to use (default: chromadb)",
     )
     grade_question_parser.add_argument(
         "--output",
@@ -276,7 +289,13 @@ def main() -> None:
     grade_student_parser.add_argument(
         "--index-dir",
         required=True,
-        help="Directory for persistent ChromaDB indexes",
+        help="Directory for persistent indexes",
+    )
+    grade_student_parser.add_argument(
+        "--index-backend",
+        default="chromadb",
+        choices=["chromadb", "in-memory"],
+        help="Index backend to use (default: chromadb)",
     )
     grade_student_parser.add_argument(
         "--output",
