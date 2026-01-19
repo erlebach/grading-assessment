@@ -5,6 +5,7 @@ Creates generic rubrics that work for all questions with two-dimensional scoring
 """
 
 from pathlib import Path
+
 import yaml
 
 
@@ -110,22 +111,32 @@ def main() -> None:
     """Main function."""
     import argparse
 
-    parser = argparse.ArgumentParser(description="Create rubrics for all 10 questions")
+    parser = argparse.ArgumentParser(
+        description="Create rubrics for all questions from ten_questions.md. "
+        "Generates generic rubrics with two-dimensional scoring (correctness and completeness).",
+        epilog=(
+            "Examples:\n"
+            "  python create_rubrics_for_all_questions.py\n"
+            "  python create_rubrics_for_all_questions.py --start-from 1\n"
+            "  python create_rubrics_for_all_questions.py --questions-file custom_questions.md --rubrics-dir custom_rubrics\n"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     parser.add_argument(
         "--questions-file",
         default="ten_questions.md",
-        help="Path to ten_questions.md (default: ten_questions.md)",
+        help="Path to questions markdown file (default: ten_questions.md)",
     )
     parser.add_argument(
         "--rubrics-dir",
         default="rubrics",
-        help="Directory to write rubric files (default: rubrics)",
+        help="Directory to write rubric YAML files (default: rubrics)",
     )
     parser.add_argument(
         "--start-from",
         type=int,
         default=3,
-        help="Start creating rubrics from question number (default: 3, for q03-q10)",
+        help="Start creating rubrics from question number (default: 3, creates q03-q10)",
     )
 
     args = parser.parse_args()
