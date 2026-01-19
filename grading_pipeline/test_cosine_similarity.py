@@ -60,9 +60,7 @@ def print_embedding_side_by_side(
         stored_val = float(stored_embedding[idx])
         new_val = float(new_embedding[idx])
         diff_val = stored_val - new_val
-        print(
-            f"{idx:5d} | {stored_val:12.5g} | {new_val:12.5g} | {diff_val:12.5g}"
-        )
+        print(f"{idx:5d} | {stored_val:12.5g} | {new_val:12.5g} | {diff_val:12.5g}")
 
     cosine_sim = _cosine_similarity(stored_embedding, new_embedding)
     print("-" * 50)
@@ -125,9 +123,7 @@ def run_embedding_diagnostics(
     print(f"  Text vs query cosine similarity: {query_sim:.6f}")
     print(f"  Chunk text repr: {random_chunk!r}")
     if cosine_sim < 0.9:
-        print(
-            f"  ⚠ WARNING: Embeddings differ! This explains low retrieval scores."
-        )
+        print(f"  ⚠ WARNING: Embeddings differ! This explains low retrieval scores.")
     print()
     print_embedding_side_by_side(stored_embedding, new_embedding)
     print()

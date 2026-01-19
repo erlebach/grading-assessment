@@ -27,7 +27,7 @@ indexes:
     chunk_overlap: 100
     paragraph_separator: "\n\n"
     collection_name: "paragraph_index"
-    enabled: false  # Disabled by default, enable to use
+    enabled: true  # Disabled by default, enable to use
 
 # NEW: Runtime index selection
 runtime:

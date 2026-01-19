@@ -24,30 +24,30 @@ Successfully generalized the grading pipeline from two hardcoded indices (word_i
 - Protocol-based architecture for extensibility
 - `IndexBuilder` protocol defining the interface all builders must implement
 - Three concrete builders:
-  - **CharacterIndexBuilder**: Character-level chunking (small, granular chunks)
-  - **SentenceIndexBuilder**: Sentence-level chunking using token-based measurement
-  - **ParagraphIndexBuilder**: Paragraph-level chunking (NEW - proves extensibility)
+    - **CharacterIndexBuilder**: Character-level chunking (small, granular chunks)
+    - **SentenceIndexBuilder**: Sentence-level chunking using token-based measurement
+    - **ParagraphIndexBuilder**: Paragraph-level chunking (NEW - proves extensibility)
 - `IndexRegistry`: Central registry for builder registration and lookup
 
 ### 3. **Index Factory** (`grading_pipeline/index_factory.py`)
 - Centralized index creation, loading, and management
 - Intelligent build-or-update logic with config change detection
 - Features:
-  - Build single index by ID
-  - Build all active indexes
-  - Build or update (smart rebuild on config change)
-  - Load previously built indexes
-  - Runtime subset selection
-  - Manifest tracking for change detection
+    - Build single index by ID
+    - Build all active indexes
+    - Build or update (smart rebuild on config change)
+    - Load previously built indexes
+    - Runtime subset selection
+    - Manifest tracking for change detection
 
 ### 4. **Multi-Index Retriever** (`retrieval_core/multi_retriever.py`)
 - Generalizes DualIndexRetriever to support N indexes
 - Features:
-  - Retrieval from multiple indexes simultaneously
-  - Smart deduplication (exact duplicates only)
-  - Cross-encoder reranking across all results
-  - Runtime index subset selection via `index_subset` parameter
-  - Clean API supporting dynamic index combinations
+    - Retrieval from multiple indexes simultaneously
+    - Smart deduplication (exact duplicates only)
+    - Cross-encoder reranking across all results
+    - Runtime index subset selection via `index_subset` parameter
+    - Clean API supporting dynamic index combinations
 
 ### 5. **Backward Compatibility** (`retrieval_core/dual_retriever_compat.py`)
 - `DualIndexRetriever` as a subclass of `MultiIndexRetriever`
@@ -64,15 +64,15 @@ Successfully generalized the grading pipeline from two hardcoded indices (word_i
 ### 7. **Manifest Enhancement** (`grading_pipeline/manifest.py`)
 - Index configuration tracking
 - Change detection functions:
-  - `get_index_configs()`: Retrieve stored index configurations
-  - `has_index_config_changed()`: Detect config modifications
-  - `update_index_config()`: Record new build metadata
+    - `get_index_configs()`: Retrieve stored index configurations
+    - `has_index_config_changed()`: Detect config modifications
+    - `update_index_config()`: Record new build metadata
 - Enables smart incremental rebuilding
 
 ### 8. **Multi-Index Building** (`grading_pipeline/index_builder_in_memory.py`)
 - New functions:
-  - `build_multi_indexes_in_memory()`: Build indexes using IndexFactory
-  - `load_multi_indexes_in_memory()`: Load built indexes
+    - `build_multi_indexes_in_memory()`: Build indexes using IndexFactory
+    - `load_multi_indexes_in_memory()`: Load built indexes
 - CLI support with `--indexes` flag
 - Original functions unchanged (backward compatible)
 

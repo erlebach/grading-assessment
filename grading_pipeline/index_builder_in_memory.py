@@ -1213,6 +1213,13 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
+    # Set up embedding model before building
+    print("[Setup] Initializing embedding model...")
+    from config.llm_config import setup_llamaindex_defaults
+
+    setup_llamaindex_defaults()
+    print("✓ Embedding model loaded\n")
+
     # Build indexes
     index_subset = None
     if args.indexes:
