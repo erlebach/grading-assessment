@@ -19,6 +19,7 @@ dependencies = [
     "sentence-transformers>=2.2.0",
     "lmql>=0.7.0",
     "pypdf>=3.0.0",
+    "pydantic>=2.12.5",
 ]
 
 [project.optional-dependencies]
