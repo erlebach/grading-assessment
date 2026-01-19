@@ -9,12 +9,16 @@ Tests the complete multi-index system including:
 
 """
 
+import os
 import tempfile
 from pathlib import Path
 
 import pytest
 import yaml
 from llama_index.core import Document, VectorStoreIndex
+
+# Set testing mode to use MockEmbedding instead of OpenAI
+os.environ["IS_TESTING"] = "true"
 
 from grading_pipeline.config.index_schema import IndexesConfig, load_index_config
 from grading_pipeline.index_factory import IndexFactory
