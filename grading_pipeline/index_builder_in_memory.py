@@ -1076,6 +1076,179 @@ def build_or_update_dual_indexes_in_memory(
     return word_index, sentence_index
 
 
+def build_multi_indexes_in_memory(
+    config_path: Path | None = None,
+    persist_dir: Path | None = None,
+    index_subset: list[str] | None = None,
+    force_rebuild: bool = False,
+) -> dict[str, VectorStoreIndex]:
+    """Build multiple indexes using the new multi-index system.
+
+    Uses IndexFactory to build indexes defined in the configuration file.
+    Supports subset selection and config-driven index definitions.
+
+    Args:
+        config_path: Path to YAML config file. If None, uses default location.
+        persist_dir: Directory to persist indexes. If None, uses default location.
+        index_subset: List of index IDs to build. If None, builds all active indexes.
+        force_rebuild: If True, rebuild all indexes even if they exist.
+
+    Returns:
+        Dictionary mapping index ID to built VectorStoreIndex.
+
+    """
+    from grading_pipeline.config.index_schema import load_index_config
+    from grading_pipeline.index_factory import IndexFactory
+
+    # Use default paths if not provided
+    if config_path is None:
+        config_path = Path(__file__).parent / "config" / "sources.yaml"
+    if persist_dir is None:
+        persist_dir = Path(__file__).parent / "persist"
+
+    # Load and validate configuration
+    print(f"Loading multi-index configuration from {config_path}")
+    with open(config_path, "r") as f:
+        config = yaml.safe_load(f)
+
+    # Load sources from configuration
+    print(f"Loading sources from {config_path}")
+    documents = load_sources_from_yaml_with_pdf(config_path)
+    print(f"✓ Loaded {len(documents)} documents")
+
+    if not documents:
+        raise ValueError("No documents loaded from sources")
+
+    # Create factory
+    factory = IndexFactory(config, persist_dir)
+
+    # Override active indexes if subset provided
+    if index_subset:
+        factory.set_active_indexes(index_subset)
+        print(f"Using index subset: {index_subset}")
+
+    # Build or update indexes
+    print(f"\nBuilding indexes: {factory.get_active_index_ids()}")
+    indexes = factory.build_or_update_active_indexes(
+        documents, force_rebuild=force_rebuild
+    )
+
+    print(f"\n✓ Multi-indexes ready at {persist_dir}")
+    return indexes
+
+
+def load_multi_indexes_in_memory(
+    config_path: Path | None = None,
+    persist_dir: Path | None = None,
+    index_subset: list[str] | None = None,
+) -> dict[str, VectorStoreIndex]:
+    """Load multiple indexes using the multi-index system.
+
+    Args:
+        config_path: Path to YAML config file. If None, uses default location.
+        persist_dir: Directory containing persisted indexes. If None, uses default.
+        index_subset: List of index IDs to load. If None, loads all active indexes.
+
+    Returns:
+        Dictionary mapping index ID to loaded VectorStoreIndex.
+
+    """
+    from grading_pipeline.index_factory import IndexFactory
+
+    # Use default paths if not provided
+    if config_path is None:
+        config_path = Path(__file__).parent / "config" / "sources.yaml"
+    if persist_dir is None:
+        persist_dir = Path(__file__).parent / "persist"
+
+    # Load configuration
+    print(f"Loading configuration from {config_path}")
+    with open(config_path, "r") as f:
+        config = yaml.safe_load(f)
+
+    # Create factory
+    factory = IndexFactory(config, persist_dir)
+
+    # Override active indexes if subset provided
+    if index_subset:
+        factory.set_active_indexes(index_subset)
+        print(f"Loading index subset: {index_subset}")
+
+    # Load indexes
+    print(f"\nLoading indexes: {factory.get_active_index_ids()}")
+    indexes = factory.load_active_indexes()
+
+    print(f"\n✓ Indexes loaded from {persist_dir}")
+    return indexes
+
+
+if __name__ == "__main__":
+    """CLI support for building indexes."""
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Build multi-index grading pipeline")
+    parser.add_argument(
+        "--config",
+        type=Path,
+        default=None,
+        help="Path to sources.yaml config file",
+    )
+    parser.add_argument(
+        "--persist-dir",
+        type=Path,
+        default=None,
+        help="Directory to persist indexes",
+    )
+    parser.add_argument(
+        "--indexes",
+        type=str,
+        help="Comma-separated index IDs to build (e.g., 'word_index,sentence_index'). "
+        "Use 'all' to build all enabled indexes.",
+    )
+    parser.add_argument(
+        "--force-rebuild",
+        action="store_true",
+        help="Force rebuild all indexes even if they exist",
+    )
+
+    args = parser.parse_args()
+
+    # Build indexes
+    index_subset = None
+    if args.indexes:
+        if args.indexes.lower() == "all":
+            # Load config to get all enabled indexes
+            if args.config is None:
+                args.config = Path(__file__).parent / "config" / "sources.yaml"
+            with open(args.config, "r") as f:
+                config = yaml.safe_load(f)
+            index_subset = [
+                idx
+                for idx, cfg in config.get("indexes", {}).items()
+                if cfg.get("enabled", True)
+            ]
+            print(f"Building all enabled indexes: {index_subset}")
+        else:
+            index_subset = args.indexes.split(",")
+            print(f"Building specified indexes: {index_subset}")
+
+    try:
+        indexes = build_multi_indexes_in_memory(
+            config_path=args.config,
+            persist_dir=args.persist_dir,
+            index_subset=index_subset,
+            force_rebuild=args.force_rebuild,
+        )
+
+        print(f"\n✓ Successfully built {len(indexes)} indexes")
+        for idx_id in indexes.keys():
+            print(f"  - {idx_id}")
+
+    except Exception as e:
+        print(f"\n✗ Error building indexes: {e}")
+        raise
+
+
 # Re-export for convenience
 __all__ = [
     "InMemoryVectorStore",
@@ -1088,4 +1261,7 @@ __all__ = [
     "delete_source_from_indexes_in_memory",
     "load_dual_indexes_in_memory",
     "load_sources_from_yaml_with_pdf",
+    # New multi-index support
+    "build_multi_indexes_in_memory",
+    "load_multi_indexes_in_memory",
 ]

@@ -1,6 +1,38 @@
 # Source Configuration for Grading Pipeline Evidence Index
 # Extends retrieval_core with PDF support and incremental indexing
 
+# NEW: Index definitions section
+indexes:
+  word_index:
+    type: "character"
+    chunk_size: 512
+    chunk_overlap: 50
+    source_type_overrides:
+      slide: 128  # Slides use smaller chunks
+    collection_name: "word_index"
+    enabled: true
+
+  sentence_index:
+    type: "sentence"
+    chunk_size: 256  # in tokens
+    chunk_overlap: 50
+    secondary_chunking_regex_default: "[^,.;。？！]+[,.;。？！]?|[,.;。？！]"
+    secondary_chunking_regex_slides: "[^,.;\\n。？！]+[,.;\\n。？！]?|[,.;\\n。？！]"
+    collection_name: "sentence_index"
+    enabled: true
+
+  paragraph_index:
+    type: "paragraph"
+    chunk_size: 1024  # in tokens
+    chunk_overlap: 100
+    paragraph_separator: "\n\n"
+    collection_name: "paragraph_index"
+    enabled: false  # Disabled by default, enable to use
+
+# NEW: Runtime index selection
+runtime:
+  active_indexes: ["word_index", "sentence_index"]  # Default subset
+
 sources:
   # PDF source - slides on data type quality
   - type: "file"

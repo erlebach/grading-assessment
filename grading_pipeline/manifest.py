@@ -167,6 +167,88 @@ def create_manifest_entry(
     }
 
 
+def get_index_configs(manifest: dict[str, Any]) -> dict[str, dict]:
+    """Get index configurations from manifest.
+
+    Args:
+        manifest: Manifest dictionary.
+
+    Returns:
+        Dictionary mapping index ID to index configuration.
+
+    """
+    return manifest.get("indexes_built", {})
+
+
+def has_index_config_changed(
+    index_id: str,
+    current_config: dict[str, Any],
+    manifest: dict[str, Any],
+) -> bool:
+    """Check if index configuration has changed since last build.
+
+    Compares relevant fields (type, chunk_size, chunk_overlap, etc.)
+    to detect configuration changes that require rebuilding.
+
+    Args:
+        index_id: ID of the index.
+        current_config: Current configuration dictionary.
+        manifest: Manifest dictionary.
+
+    Returns:
+        True if configuration changed or index not in manifest, False otherwise.
+
+    """
+    indexes_built = get_index_configs(manifest)
+
+    if index_id not in indexes_built:
+        return True  # New index - needs building
+
+    old_config = indexes_built[index_id]
+
+    # Compare relevant fields
+    fields_to_compare = [
+        "type",
+        "chunk_size",
+        "chunk_overlap",
+        "collection_name",
+        "source_type_overrides",
+        "paragraph_separator",
+        "secondary_chunking_regex_default",
+        "secondary_chunking_regex_slides",
+    ]
+
+    for key in fields_to_compare:
+        current_val = current_config.get(key)
+        old_val = old_config.get(key)
+        if current_val != old_val:
+            return True
+
+    return False
+
+
+def update_index_config(
+    manifest: dict[str, Any],
+    index_id: str,
+    config: dict[str, Any],
+) -> None:
+    """Update index configuration in manifest after build.
+
+    Args:
+        manifest: Manifest dictionary to update.
+        index_id: ID of the index being built.
+        config: Configuration dictionary for the index.
+
+    """
+    if "indexes_built" not in manifest:
+        manifest["indexes_built"] = {}
+
+    manifest["indexes_built"][index_id] = {
+        **config,
+        "built_at": datetime.now().isoformat(),
+    }
+
+
 def get_manifest_summary(manifest: dict[str, Any]) -> str:
     """Get a human-readable summary of the manifest.
 
