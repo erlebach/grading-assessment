@@ -48,8 +48,7 @@ def build_or_update_indexes_for_backend(
         return build_or_update_dual_indexes_in_memory(config_path, persist_dir)
 
     raise ValueError(
-        f"Unknown index backend: {index_backend}. "
-        "Choose 'chromadb' or 'in-memory'."
+        f"Unknown index backend: {index_backend}. " "Choose 'chromadb' or 'in-memory'."
     )
 
 
@@ -80,8 +79,7 @@ def setup_grading_environment(
 
     """
     print(
-        f"[Index Setup] Building or updating indexes "
-        f"(backend: {index_backend})...",
+        f"[Index Setup] Building or updating indexes " f"(backend: {index_backend})...",
         flush=True,
     )
     start_time = time.time()
@@ -96,8 +94,7 @@ def setup_grading_environment(
     # Output indexed files (from manifest)
     manifest = load_manifest(persist_dir)
     indexed_files = [
-        source["file_path"]
-        for source in manifest.get("sources", {}).values()
+        source["file_path"] for source in manifest.get("sources", {}).values()
     ]
     print(f"[Index Setup] Indexed files:", flush=True)
     for file_path in indexed_files:
@@ -121,6 +118,7 @@ def _grade_student_core(
     question_text: str,
     rubric: dict[str, Any],
     retriever: DualIndexRetriever,
+    answer_type: str | None = None,
 ) -> dict[str, Any]:
     """Core grading logic for a single student.
 
@@ -136,6 +134,7 @@ def _grade_student_core(
         question_text: The question text that was asked.
         rubric: Rubric dictionary.
         retriever: DualIndexRetriever instance.
+        answer_type: Optional answer type from submission (e.g., "good", "less_good", "wrong").
 
     Returns:
         Formatted grading result dictionary.
@@ -208,12 +207,14 @@ def _grade_student_core(
         "score": grading_result["total_score"],
         "max_score": grading_result["max_score"],
         "rubric_items": rubric_items,
-        "citations": [
-            ev["source_id"] for ev in grading_result["evidence_used"]
-        ],
+        "citations": [ev["source_id"] for ev in grading_result["evidence_used"]],
         "feedback": grading_result["feedback"],
         "timings": step_timings,
     }
+
+    # Include answer_type if provided
+    if answer_type is not None:
+        result["answer_type"] = answer_type
 
     return result
 
@@ -227,6 +228,7 @@ def grade_question_batch(
     index_backend: str = "chromadb",
     execution_mode: str = "sequential",
     log_file: Path | None = None,
+    output_path: Path | None = None,
 ) -> list[dict[str, Any]]:
     """Grade all students for a single question.
 
@@ -245,6 +247,8 @@ def grade_question_batch(
         execution_mode: Execution mode ("sequential", "batched", "async").
             Currently only "sequential" is implemented.
         log_file: Optional path to log file for unbuffered output.
+        output_path: Optional path to output JSON file. If provided, results will be
+            written incrementally after each student is processed.
 
     Returns:
         List of grading results, one per student.
@@ -278,25 +282,52 @@ def grade_question_batch(
         student_id = submission["student_id"]
         student_answer = submission["answer"]
         question_text = submission.get("question_text", rubric.get("question_text", ""))
+        # Extract answer_type from metadata if present, otherwise check top level
+        metadata = submission.get("metadata", {})
+        answer_type = None
+        if isinstance(metadata, dict):
+            answer_type = metadata.get("answer_type")
+        if answer_type is None:
+            answer_type = submission.get("answer_type")
 
-        log_print(f"[Grading] Processing {student_id}...")
+        answer_type_str = f" ({answer_type})" if answer_type else ""
+        log_print(
+            f"[Grading] Processing {student_id} for {question_id}{answer_type_str}..."
+        )
 
         try:
             result = _grade_student_core(
-                student_id, student_answer, question_text, rubric, retriever
+                student_id,
+                student_answer,
+                question_text,
+                rubric,
+                retriever,
+                answer_type,
             )
             results.append(result)
-            log_print(f"[Grading] ✓ {student_id} completed")
+            log_print(
+                f"[Grading] ✓ {student_id} completed for {question_id}{answer_type_str}"
+            )
+
+            # Write results incrementally if output_path is provided
+            if output_path is not None:
+                write_results(results, question_id, output_path, per_student=False)
         except Exception as e:
             error_msg = f"Error grading {student_id}: {type(e).__name__}: {e}"
             log_print(f"[Grading] ✗ {error_msg}")
-            results.append(
-                {
-                    "student_id": student_id,
-                    "question_id": question_id,
-                    "error": error_msg,
-                }
-            )
+            error_result = {
+                "student_id": student_id,
+                "question_id": question_id,
+                "error": error_msg,
+            }
+            # Include answer_type in error result if available
+            if answer_type is not None:
+                error_result["answer_type"] = answer_type
+            results.append(error_result)
+
+            # Write results incrementally even on error if output_path is provided
+            if output_path is not None:
+                write_results(results, question_id, output_path, per_student=False)
 
     if log_handle:
         log_handle.close()
@@ -328,8 +359,9 @@ def write_results(
             if "error" not in result:
                 student_id = result["student_id"]
                 student_file = output_path.parent / f"{student_id}_{question_id}.json"
-                with open(student_file, "w") as f:
+                with open(student_file, "w", buffering=1) as f:
                     json.dump(result, f, indent=2)
+                    f.flush()  # Ensure unbuffered write
 
     # Always write batch file
     batch_result = {
@@ -342,8 +374,9 @@ def write_results(
     }
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(output_path, "w") as f:
+    with open(output_path, "w", buffering=1) as f:
         json.dump(batch_result, f, indent=2)
+        f.flush()  # Ensure unbuffered write
 
 
 def grade_single_student(
@@ -389,7 +422,7 @@ def grade_single_student(
 if __name__ == "__main__":
     # Test pipeline setup
     test_config = Path(__file__).parent / "config" / "sources.yaml"
-    
+
     # Use test directory if running from test script, otherwise use production tmp
     # Check if we're in a test environment by looking for tests/ directory
     tests_dir = Path(__file__).parent.parent / "tests"
@@ -399,7 +432,7 @@ if __name__ == "__main__":
     else:
         # Production use - use production tmp
         test_persist = Path(__file__).parent / "tmp" / "chroma_db"
-    
+
     test_rubric = Path(__file__).parent.parent / "rubrics" / "q01.yaml"
 
     if test_config.exists() and test_rubric.exists():

@@ -9,8 +9,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from grading_pipeline.config_loader import get_rubric_path
 from grader.grade_question import load_rubric
+from grading_pipeline.config_loader import get_rubric_path
 
 
 def create_self_contained_submission(
@@ -53,9 +53,7 @@ def create_self_contained_submission(
 
     # Extract question_text from rubric
     if "question_text" not in rubric:
-        raise ValueError(
-            f"Rubric {rubric_path} missing required 'question_text' field"
-        )
+        raise ValueError(f"Rubric {rubric_path} missing required 'question_text' field")
 
     question_text = rubric["question_text"]
 

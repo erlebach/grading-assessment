@@ -77,7 +77,7 @@ def cleanup_all_test_artifacts() -> Path:
 
     """
     test_artifacts_dir = get_test_artifacts_dir()
-    
+
     # Clean up old test directory location if it exists
     old_test_dir = Path("grading_pipeline/test_tmp")
     if old_test_dir.exists():
@@ -87,14 +87,16 @@ def cleanup_all_test_artifacts() -> Path:
             print(f"✓ Removed old test directory: {old_test_dir}")
         else:
             print(f"⚠ Leaving old test directory (cleanup disabled)")
-    
+
     if should_cleanup_artifacts():
         if test_artifacts_dir.exists():
             shutil.rmtree(test_artifacts_dir)
             print(f"✓ Cleaned up all test artifacts: {test_artifacts_dir}")
     else:
-        print(f"⚠ Cleanup disabled in test_config.yaml - leaving artifacts: {test_artifacts_dir}")
-    
+        print(
+            f"⚠ Cleanup disabled in test_config.yaml - leaving artifacts: {test_artifacts_dir}"
+        )
+
     test_artifacts_dir.mkdir(parents=True, exist_ok=True)
     return test_artifacts_dir
 
@@ -405,7 +407,9 @@ def main():
         else:
             test_artifacts_dir = get_test_artifacts_dir()
             print(f"\n⚠ Artifacts preserved for debugging: {test_artifacts_dir}")
-            print("  Set cleanup.remove_artifacts: true in tests/test_config.yaml to enable cleanup")
+            print(
+                "  Set cleanup.remove_artifacts: true in tests/test_config.yaml to enable cleanup"
+            )
 
     except Exception as e:
         print(f"\n✗ Test suite failed with error:")
@@ -413,7 +417,7 @@ def main():
         import traceback
 
         traceback.print_exc()
-        
+
         # Cleanup on error if configured
         if should_cleanup_artifacts():
             test_artifacts_dir = get_test_artifacts_dir()

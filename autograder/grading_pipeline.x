@@ -12,7 +12,7 @@ echo ""
 
 # Run the grading pipeline
 uv run python -m grading_pipeline.cli grade-question \
-  --question q01 \
+  --question q03 \
   --rubrics-config grading_pipeline/config/rubrics.yaml \
   --submissions-dir grading_pipeline/submissions \
   --sources-config grading_pipeline/config/sources.yaml \
