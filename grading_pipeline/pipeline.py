@@ -9,13 +9,48 @@ import json
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
+
+from llama_index.core import VectorStoreIndex
 
 from grader.grade_question import apply_rubric_scoring, load_rubric
 from grader.lmql_grading import LMQLGrader
 from grading_pipeline.index_builder import build_or_update_dual_indexes
+from grading_pipeline.index_builder_in_memory import (
+    build_or_update_dual_indexes_in_memory,
+)
 from grading_pipeline.manifest import load_manifest
 from retrieval_core.retriever import DualIndexRetriever
+
+
+def build_or_update_indexes_for_backend(
+    index_backend: str,
+    config_path: Path,
+    persist_dir: Path,
+) -> tuple[VectorStoreIndex, VectorStoreIndex]:
+    """Build or update indexes based on the selected backend.
+
+    Args:
+        index_backend: Backend identifier ("chromadb" or "in-memory").
+        config_path: Path to sources configuration YAML file.
+        persist_dir: Directory for persistent indexes.
+
+    Returns:
+        Tuple of (word_index, sentence_index).
+
+    Raises:
+        ValueError: If index_backend is not recognized.
+
+    """
+    if index_backend == "chromadb":
+        return build_or_update_dual_indexes(config_path, persist_dir)
+    if index_backend == "in-memory":
+        return build_or_update_dual_indexes_in_memory(config_path, persist_dir)
+
+    raise ValueError(
+        f"Unknown index backend: {index_backend}. "
+        "Choose 'chromadb' or 'in-memory'."
+    )
 
 
 def setup_grading_environment(
@@ -23,6 +58,7 @@ def setup_grading_environment(
     rubric_path: Path,
     persist_dir: Path,
     config_path: Path,
+    index_backend: str = "chromadb",
 ) -> tuple[DualIndexRetriever, dict[str, Any], dict[str, float]]:
     """Setup grading environment for a question.
 
@@ -35,19 +71,24 @@ def setup_grading_environment(
     Args:
         question_id: Question identifier (for logging).
         rubric_path: Path to the rubric YAML file.
-        persist_dir: Directory for persistent ChromaDB indexes.
+        persist_dir: Directory for persistent indexes.
         config_path: Path to sources configuration YAML file.
+        index_backend: Index backend to use ("chromadb" or "in-memory").
 
     Returns:
         Tuple of (retriever, rubric, timing_info).
 
     """
-    print(f"[Index Setup] Building or updating indexes...", flush=True)
+    print(
+        f"[Index Setup] Building or updating indexes "
+        f"(backend: {index_backend})...",
+        flush=True,
+    )
     start_time = time.time()
 
     # Build or update indexes
-    word_index, sentence_index = build_or_update_dual_indexes(
-        config_path, persist_dir
+    word_index, sentence_index = build_or_update_indexes_for_backend(
+        index_backend, config_path, persist_dir
     )
 
     build_time = time.time() - start_time
@@ -183,6 +224,7 @@ def grade_question_batch(
     submissions: list[dict[str, Any]],
     persist_dir: Path,
     config_path: Path,
+    index_backend: str = "chromadb",
     execution_mode: str = "sequential",
     log_file: Path | None = None,
 ) -> list[dict[str, Any]]:
@@ -197,8 +239,9 @@ def grade_question_batch(
         question_id: Question identifier.
         rubric_path: Path to the rubric YAML file.
         submissions: List of submission dictionaries.
-        persist_dir: Directory for persistent ChromaDB indexes.
+        persist_dir: Directory for persistent indexes.
         config_path: Path to sources configuration YAML file.
+        index_backend: Index backend to use ("chromadb" or "in-memory").
         execution_mode: Execution mode ("sequential", "batched", "async").
             Currently only "sequential" is implemented.
         log_file: Optional path to log file for unbuffered output.
@@ -222,7 +265,11 @@ def grade_question_batch(
 
     # Setup environment
     retriever, rubric, timing = setup_grading_environment(
-        question_id, rubric_path, persist_dir, config_path
+        question_id,
+        rubric_path,
+        persist_dir,
+        config_path,
+        index_backend=index_backend,
     )
 
     results = []
@@ -305,6 +352,8 @@ def grade_single_student(
     submission: dict[str, Any],
     persist_dir: Path,
     config_path: Path,
+    index_backend: str = "chromadb",
+    log_file: Path | None = None,
 ) -> dict[str, Any]:
     """Grade a single student (wrapper around grade_question_batch).
 
@@ -314,8 +363,10 @@ def grade_single_student(
         question_id: Question identifier.
         rubric_path: Path to the rubric YAML file.
         submission: Single submission dictionary.
-        persist_dir: Directory for persistent ChromaDB indexes.
+        persist_dir: Directory for persistent indexes.
         config_path: Path to sources configuration YAML file.
+        index_backend: Index backend to use ("chromadb" or "in-memory").
+        log_file: Optional path to log file for unbuffered output.
 
     Returns:
         Single grading result dictionary.
@@ -327,7 +378,9 @@ def grade_single_student(
         submissions=[submission],
         persist_dir=persist_dir,
         config_path=config_path,
+        index_backend=index_backend,
         execution_mode="sequential",
+        log_file=log_file,
     )
 
     return results[0]

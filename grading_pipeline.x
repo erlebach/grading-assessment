@@ -16,7 +16,8 @@ uv run python -m grading_pipeline.cli grade-question \
   --rubrics-config grading_pipeline/config/rubrics.yaml \
   --submissions-dir grading_pipeline/submissions \
   --sources-config grading_pipeline/config/sources.yaml \
-  --index-dir grading_pipeline/tmp/chroma_db \
+  --index-dir grading_pipeline/tmp/in_memory_indexes \
+  --index-backend in-memory \
   --output grading_pipeline/results/q01_results.json \
   --mode sequential \
   --log grading_pipeline/results/q01_grading.log

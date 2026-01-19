@@ -987,13 +987,32 @@ def build_or_update_dual_indexes_in_memory(
 
         # For loading only, we need minimal embedding setup (but won't use it)
         if lazy_load_embeddings:
-            # Set a lightweight placeholder - won't be used for loading
+            # Align embedding model with stored metadata for verification
             from llama_index.core import Settings
-            from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 
-            # Directly set without checking (checking triggers initialization)
-            Settings.embed_model = HuggingFaceEmbedding(
-                model_name="sentence-transformers/all-MiniLM-L6-v2"
+            from config.llm_config import configure_embedding
+
+            stored_metadata = load_embedding_metadata(persist_dir) or {}
+            embedding_type = stored_metadata.get("embedding_type", "")
+            embedding_model = stored_metadata.get("embedding_model")
+
+            if embedding_type == "OpenAIEmbedding":
+                Settings.embed_model = configure_embedding(
+                    provider="openai", model=embedding_model
+                )
+            else:
+                Settings.embed_model = configure_embedding(
+                    provider="sentence-transformer", model=embedding_model
+                )
+
+            # Log the resolved embedding model for tracing
+            resolved_model = (
+                embedding_model if embedding_model else "default for provider"
+            )
+            print(
+                f"  Configured embedding model: {embedding_type} "
+                f"({resolved_model})",
+                flush=True,
             )
 
         word_index, sentence_index = load_dual_indexes_in_memory(persist_dir)
