@@ -105,17 +105,46 @@ class CharacterIndexBuilder:
                 )
                 nodes.append(node)
 
-        # Build index from nodes
+        # Validate that we have nodes before building
+        if not nodes:
+            raise RuntimeError(
+                f"Cannot build {collection_name}: no nodes created from documents.\n"
+                f"  This indicates documents were empty or chunking produced no chunks.\n"
+                f"  Documents provided: {len(documents)}\n"
+                f"  This prevents downstream execution."
+            )
+
+        # Build index from nodes using StorageContext (required for proper store population)
+        from llama_index.core import StorageContext
+
+        storage_context = StorageContext.from_defaults(vector_store=vector_store)
         index = VectorStoreIndex(
-            nodes,
-            vector_store=vector_store,
+            nodes=nodes,
+            storage_context=storage_context,
             show_progress=True,
         )
+
+        # Get the actual store from the index's storage context (it may be different)
+        actual_store = index._storage_context.vector_store
+        if not isinstance(actual_store, InMemoryVectorStore):
+            raise RuntimeError(
+                f"Cannot persist {collection_name}: expected InMemoryVectorStore, "
+                f"got {type(actual_store).__name__}"
+            )
+
+        # Validate store has content before persisting
+        if len(actual_store.nodes) == 0:
+            raise RuntimeError(
+                f"Cannot persist {collection_name}: vector store is empty after building.\n"
+                f"  This indicates a critical error in the build process.\n"
+                f"  Nodes created: {len(nodes)}, but store has {len(actual_store.nodes)} nodes.\n"
+                f"  This prevents downstream execution."
+            )
 
         # Persist vector store
         persist_dir.mkdir(parents=True, exist_ok=True)
         pickle_path = persist_dir / f"{collection_name}.pkl"
-        vector_store.save_to_pickle(pickle_path)
+        actual_store.save_to_pickle(pickle_path)
 
         return index
 
@@ -131,8 +160,8 @@ class CharacterIndexBuilder:
         # Load vector store from pickle
         vector_store = InMemoryVectorStore.load_from_pickle(pickle_path)
 
-        # Create index from loaded vector store
-        index = VectorStoreIndex([], vector_store=vector_store, show_progress=False)
+        # Create index from loaded vector store (use from_vector_store for proper connection)
+        index = VectorStoreIndex.from_vector_store(vector_store)
 
         return index
 
@@ -173,18 +202,45 @@ class SentenceIndexBuilder:
 
         splitter = SentenceSplitter(**splitter_config)
 
+        # Validate documents before building
+        if not documents:
+            raise RuntimeError(
+                f"Cannot build {collection_name}: no documents provided.\n"
+                f"  This prevents downstream execution."
+            )
+
         # Build index from documents with sentence splitter
+        from llama_index.core import StorageContext
+
+        storage_context = StorageContext.from_defaults(vector_store=vector_store)
         index = VectorStoreIndex.from_documents(
             documents,
             transformations=[splitter],
-            vector_store=vector_store,
+            storage_context=storage_context,
             show_progress=True,
         )
+
+        # Get the actual store from the index's storage context
+        actual_store = index._storage_context.vector_store
+        if not isinstance(actual_store, InMemoryVectorStore):
+            raise RuntimeError(
+                f"Cannot persist {collection_name}: expected InMemoryVectorStore, "
+                f"got {type(actual_store).__name__}"
+            )
+
+        # Validate store has content before persisting
+        if len(actual_store.nodes) == 0:
+            raise RuntimeError(
+                f"Cannot persist {collection_name}: vector store is empty after building.\n"
+                f"  This indicates documents were empty or chunking produced no chunks.\n"
+                f"  Documents provided: {len(documents)}, but store has {len(actual_store.nodes)} nodes.\n"
+                f"  This prevents downstream execution."
+            )
 
         # Persist vector store
         persist_dir.mkdir(parents=True, exist_ok=True)
         pickle_path = persist_dir / f"{collection_name}.pkl"
-        vector_store.save_to_pickle(pickle_path)
+        actual_store.save_to_pickle(pickle_path)
 
         return index
 
@@ -200,8 +256,8 @@ class SentenceIndexBuilder:
         # Load vector store from pickle
         vector_store = InMemoryVectorStore.load_from_pickle(pickle_path)
 
-        # Create index from loaded vector store
-        index = VectorStoreIndex([], vector_store=vector_store, show_progress=False)
+        # Create index from loaded vector store (use from_vector_store for proper connection)
+        index = VectorStoreIndex.from_vector_store(vector_store)
 
         return index
 
@@ -236,18 +292,45 @@ class ParagraphIndexBuilder:
             separator=paragraph_separator,
         )
 
+        # Validate documents before building
+        if not documents:
+            raise RuntimeError(
+                f"Cannot build {collection_name}: no documents provided.\n"
+                f"  This prevents downstream execution."
+            )
+
         # Build index from documents with paragraph splitter
+        from llama_index.core import StorageContext
+
+        storage_context = StorageContext.from_defaults(vector_store=vector_store)
         index = VectorStoreIndex.from_documents(
             documents,
             transformations=[splitter],
-            vector_store=vector_store,
+            storage_context=storage_context,
             show_progress=True,
         )
+
+        # Get the actual store from the index's storage context
+        actual_store = index._storage_context.vector_store
+        if not isinstance(actual_store, InMemoryVectorStore):
+            raise RuntimeError(
+                f"Cannot persist {collection_name}: expected InMemoryVectorStore, "
+                f"got {type(actual_store).__name__}"
+            )
+
+        # Validate store has content before persisting
+        if len(actual_store.nodes) == 0:
+            raise RuntimeError(
+                f"Cannot persist {collection_name}: vector store is empty after building.\n"
+                f"  This indicates documents were empty or chunking produced no chunks.\n"
+                f"  Documents provided: {len(documents)}, but store has {len(actual_store.nodes)} nodes.\n"
+                f"  This prevents downstream execution."
+            )
 
         # Persist vector store
         persist_dir.mkdir(parents=True, exist_ok=True)
         pickle_path = persist_dir / f"{collection_name}.pkl"
-        vector_store.save_to_pickle(pickle_path)
+        actual_store.save_to_pickle(pickle_path)
 
         return index
 
@@ -263,8 +346,8 @@ class ParagraphIndexBuilder:
         # Load vector store from pickle
         vector_store = InMemoryVectorStore.load_from_pickle(pickle_path)
 
-        # Create index from loaded vector store
-        index = VectorStoreIndex([], vector_store=vector_store, show_progress=False)
+        # Create index from loaded vector store (use from_vector_store for proper connection)
+        index = VectorStoreIndex.from_vector_store(vector_store)
 
         return index
 

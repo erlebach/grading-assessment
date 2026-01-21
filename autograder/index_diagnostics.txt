@@ -1,0 +1,11 @@
+[Index Diagnostics]
+  persist_dir: /Users/erlebach/src/2026/grading_assessment/autograder/grading_dynamic_rubrics/tmp/in_memory_indexes
+  active_indexes: ['word_index', 'sentence_index']
+- word_index:
+    chunks       : 231
+    chars        : min=77, max=128, avg=123.3
+    tokens (≈4/ch): min=19.2, max=32.0, avg=30.8
+- sentence_index:
+    chunks       : 29
+    chars        : min=455, max=927, avg=682.6
+    tokens (≈4/ch): min=113.8, max=231.8, avg=170.7

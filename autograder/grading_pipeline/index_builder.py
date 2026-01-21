@@ -287,13 +287,25 @@ def _load_file_source_with_pdf(
     Returns:
         List of Document objects with extracted text and metadata.
 
+    Raises:
+        FileNotFoundError: If source path does not exist.
+        ValueError: If no files match the patterns.
+
     """
     documents = []
     source_path = Path(source.get("path", ""))
 
     if not source_path.exists():
-        print(f"Warning: Source path {source_path} does not exist, skipping")
-        return documents
+        import os
+
+        cwd = os.getcwd()
+        abs_path = source_path.resolve()
+        raise FileNotFoundError(
+            f"Source path does not exist: {source_path}\n"
+            f"  Resolved absolute path: {abs_path}\n"
+            f"  Current working directory: {cwd}\n"
+            f"  Path is relative to CWD, not config file location."
+        )
 
     patterns = source.get("patterns", ["*.txt", "*.md"])
     file_paths = []
@@ -301,6 +313,13 @@ def _load_file_source_with_pdf(
     # Collect all matching files
     for pattern in patterns:
         file_paths.extend(source_path.glob(f"**/{pattern}"))
+
+    if not file_paths:
+        raise ValueError(
+            f"No files found matching patterns {patterns} in path: {source_path}\n"
+            f"  Resolved absolute path: {source_path.resolve()}\n"
+            f"  Check that the path contains files matching the patterns."
+        )
 
     # Process each file
     for file_path in file_paths:
@@ -348,27 +367,66 @@ def load_sources_from_yaml_with_pdf(config_path: Path) -> list[Document]:
     Returns:
         List of Document objects with metadata.
 
+    Raises:
+        FileNotFoundError: If config file or source paths don't exist.
+        ValueError: If no documents are loaded from any source.
+
     """
+    if not config_path.exists():
+        raise FileNotFoundError(
+            f"Configuration file not found: {config_path}\n"
+            f"  Resolved absolute path: {config_path.resolve()}"
+        )
+
     with open(config_path, "r") as f:
         config = yaml.safe_load(f)
 
     sources = config.get("sources", [])
-    all_documents = []
+    if not sources:
+        raise ValueError(
+            f"No sources defined in configuration file: {config_path}\n"
+            f"  Expected 'sources' key with at least one source entry."
+        )
 
-    for source in sources:
+    all_documents = []
+    source_errors = []
+
+    for i, source in enumerate(sources):
         source_type = source.get("type")
         metadata = source.get("metadata", {})
 
-        if source_type == "file":
-            # Load from local files with PDF support
-            docs = _load_file_source_with_pdf(source, metadata)
-            all_documents.extend(docs)
-        elif source_type == "url":
-            # Load from URL using retrieval_core's function
-            docs = _load_url_source(source, metadata)
-            all_documents.extend(docs)
+        try:
+            if source_type == "file":
+                # Load from local files with PDF support
+                docs = _load_file_source_with_pdf(source, metadata)
+                all_documents.extend(docs)
+                print(f"  ✓ Loaded {len(docs)} document(s) from file source {i+1}")
+            elif source_type == "url":
+                # Load from URL using retrieval_core's function
+                docs = _load_url_source(source, metadata)
+                all_documents.extend(docs)
+                print(f"  ✓ Loaded {len(docs)} document(s) from URL source {i+1}")
+            else:
+                source_errors.append(
+                    f"Source {i+1}: Unknown source type '{source_type}'"
+                )
+        except Exception as e:
+            source_errors.append(f"Source {i+1} (type={source_type}): {type(e).__name__}: {e}")
+
+    if source_errors:
+        error_msg = (
+            f"Errors loading sources from {config_path}:\n"
+            + "\n".join(f"  - {err}" for err in source_errors)
+        )
+        if not all_documents:
+            # No documents loaded at all - this is a fatal error
+            raise ValueError(
+                f"{error_msg}\n\n"
+                f"No documents were successfully loaded. Cannot proceed with index building."
+            )
         else:
-            print(f"Warning: Unknown source type '{source_type}', skipping")
+            # Some documents loaded, but some sources failed - warn but continue
+            print(f"Warning: {error_msg}")
 
     return all_documents
 

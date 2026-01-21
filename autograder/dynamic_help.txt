@@ -1,0 +1,58 @@
+Creating dynamic rubrics with LLM...
+
+usage: create_dynamic_rubrics_for_each_question.py [-h] --source-file
+                                                   SOURCE_FILE
+                                                   [--questions-file QUESTIONS_FILE]
+                                                   [--prompt-template PROMPT_TEMPLATE]
+                                                   [--rubrics-dir RUBRICS_DIR]
+                                                   [--start-from START_FROM]
+                                                   [--llm-provider {openai,anthropic,gemini,ollama}]
+                                                   [--llm-model LLM_MODEL]
+                                                   [--dry-run] [--verbose]
+
+Create dynamic rubrics for questions using LLM generation. Generates rubrics with source file context and outputs in both JSON and YAML formats.
+
+options:
+  -h, --help            show this help message and exit
+  --source-file SOURCE_FILE
+                        Path to source file (text, markdown, or PDF) to
+                        include in prompt context
+  --questions-file QUESTIONS_FILE
+                        Path to questions markdown file (default:
+                        ten_questions.md)
+  --prompt-template PROMPT_TEMPLATE
+                        Path to prompt template file (default:
+                        rubric_generator_template.txt in script directory)
+  --rubrics-dir RUBRICS_DIR
+                        Directory to write rubric files (default: rubrics)
+  --start-from START_FROM
+                        Start creating rubrics from question number (default:
+                        1, creates q01-q10)
+  --llm-provider {openai,anthropic,gemini,ollama}
+                        LLM provider (default: from config)
+  --llm-model LLM_MODEL
+                        LLM model name (default: from config)
+  --dry-run             Show what would be generated without calling LLM
+  --verbose             Enable verbose output with detailed logging
+
+Examples:
+  python -m gp.create_dynamic_rubrics_for_each_question \
+    --source-file grading_pipeline/sources/slides.pdf \
+    --questions-file ten_questions.md
+
+  python -m gp.create_dynamic_rubrics_for_each_question \
+    --source-file sources/textbook.pdf \
+    --prompt-template custom_template.txt \
+    --rubrics-dir custom_rubrics \
+    --start-from 1
+
+  python -m gp.create_dynamic_rubrics_for_each_question \
+    --source-file sources/slides.pdf \
+    --dry-run --verbose
+
+Output Structure:
+  Rubrics are saved in two formats:
+    - JSON: <rubrics-dir>/json/<question_id>.json (raw LLM output)
+    - YAML: <rubrics-dir>/yaml/<question_id>.yaml (pipeline format)
+
+✓ Rubric generation complete!

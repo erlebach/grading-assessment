@@ -1,0 +1,43 @@
+https://github.com/google-gemini/deprecated-generative-ai-python/blob/main/README.md
+
+  import google.generativeai as genai
+Default embedding instructions for HuggingFaceEmbedding:
+  text_instruction: None
+  query_instruction: None
+✓ Embedding model loaded
+
+Loading multi-index configuration from grading_dynamic_rubrics/config/sources.yaml
+Loading sources from grading_dynamic_rubrics/config/sources.yaml
+  ✓ Loaded 1 document(s) from file source 1
+✓ Loaded 1 documents
+
+Building indexes: ['word_index', 'sentence_index']
+Rebuilding index: word_index
+Building character index: word_index
+Generating embeddings: 100%|██████████████████████████████████████████| 231/231 [00:00<00:00, 283.03it/s]
+
+✗ Error building indexes: Cannot persist word_index: vector store is empty after building.
+  This indicates a critical error in the build process.
+  Nodes created: 231, but store has 0 nodes.
+  This prevents downstream execution.
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/Users/erlebach/src/2026/grading_assessment/autograder/grading_pipeline/index_builder_in_memory.py", line 1355, in <module>
+    indexes = build_multi_indexes_in_memory(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/erlebach/src/2026/grading_assessment/autograder/grading_pipeline/index_builder_in_memory.py", line 1175, in build_multi_indexes_in_memory
+    indexes = factory.build_or_update_active_indexes(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/erlebach/src/2026/grading_assessment/autograder/grading_pipeline/index_factory.py", line 222, in build_or_update_active_indexes
+    indexes[index_id] = self.build_index(
+                        ^^^^^^^^^^^^^^^^^
+  File "/Users/erlebach/src/2026/grading_assessment/autograder/grading_pipeline/index_factory.py", line 99, in build_index
+    index = builder.build(
+            ^^^^^^^^^^^^^^
+  File "/Users/erlebach/src/2026/grading_assessment/autograder/grading_pipeline/index_registry.py", line 126, in build
+    raise RuntimeError(
+RuntimeError: Cannot persist word_index: vector store is empty after building.
+  This indicates a critical error in the build process.
+  Nodes created: 231, but store has 0 nodes.
+  This prevents downstream execution.

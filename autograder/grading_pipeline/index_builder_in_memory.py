@@ -1132,11 +1132,35 @@ def build_multi_indexes_in_memory(
 
     # Load sources from configuration
     print(f"Loading sources from {config_path}")
-    documents = load_sources_from_yaml_with_pdf(config_path)
-    print(f"✓ Loaded {len(documents)} documents")
+    try:
+        documents = load_sources_from_yaml_with_pdf(config_path)
+        print(f"✓ Loaded {len(documents)} documents")
+    except (FileNotFoundError, ValueError) as e:
+        # Re-raise with additional context about the build operation
+        import traceback
+
+        raise RuntimeError(
+            f"Failed to load documents for index building:\n"
+            f"  Config path: {config_path}\n"
+            f"  Persist dir: {persist_dir}\n"
+            f"  Original error: {e}\n\n"
+            f"Full traceback:\n{traceback.format_exc()}"
+        ) from e
 
     if not documents:
-        raise ValueError("No documents loaded from sources")
+        import traceback
+
+        raise RuntimeError(
+            f"Cannot build indexes: no documents were loaded from sources.\n"
+            f"  Config path: {config_path}\n"
+            f"  Persist dir: {persist_dir}\n"
+            f"  This will prevent downstream execution.\n\n"
+            f"Check:\n"
+            f"  1. Source paths in YAML are correct and relative to current working directory\n"
+            f"  2. Source files exist and match the specified patterns\n"
+            f"  3. Files are readable and contain extractable text\n\n"
+            f"Full traceback:\n{traceback.format_exc()}"
+        )
 
     # Create factory
     factory = IndexFactory(config, persist_dir)
@@ -1200,6 +1224,75 @@ def load_multi_indexes_in_memory(
     print(f"\n✓ Indexes loaded from {persist_dir}")
     return indexes
 
+
+def print_index_diagnostics(
+    config_path: Path | None = None,
+    persist_dir: Path | None = None,
+    index_subset: list[str] | None = None,
+) -> None:
+    """Print diagnostics for all active in-memory indexes.
+
+    Diagnostics include:
+    - Number of chunks (nodes) per index
+    - Minimum/maximum/average chunk size in characters
+    - Approximate min/max/average chunk size in tokens (4 chars ≈ 1 token)
+
+    Args:
+        config_path: Optional path to YAML config file. If None, uses default.
+        persist_dir: Optional directory containing persisted indexes. If None, uses
+            the default in-memory persist directory.
+        index_subset: Optional list of index IDs to restrict diagnostics to. If None,
+            uses the active indexes from the config.
+
+    """
+    indexes = load_multi_indexes_in_memory(
+        config_path=config_path,
+        persist_dir=persist_dir,
+        index_subset=index_subset,
+    )
+
+    print("\n[Index Diagnostics]")
+    for index_id, index in indexes.items():
+        vector_store = index._storage_context.vector_store  # type: ignore[attr-defined]
+
+        if not isinstance(vector_store, InMemoryVectorStore):
+            print(
+                f"- {index_id}: unsupported vector store type "
+                f"{type(vector_store).__name__} (expected InMemoryVectorStore)"
+            )
+            continue
+
+        # Collect chunk lengths
+        texts = [node.text for node in vector_store.nodes.values()]
+        num_chunks = len(texts)
+
+        if num_chunks == 0:
+            print(f"- {index_id}: 0 chunks")
+            continue
+
+        lengths = [len(t) for t in texts]
+        min_chars = min(lengths)
+        max_chars = max(lengths)
+        avg_chars = sum(lengths) / float(num_chunks)
+
+        # Approximate tokens as 4 characters per token
+        def _chars_to_tokens(chars: int | float) -> float:
+            return float(chars) / 4.0
+
+        min_tokens = _chars_to_tokens(min_chars)
+        max_tokens = _chars_to_tokens(max_chars)
+        avg_tokens = _chars_to_tokens(avg_chars)
+
+        print(f"- {index_id}:")
+        print(f"    chunks       : {num_chunks}")
+        print(
+            f"    chars        : min={min_chars}, max={max_chars}, "
+            f"avg={avg_chars:.1f}"
+        )
+        print(
+            f"    tokens (≈4/ch): min={min_tokens:.1f}, "
+            f"max={max_tokens:.1f}, avg={avg_tokens:.1f}"
+        )
 
 if __name__ == "__main__":
     """CLI support for building indexes."""

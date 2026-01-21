@@ -1,0 +1,33 @@
+Running grading pipeline for q01 with 2 students...
+
+Warning: Output filename 'q01_results.json' does not match question_id 'q03'. Using 'q03_results.json' instead.
+Clearing results directory: grading_pipeline/results
+  Removed: q01_grading.log
+  Removed: q03_results.json
+Loaded 3 submissions for question q03
+[Index Setup] Building or updating indexes (backend: in-memory)...
+Loading sources from grading_pipeline/config/sources.yaml
+✓ Loaded 1 documents from YAML
+  UNCHANGED: file_slides_data_type_quality (slides_data_type_quality.pdf) - skipping
+
+All sources unchanged - loading existing indexes...
+Default embedding instructions for HuggingFaceEmbedding:
+  text_instruction: None
+  query_instruction: None
+  Configured embedding model: HuggingFaceEmbedding (BAAI/bge-small-en-v1.5)
+  Using embedding model: HuggingFaceEmbedding (BAAI/bge-small-en-v1.5)
+✓ Manifest saved to grading_pipeline/tmp/in_memory_indexes/source_manifest.yaml
+
+✓ Dual indexes ready at grading_pipeline/tmp/in_memory_indexes
+[Index Setup] Indexed files:
+  - grading_pipeline/sources/slides_data_type_quality.pdf
+[Index Setup] Index ready in 3.56s
+Loading reranker model: cross-encoder/ms-marco-MiniLM-L-6-v2
+[Grading] Processing student_001 for q03 (wrong)...
+
+  [Single Mode] Context Usage:
+    Input tokens:  440
+    Output tokens: 218
+    Total tokens:  658
+[Grading] ✓ student_001 completed for q03 (wrong)
+[Grading] Processing student_001 for q03 (good)...
