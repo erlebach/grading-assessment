@@ -1,63 +1,30 @@
-"""Command-line interface for grading pipeline.
+"""Command-line interface for dynamic rubrics grading pipeline.
 
-This module provides CLI commands for grading questions and individual students.
+This CLI is simplified compared to grading_pipeline.cli:
+- Always uses in-memory indexes (no --index-dir or --index-backend flags)
+- Uses dynamic rubrics from rubrics_dynamic/yaml/
+- Implements two-dimensional scoring (keyword + semantic)
 
 """
 
 import argparse
 from pathlib import Path
 
-from grading_pipeline.config_loader import get_rubric_path
-from grading_pipeline.pipeline import (
+from grading_dynamic_rubrics.config_loader import get_rubric_path
+from grading_dynamic_rubrics.pipeline import (
     grade_question_batch,
     grade_single_student,
     write_results,
 )
-from grading_pipeline.submission_loader import (
+from grading_dynamic_rubrics.submission_loader import (
     load_all_submissions_for_question,
     load_submission,
 )
-
-
-def validate_paths(
-    rubrics_config: Path,
-    rubric_path: Path | None = None,
-    submissions_dir: Path | None = None,
-    submission_path: Path | None = None,
-    sources_config: Path | None = None,
-) -> None:
-    """Validate that required paths exist.
-
-    Args:
-        rubrics_config: Path to rubric configuration file.
-        rubric_path: Optional rubric file path.
-        submissions_dir: Optional submissions directory.
-        submission_path: Optional single submission file.
-        sources_config: Optional sources configuration file.
-
-    Raises:
-        FileNotFoundError: If any required path doesn't exist.
-        ValueError: If path validation fails.
-
-    """
-    if not rubrics_config.exists():
-        raise FileNotFoundError(f"Rubrics config not found: {rubrics_config}")
-
-    if rubric_path and not rubric_path.exists():
-        raise FileNotFoundError(f"Rubric file not found: {rubric_path}")
-
-    if submissions_dir and not submissions_dir.exists():
-        raise FileNotFoundError(f"Submissions directory not found: {submissions_dir}")
-
-    if submission_path and not submission_path.exists():
-        raise FileNotFoundError(f"Submission file not found: {submission_path}")
-
-    if sources_config and not sources_config.exists():
-        raise FileNotFoundError(f"Sources config not found: {sources_config}")
+from grading_pipeline.cli import validate_paths
 
 
 def grade_question_command(args: argparse.Namespace) -> None:
-    """Grade all students for a question.
+    """Grade all students for a question using dynamic rubrics.
 
     Args:
         args: Parsed command-line arguments.
@@ -67,19 +34,14 @@ def grade_question_command(args: argparse.Namespace) -> None:
     rubrics_config = Path(args.rubrics_config)
     submissions_dir = Path(args.submissions_dir)
     sources_config = Path(args.sources_config)
-    index_dir = Path(args.index_dir)
     output_path = Path(args.output)
 
     # Ensure output filename matches question_id
-    # If output is a directory, create filename; otherwise validate filename contains question_id
     if output_path.is_dir() or (not output_path.suffix and not output_path.exists()):
-        # Output is a directory or path without extension - create proper filename
         output_path = output_path / f"{args.question}_results.json"
     else:
-        # Validate that filename contains the question_id
         expected_filename = f"{args.question}_results.json"
         if output_path.name != expected_filename:
-            # Auto-correct: use the directory from provided path but fix the filename
             print(
                 f"Warning: Output filename '{output_path.name}' does not match question_id '{args.question}'. "
                 f"Using '{expected_filename}' instead.",
@@ -91,13 +53,11 @@ def grade_question_command(args: argparse.Namespace) -> None:
     results_dir = output_path.parent
     if results_dir.exists() and results_dir.is_dir():
         print(f"Clearing results directory: {results_dir}", flush=True)
-        # Remove all files in the results directory
         for file_path in results_dir.glob("*"):
             if file_path.is_file():
                 file_path.unlink()
                 print(f"  Removed: {file_path.name}", flush=True)
     else:
-        # Create directory if it doesn't exist
         results_dir.mkdir(parents=True, exist_ok=True)
 
     validate_paths(
@@ -129,23 +89,31 @@ def grade_question_command(args: argparse.Namespace) -> None:
     log_file_name = args.log_file
     enable_transparent = args.log
 
-    # Grade batch
+    # Set debug mode via environment variable
+    if args.debug:
+        import os
+
+        os.environ["GRADING_DEBUG"] = "1"
+        print(
+            "[DEBUG] Debug mode enabled - detailed scoring information will be printed",
+            flush=True,
+        )
+
+    # Grade batch (always in-memory)
     try:
         results = grade_question_batch(
             question_id=args.question,
             rubric_path=rubric_path,
             submissions=submissions,
-            persist_dir=index_dir,
             config_path=sources_config,
-            index_backend=args.index_backend,
             execution_mode=args.mode,
             log_path=log_path,
             log_file_name=log_file_name,
             enable_transparent=enable_transparent,
-            output_path=output_path,  # Pass output_path for incremental writes
+            output_path=output_path,
         )
 
-        # Final write (in case output_path wasn't provided, or as a safety net)
+        # Final write
         write_results(results, args.question, output_path, per_student=False)
 
         successful = len([r for r in results if "error" not in r])
@@ -162,7 +130,7 @@ def grade_question_command(args: argparse.Namespace) -> None:
 
 
 def grade_student_command(args: argparse.Namespace) -> None:
-    """Grade a single student.
+    """Grade a single student using dynamic rubrics.
 
     Args:
         args: Parsed command-line arguments.
@@ -172,7 +140,6 @@ def grade_student_command(args: argparse.Namespace) -> None:
     rubrics_config = Path(args.rubrics_config)
     submission_path = Path(args.submission)
     sources_config = Path(args.sources_config)
-    index_dir = Path(args.index_dir)
     output_path = Path(args.output)
 
     validate_paths(
@@ -205,15 +172,23 @@ def grade_student_command(args: argparse.Namespace) -> None:
     log_file_name = args.log_file
     enable_transparent = args.log
 
-    # Grade single student
+    # Set debug mode via environment variable
+    if args.debug:
+        import os
+
+        os.environ["GRADING_DEBUG"] = "1"
+        print(
+            "[DEBUG] Debug mode enabled - detailed scoring information will be printed",
+            flush=True,
+        )
+
+    # Grade single student (always in-memory)
     try:
         result = grade_single_student(
             question_id=question_id,
             rubric_path=rubric_path,
             submission=submission,
-            persist_dir=index_dir,
             config_path=sources_config,
-            index_backend=args.index_backend,
             log_path=log_path,
             log_file_name=log_file_name,
             enable_transparent=enable_transparent,
@@ -229,7 +204,7 @@ def grade_student_command(args: argparse.Namespace) -> None:
                 import json
 
                 json.dump(result, f, indent=2)
-                f.flush()  # Ensure unbuffered write
+                f.flush()
             print("✓ Grading complete", flush=True)
             print(
                 f"  Score: {result.get('score', 0)}/{result.get('max_score', 0)}",
@@ -243,10 +218,30 @@ def grade_student_command(args: argparse.Namespace) -> None:
 
 
 def main() -> None:
-    """Main CLI entry point."""
+    """Main CLI entry point for dynamic rubrics grading."""
     parser = argparse.ArgumentParser(
-        description="Grading Pipeline CLI",
+        description="Dynamic Rubrics Grading Pipeline CLI",
         formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+This CLI uses LLM-generated dynamic rubrics with two-dimensional scoring
+(keyword + semantic). All indexes are in-memory (no persistence).
+
+Examples:
+  # Grade question q01
+  python -m grading_dynamic_rubrics.cli grade-question \\
+      --question q01 \\
+      --rubrics-config grading_dynamic_rubrics/config/rubrics.yaml \\
+      --submissions-dir grading_dynamic_rubrics/submissions \\
+      --sources-config grading_dynamic_rubrics/config/sources.yaml \\
+      --output grading_dynamic_rubrics/results/q01_results.json
+
+  # Grade single student
+  python -m grading_dynamic_rubrics.cli grade-student \\
+      --submission grading_dynamic_rubrics/submissions/student_001_q01.yaml \\
+      --rubrics-config grading_dynamic_rubrics/config/rubrics.yaml \\
+      --sources-config grading_dynamic_rubrics/config/sources.yaml \\
+      --output grading_dynamic_rubrics/results/student_001_q01.json
+        """,
     )
 
     subparsers = parser.add_subparsers(dest="command", help="Command to run")
@@ -274,17 +269,6 @@ def main() -> None:
         "--sources-config",
         required=True,
         help="Path to sources configuration YAML file",
-    )
-    grade_question_parser.add_argument(
-        "--index-dir",
-        required=True,
-        help="Directory for persistent indexes",
-    )
-    grade_question_parser.add_argument(
-        "--index-backend",
-        default="chromadb",
-        choices=["chromadb", "in-memory"],
-        help="Index backend to use (default: chromadb)",
     )
     grade_question_parser.add_argument(
         "--output",
@@ -324,6 +308,11 @@ def main() -> None:
         action="store_false",
         help="Disable transparency logging",
     )
+    grade_question_parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Enable debug output (shows detailed scoring information)",
+    )
     grade_question_parser.set_defaults(func=grade_question_command)
 
     # Grade student command
@@ -348,17 +337,6 @@ def main() -> None:
         "--sources-config",
         required=True,
         help="Path to sources configuration YAML file",
-    )
-    grade_student_parser.add_argument(
-        "--index-dir",
-        required=True,
-        help="Directory for persistent indexes",
-    )
-    grade_student_parser.add_argument(
-        "--index-backend",
-        default="chromadb",
-        choices=["chromadb", "in-memory"],
-        help="Index backend to use (default: chromadb)",
     )
     grade_student_parser.add_argument(
         "--output",
@@ -392,6 +370,11 @@ def main() -> None:
         action="store_false",
         help="Disable transparency logging",
     )
+    grade_student_parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Enable debug output (shows detailed scoring information)",
+    )
     grade_student_parser.set_defaults(func=grade_student_command)
 
     args = parser.parse_args()
@@ -400,6 +383,7 @@ def main() -> None:
         parser.print_help()
         return
 
+    # Refer to ....set_defaults(func=grade_question_command) for more information
     args.func(args)
 
 

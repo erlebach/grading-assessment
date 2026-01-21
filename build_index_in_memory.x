@@ -18,7 +18,12 @@ echo "Building grading pipeline indexes..."
 echo ""
 
 # Pass all arguments to the Python script
-uv run python -m grading_pipeline.build_index_in_memory "$@"
+# uv run python -m grading_pipeline.build_index_in_memory "$@"
+
+uv run python -m grading_pipeline.index_builder_in_memory \
+    --config grading_dynamic_rubrics/config/sources.yaml \
+    --persist-dir grading_dynamic_rubrics/tmp/in_memory_indexes \
+    --force-rebuild
 
 echo ""
 echo "✓ Index build complete!"

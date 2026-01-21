@@ -1,0 +1,14 @@
+- Calculate student score with each embedding type
+- Look at Chu et al paper: how does dimension relate to 
+  embeddings? 
+- Find Perplexity or GPT5.2 conversation on how to generalize
+  Chu et al so I don't need my own graded samples
+- read up on how to handle keywords. Use Inverse frequency? 
+- q01/q02 rubrics still involve factorials. WRONG. 
+  - need a way to align rubrics with questions. 
+- What is the purpose of rubrics.yaml? Seems to violate the DRY Principle
+  given that the questions are already found in ../../rubrics/
+- Modify "Running grading pipeline for q01 with 2 students..."
+  to print the number of questions and the correct nb students
+- For each question, run through foundational model (Claude, GPT5.2, Gemini 3) together with sources, and generate 3-5 correct answers that would get a maximum score. 
+----------------------------------------------------------------------

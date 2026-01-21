@@ -1,0 +1,292 @@
+[0;34m========================================[0m
+[0;34mGrading Pipeline Test & Run Script[0m
+[0;34m========================================[0m
+
+[1;33m[Test 1/7] Testing index_builder with incremental indexing...[0m
+Testing grading_pipeline incremental indexing with lazy embedding loading...
+
+Building or updating indexes from /Users/erlebach/src/2026/grading_assessment/autograder/grading_pipeline/config/sources.yaml
+Loading sources from /Users/erlebach/src/2026/grading_assessment/autograder/grading_pipeline/config/sources.yaml
+✓ Loaded 1 documents from YAML
+  UNCHANGED: file_slides_data_type_quality (slides_data_type_quality.pdf) - skipping
+
+All sources unchanged - loading existing indexes...
+✓ Manifest saved to /Users/erlebach/src/2026/grading_assessment/autograder/grading_pipeline/tmp/chroma_db/source_manifest.yaml
+
+✓ Dual indexes ready at /Users/erlebach/src/2026/grading_assessment/autograder/grading_pipeline/tmp/chroma_db
+✓ Indexes ready
+
+Testing retrieval with query: 'What is data quality?'
+  Word-based retrieval: 2 results
+  Sentence-based retrieval: 1 results
+
+✓ Grading pipeline incremental indexing test complete
+[0;32m✓ Index builder test passed[0m
+
+[1;33m[Test 2/7] Running comprehensive incremental indexing tests...[0m
+[0;34mRunning: uv run python tests/test_pipeline_incremental_indexing.py[0m
+
+======================================================================
+Grading Pipeline: Incremental Indexing Test Suite
+======================================================================
+
+[Cleanup] Removing all test artifacts...
+✓ Cleaned up all test artifacts: grading_pipeline/test_tmp
+
+[Setup] Configuring LlamaIndex...
+✓ Configuration loaded
+
+======================================================================
+Test 1: Fresh Build (No Existing Indexes)
+======================================================================
+
+Building indexes for the first time...
+Loading sources from grading_pipeline/config/sources.yaml
+✓ Loaded 1 documents from YAML
+  NEW: file_slides_data_type_quality (slides_data_type_quality.pdf)
+
+[Lazy Loading] Embedding model needed for indexing...
+✓ Embedding model loaded
+
+No existing indexes found - building fresh indexes...
+Building word-based index (512 chars, 50 overlap)...
+Building sentence-based index (pure sentence splitting)...
+✓ Manifest saved to grading_pipeline/test_tmp/fresh_build/source_manifest.yaml
+
+✓ Dual indexes ready at grading_pipeline/test_tmp/fresh_build
+
+  Build completed in 3.39s
+
+  Manifest summary:
+  Manifest version: 1.0
+  Last updated: 2026-01-17T13:17:50.676554
+  Total sources: 1
+  
+  Sources:
+    - slides_data_type_quality.pdf (file_slides_data_type_quality)
+      Indexed: 2026-01-17T13:17:50.676523, Chunks: 13
+
+  Retrieval test: 2 results from word index
+
+✓ Test 1 PASSED
+
+======================================================================
+Test 2: Reload with No Changes
+======================================================================
+
+Step 1: Building initial indexes...
+Loading sources from grading_pipeline/config/sources.yaml
+✓ Loaded 1 documents from YAML
+  NEW: file_slides_data_type_quality (slides_data_type_quality.pdf)
+
+[Lazy Loading] Embedding model needed for indexing...
+✓ Embedding model loaded
+
+No existing indexes found - building fresh indexes...
+Building word-based index (512 chars, 50 overlap)...
+Building sentence-based index (pure sentence splitting)...
+✓ Manifest saved to grading_pipeline/test_tmp/no_changes/source_manifest.yaml
+
+✓ Dual indexes ready at grading_pipeline/test_tmp/no_changes
+
+Step 2: Reloading with no changes...
+Loading sources from grading_pipeline/config/sources.yaml
+✓ Loaded 1 documents from YAML
+  UNCHANGED: file_slides_data_type_quality (slides_data_type_quality.pdf) - skipping
+
+All sources unchanged - loading existing indexes...
+✓ Manifest saved to grading_pipeline/test_tmp/no_changes/source_manifest.yaml
+
+✓ Dual indexes ready at grading_pipeline/test_tmp/no_changes
+
+  Reload completed in 1.65s
+
+  Retrieval test: 2 results from word index
+
+✓ Test 2 PASSED (reload took 1.65s)
+
+======================================================================
+Test 3: Add New Source
+======================================================================
+
+Step 1: Build initial index with 1 source...
+Loading sources from grading_pipeline/test_tmp/add_source_config.yaml
+✓ Loaded 1 documents from YAML
+  NEW: file_slides_data_type_quality (slides_data_type_quality.pdf)
+
+[Lazy Loading] Embedding model needed for indexing...
+✓ Embedding model loaded
+
+No existing indexes found - building fresh indexes...
+Building word-based index (512 chars, 50 overlap)...
+Building sentence-based index (pure sentence splitting)...
+✓ Manifest saved to grading_pipeline/test_tmp/add_source/source_manifest.yaml
+
+✓ Dual indexes ready at grading_pipeline/test_tmp/add_source
+  Initial sources: 1
+  Created test file: slides_data_type_quality_copy.pdf
+
+Step 2: Update index with new source...
+Loading sources from grading_pipeline/test_tmp/add_source_config.yaml
+✓ Loaded 2 documents from YAML
+  UNCHANGED: file_slides_data_type_quality (slides_data_type_quality.pdf) - skipping
+  NEW: file_slides_data_type_quality_copy (slides_data_type_quality_copy.pdf)
+
+[Lazy Loading] Embedding model needed for indexing...
+✓ Embedding model loaded
+
+Incremental update: 1 new, 0 changed
+  Adding 1 documents to indexes...
+  ✓ Added 13 word chunks, 1 sentence chunks
+✓ Manifest saved to grading_pipeline/test_tmp/add_source/source_manifest.yaml
+
+✓ Dual indexes ready at grading_pipeline/test_tmp/add_source
+  Final sources: 2
+  Update took 2.15s
+  Cleaned up test file: slides_data_type_quality_copy.pdf
+
+✓ Test 3 PASSED
+
+======================================================================
+Test 4: Modify Existing Source
+======================================================================
+  Created test file: grading_pipeline/test_tmp/changed_source/sources/test_doc.txt
+
+Step 1: Build initial index...
+Loading sources from grading_pipeline/test_tmp/changed_source/config.yaml
+✓ Loaded 1 documents from YAML
+  NEW: file_test_doc (test_doc.txt)
+
+[Lazy Loading] Embedding model needed for indexing...
+✓ Embedding model loaded
+
+No existing indexes found - building fresh indexes...
+Building word-based index (512 chars, 50 overlap)...
+Building sentence-based index (pure sentence splitting)...
+✓ Manifest saved to grading_pipeline/test_tmp/changed_source/chroma_db/source_manifest.yaml
+
+✓ Dual indexes ready at grading_pipeline/test_tmp/changed_source/chroma_db
+  Original file mtime: 1768673878.34783
+  Modified test file
+  New file mtime: 1768673880.0828667
+
+Step 2: Update index after file modification...
+Loading sources from grading_pipeline/test_tmp/changed_source/config.yaml
+✓ Loaded 1 documents from YAML
+  CHANGED: file_test_doc (test_doc.txt) - will delete old embeddings and re-index
+
+[Lazy Loading] Embedding model needed for indexing...
+✓ Embedding model loaded
+
+Incremental update: 0 new, 1 changed
+  Deleting old embeddings for file_test_doc...
+  Deleted embeddings for file_test_doc from word index
+  Deleted embeddings for file_test_doc from sentence index
+  Adding 1 documents to indexes...
+  ✓ Added 1 word chunks, 1 sentence chunks
+✓ Manifest saved to grading_pipeline/test_tmp/changed_source/chroma_db/source_manifest.yaml
+
+✓ Dual indexes ready at grading_pipeline/test_tmp/changed_source/chroma_db
+  Updated manifest mtime: 1768673880.0828667
+  Update took 1.62s
+
+✓ Test 4 PASSED
+
+======================================================================
+Test Suite Summary
+======================================================================
+✓ Test 1: Fresh build - PASSED
+✓ Test 2: Reload with no changes - PASSED
+✓ Test 3: Add new source - PASSED
+✓ Test 4: Modify existing source - PASSED
+
+✓ All tests PASSED!
+[0;32m✓ Incremental indexing test suite passed[0m
+
+[1;33m[Test 3/7] Testing manifest functionality...[0m
+Testing manifest module...
+
+[Test 1] Load non-existent manifest
+✓ Returns empty manifest
+
+[Test 2] Create and save manifest
+✓ Manifest saved to /var/folders/g_/_bggj09s1z183t3_j5jy1r9c0000gn/T/tmp5aiwm2zx/source_manifest.yaml
+✓ Manifest saved successfully
+
+[Test 3] Load saved manifest
+✓ Manifest loaded correctly
+
+[Test 4] Change detection
+  Has changed (should be False): False
+✓ Detects size change
+
+[Test 5] Manifest summary
+Manifest version: 1.0
+Last updated: 2026-01-17T13:18:03.727210
+Total sources: 1
+
+Sources:
+  - manifest.py (test_file)
+    Indexed: 2026-01-17T13:18:03.727193, Chunks: 7
+✓ Summary generated
+
+✓ All manifest tests passed
+[0;32m✓ Manifest test passed[0m
+
+[1;33m[Test 4/7] Testing config_loader...[0m
+[0;34mRunning: uv run python tests/test_config_loader.py[0m
+
+✓ test_load_rubric_config_valid passed
+✓ test_load_rubric_config_missing_file passed
+✓ test_load_rubric_config_invalid_structure passed
+✓ test_get_rubric_path_valid passed
+✓ test_get_rubric_path_relative passed
+✓ test_get_rubric_path_invalid_question passed
+
+✓ All config_loader tests passed
+[0;32m✓ Config loader test passed[0m
+
+[1;33m[Test 5/7] Testing submission_loader...[0m
+[0;34mRunning: uv run python tests/test_submission_loader.py[0m
+
+✓ test_load_submission_valid passed
+✓ test_load_submission_missing_fields passed
+✓ test_load_all_submissions_for_question passed
+✓ test_load_all_submissions_for_question_none_found passed
+
+✓ All submission_loader tests passed
+[0;32m✓ Submission loader test passed[0m
+
+[1;33m[Test 6/7] Testing submission_converter...[0m
+[0;34mRunning: uv run python tests/test_submission_converter.py[0m
+
+✓ test_create_self_contained_submission passed
+✓ test_create_self_contained_submission_missing_question_text passed
+
+✓ All submission_converter tests passed
+[0;32m✓ Submission converter test passed[0m
+
+[1;33m[Test 7/7] Testing pipeline batch (result writing)...[0m
+[0;34mRunning: uv run python tests/test_pipeline_batch.py[0m
+
+✓ test_write_results passed
+✓ test_write_results_per_student passed
+
+✓ All pipeline tests passed
+
+Note: Full integration tests require LLM setup.
+Run manual tests with:
+  python -m grading_pipeline.cli grade-question --question q01 ...
+[0;32m✓ Pipeline batch test passed[0m
+
+[0;32m========================================[0m
+[0;32mAll grading_pipeline tests passed![0m
+[0;32m========================================[0m
+[0;34mSummary:[0m
+  ✓ Incremental indexing
+  ✓ Index builder with PDF support
+  ✓ Manifest tracking
+  ✓ Config loader (batch-by-question)
+  ✓ Submission loader (batch-by-question)
+  ✓ Submission converter (batch-by-question)
+  ✓ Pipeline batch (result writing)

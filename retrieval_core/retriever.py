@@ -6,6 +6,7 @@ combines results with smart deduplication, and reranks using a cross-encoder mod
 """
 
 import os
+from collections.abc import Callable
 from typing import Any
 
 from llama_index.core import VectorStoreIndex
@@ -27,6 +28,8 @@ class DualIndexRetriever:
         word_index: VectorStoreIndex,
         sentence_index: VectorStoreIndex,
         reranker_model: str | None = None,
+        transparent: bool = False,
+        trace_writer: Callable[[str], None] | None = None,
     ) -> None:
         """Initialize the dual-index retriever.
 
@@ -35,10 +38,15 @@ class DualIndexRetriever:
             sentence_index: Sentence-based VectorStoreIndex.
             reranker_model: Cross-encoder model name. If None, uses environment
                 variable RERANKER_MODEL or defaults to ms-marco-MiniLM-L-6-v2.
+            transparent: If True, emit verbose retrieval/rerank traces.
+            trace_writer: Optional function that receives trace strings.
+                If None, trace output goes to stdout.
 
         """
         self.word_index = word_index
         self.sentence_index = sentence_index
+        self.transparent = transparent
+        self._trace_writer = trace_writer
 
         # Get reranker model from parameter, env var, or default
         if reranker_model is None:
@@ -50,12 +58,24 @@ class DualIndexRetriever:
         self.reranker = CrossEncoder(reranker_model)
         self.reranker_model_name = reranker_model
 
+    def enable_transparency(self, trace_writer: Callable[[str], None] | None) -> None:
+        """Enable verbose transparency traces.
+
+        Args:
+            trace_writer: Function that receives trace strings. If None, traces
+                are printed to stdout.
+
+        """
+        self.transparent = True
+        self._trace_writer = trace_writer
+
     def retrieve(
         self,
         query: str,
         top_k_per_index: int = 10,
         final_top_k: int = 5,
         similarity_threshold: float = 0.0,
+        trace_label: str | None = None,
     ) -> list[dict[str, Any]]:
         """Retrieve and rerank evidence from both indexes.
 
@@ -64,11 +84,21 @@ class DualIndexRetriever:
             top_k_per_index: Number of results to retrieve from each index.
             final_top_k: Number of results to return after reranking.
             similarity_threshold: Minimum similarity score (0.0 to 1.0).
+            trace_label: Optional label included in transparent traces (e.g.,
+                criterion id).
 
         Returns:
             List of reranked evidence dictionaries with citation metadata.
 
         """
+        if self.transparent:
+            self._trace_retrieval_parameters(
+                top_k_per_index=top_k_per_index,
+                final_top_k=final_top_k,
+                similarity_threshold=similarity_threshold,
+            )
+            self._trace_query(query=query, trace_label=trace_label)
+
         # Retrieve from word-based index
         word_retriever = self.word_index.as_retriever(
             similarity_top_k=top_k_per_index
@@ -96,11 +126,27 @@ class DualIndexRetriever:
                 citation["index_type"] = "sentence"
                 sentence_results.append(citation)
 
+        if self.transparent:
+            self._trace_retriever_results(
+                index_label="word",
+                results=word_results,
+                top_k=top_k_per_index,
+            )
+            self._trace_retriever_results(
+                index_label="sentence",
+                results=sentence_results,
+                top_k=top_k_per_index,
+            )
+
         # Union and deduplicate
         combined_results = self._union_and_deduplicate(word_results, sentence_results)
 
         # Rerank
+        if self.transparent:
+            self._trace_reranker_inputs(query=query, candidates=combined_results)
         reranked_results = self._rerank(query, combined_results, final_top_k)
+        if self.transparent:
+            self._trace_reranker_outputs(results=reranked_results, top_k=final_top_k)
 
         return reranked_results
 
@@ -196,9 +242,13 @@ class DualIndexRetriever:
         """
         # Construct query from criterion and student answer
         query = f"{criterion['description']} {student_answer}"
+        criterion_id = str(criterion.get("criterion_id", "")).strip() or None
 
         return self.retrieve(
-            query, top_k_per_index=top_k_per_index, final_top_k=final_top_k
+            query,
+            top_k_per_index=top_k_per_index,
+            final_top_k=final_top_k,
+            trace_label=criterion_id,
         )
 
     def format_evidence_for_grading(
@@ -228,6 +278,148 @@ class DualIndexRetriever:
             )
 
         return "\n".join(lines)
+
+    def _trace_write(self, msg: str) -> None:
+        """Write a trace message.
+
+        Args:
+            msg: Message to write (should already contain trailing newline).
+
+        """
+        if self._trace_writer is not None:
+            self._trace_writer(msg)
+            return
+        print(msg, end="", flush=True)
+
+    def _trace_divider(self) -> None:
+        """Write a dotted divider line."""
+        self._trace_write("." * 80 + "\n")
+
+    def _trace_query(self, query: str, trace_label: str | None) -> None:
+        """Trace the input query text.
+
+        Args:
+            query: Query string.
+            trace_label: Optional label for this query (e.g., criterion id).
+
+        """
+        self._trace_divider()
+        label = f" [{trace_label}]" if trace_label else ""
+        self._trace_write(f"[TRANSPARENT] INPUT QUERY{label}\n")
+        query_display = query if query else '""'
+        self._trace_write(f"QUERY_STRING={query_display}\n")
+        self._trace_divider()
+
+    def _trace_retriever_results(
+        self,
+        index_label: str,
+        results: list[dict[str, Any]],
+        top_k: int,
+    ) -> None:
+        """Trace retriever outputs for an index.
+
+        Args:
+            index_label: Human-readable index label.
+            results: Retrieved citation dicts (already threshold-filtered).
+            top_k: Requested top-k for that index.
+
+        """
+        self._trace_write("[TRANSPARENT] RETRIEVER RESULTS\n")
+        self._trace_write(f"INDEX_NAME={index_label}\n")
+        self._trace_write(f"REQUESTED_K={top_k} RETURNED={len(results)}\n")
+        if not results:
+            self._trace_divider()
+            return
+        for i, r in enumerate(results, 1):
+            similarity = float(r.get("score", 0.0))
+            source_id = str(r.get("source_id", "unknown"))
+            self._trace_write(
+                f"[{index_label} #{i}] SIMILARITY_SCORE={similarity:.6f} "
+                f"SOURCE_ID={source_id}\n"
+            )
+            self._trace_write("<<<BEGIN RETRIEVED TEXT>>>\n")
+            self._trace_write(f"{r.get('text', '')}\n")
+            self._trace_write("<<<END RETRIEVED TEXT>>>\n")
+            self._trace_divider()
+
+    def _trace_reranker_inputs(
+        self, query: str, candidates: list[dict[str, Any]]
+    ) -> None:
+        """Trace inputs to the reranker.
+
+        Args:
+            query: Query string.
+            candidates: Candidate list prior to reranking.
+
+        """
+        self._trace_write("[TRANSPARENT] RERANKER INPUTS\n")
+        self._trace_write(f"CANDIDATES={len(candidates)}\n")
+        self._trace_write("<<<BEGIN RERANKER QUERY>>>\n")
+        self._trace_write(f"{query}\n")
+        self._trace_write("<<<END RERANKER QUERY>>>\n")
+        self._trace_divider()
+        for i, c in enumerate(candidates, 1):
+            similarity = float(c.get("score", 0.0))
+            source_id = str(c.get("source_id", "unknown"))
+            index_type = str(c.get("index_type", "unknown"))
+            self._trace_write(
+                f"[candidate #{i}] SIMILARITY_SCORE={similarity:.6f} "
+                f"SOURCE_ID={source_id} INDEX={index_type}\n"
+            )
+            self._trace_write("<<<BEGIN CANDIDATE TEXT>>>\n")
+            self._trace_write(f"{c.get('text', '')}\n")
+            self._trace_write("<<<END CANDIDATE TEXT>>>\n")
+            self._trace_divider()
+
+    def _trace_reranker_outputs(self, results: list[dict[str, Any]], top_k: int) -> None:
+        """Trace outputs from the reranker.
+
+        Args:
+            results: Reranked results (post top-k).
+            top_k: Requested final top-k.
+
+        """
+        self._trace_write("[TRANSPARENT] RERANKER OUTPUTS\n")
+        self._trace_write(f"REQUESTED_TOP_K={top_k} RETURNED={len(results)}\n")
+        if not results:
+            self._trace_divider()
+            return
+        for i, r in enumerate(results, 1):
+            rerank_score = float(r.get("rerank_score", 0.0))
+            original_score = float(r.get("original_score", 0.0))
+            source_id = str(r.get("source_id", "unknown"))
+            index_type = str(r.get("index_type", "unknown"))
+            self._trace_write(
+                f"[reranked #{i}] RERANK_SCORE={rerank_score:.6f} "
+                f"ORIGINAL_SIMILARITY_SCORE={original_score:.6f} "
+                f"SOURCE_ID={source_id} INDEX={index_type}\n"
+            )
+            self._trace_write("<<<BEGIN RERANKED TEXT>>>\n")
+            self._trace_write(f"{r.get('text', '')}\n")
+            self._trace_write("<<<END RERANKED TEXT>>>\n")
+            self._trace_divider()
+
+    def _trace_retrieval_parameters(
+        self,
+        top_k_per_index: int,
+        final_top_k: int,
+        similarity_threshold: float,
+    ) -> None:
+        """Trace which indexes/parameters are used for retrieval.
+
+        Args:
+            top_k_per_index: Requested top-k per index.
+            final_top_k: Requested final top-k after reranking.
+            similarity_threshold: Similarity threshold for accepting candidates.
+
+        """
+        self._trace_divider()
+        self._trace_write("[TRANSPARENT] RETRIEVAL PARAMETERS\n")
+        self._trace_write("ACTIVE_INDEXES=['word', 'sentence']\n")
+        self._trace_write(f"TOP_K_PER_INDEX={top_k_per_index}\n")
+        self._trace_write(f"FINAL_TOP_K={final_top_k}\n")
+        self._trace_write(f"SIMILARITY_THRESHOLD={similarity_threshold:.6f}\n")
+        self._trace_divider()
 
 
 if __name__ == "__main__":

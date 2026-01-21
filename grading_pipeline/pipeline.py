@@ -96,7 +96,7 @@ def setup_grading_environment(
     indexed_files = [
         source["file_path"] for source in manifest.get("sources", {}).values()
     ]
-    print(f"[Index Setup] Indexed files:", flush=True)
+    print("[Index Setup] Indexed files:", flush=True)
     for file_path in indexed_files:
         print(f"  - {file_path}", flush=True)
     print(f"[Index Setup] Index ready in {build_time:.2f}s", flush=True)
@@ -227,7 +227,9 @@ def grade_question_batch(
     config_path: Path,
     index_backend: str = "chromadb",
     execution_mode: str = "sequential",
-    log_file: Path | None = None,
+    log_path: Path | None = None,
+    log_file_name: str = "grading.log",
+    enable_transparent: bool = True,
     output_path: Path | None = None,
 ) -> list[dict[str, Any]]:
     """Grade all students for a single question.
@@ -235,7 +237,7 @@ def grade_question_batch(
     Error Handling:
     - Continue on error (don't stop batch)
     - Mark failed students with error field
-    - Unbuffered output to stdout or log file
+    - Unbuffered output to stdout and log file
 
     Args:
         question_id: Question identifier.
@@ -246,7 +248,9 @@ def grade_question_batch(
         index_backend: Index backend to use ("chromadb" or "in-memory").
         execution_mode: Execution mode ("sequential", "batched", "async").
             Currently only "sequential" is implemented.
-        log_file: Optional path to log file for unbuffered output.
+        log_path: Directory where log files are written (default: logs).
+        log_file_name: Name of the main log file (default: grading.log).
+        enable_transparent: If True, write transparency traces to transparency.log.
         output_path: Optional path to output JSON file. If provided, results will be
             written incrementally after each student is processed.
 
@@ -255,17 +259,52 @@ def grade_question_batch(
         Failed students have {"error": "error message"} instead of full result.
 
     """
-    # Setup logging (unbuffered)
-    log_handle = None
-    if log_file:
-        log_handle = open(log_file, "w", buffering=1)  # Line buffered
+    # Setup main log file (always write normal stdout messages to log)
+    project_root = Path(__file__).resolve().parents[1]
+    if log_path is None:
+        # Default: logs directory under project root (autograder/logs)
+        log_dir = project_root / "logs"
+    else:
+        candidate = Path(log_path)
+        # If relative, interpret relative to project root for consistency
+        log_dir = candidate if candidate.is_absolute() else project_root / candidate
+
+    # Clear log directory before starting (files only)
+    log_dir.mkdir(parents=True, exist_ok=True)
+    for p in log_dir.iterdir():
+        if p.is_file():
+            p.unlink()
+
+    log_file_path = log_dir / log_file_name
+    log_handle = open(log_file_path, "w", buffering=1)  # Line buffered
 
     def log_print(msg: str) -> None:
-        """Print with unbuffered output."""
+        """Print to stdout and log file (unbuffered).
+
+        Args:
+            msg: Message to print (should not include trailing newline).
+
+        """
         print(msg, flush=True)
-        if log_handle:
-            log_handle.write(msg + "\n")
-            log_handle.flush()
+        log_handle.write(msg + "\n")
+        log_handle.flush()
+
+    # Setup transparency log (only if enabled)
+    transparent_handle = None
+    transparent_log_path = None
+    if enable_transparent:
+        transparent_log_path = log_dir / "transparency.log"
+        transparent_handle = open(transparent_log_path, "w", buffering=1)
+
+        def transparent_write(msg: str) -> None:
+            """Write transparency traces to file only.
+
+            Args:
+                msg: Trace message (may include trailing newline).
+
+            """
+            transparent_handle.write(msg)
+            transparent_handle.flush()
 
     # Setup environment
     retriever, rubric, timing = setup_grading_environment(
@@ -275,6 +314,9 @@ def grade_question_batch(
         config_path,
         index_backend=index_backend,
     )
+    if enable_transparent:
+        retriever.enable_transparency(transparent_write)
+        log_print(f"[Transparent] Writing trace log to: {transparent_log_path}")
 
     results = []
 
@@ -329,8 +371,9 @@ def grade_question_batch(
             if output_path is not None:
                 write_results(results, question_id, output_path, per_student=False)
 
-    if log_handle:
-        log_handle.close()
+    if transparent_handle:
+        transparent_handle.close()
+    log_handle.close()  # Always close main log file
 
     return results
 
@@ -386,7 +429,9 @@ def grade_single_student(
     persist_dir: Path,
     config_path: Path,
     index_backend: str = "chromadb",
-    log_file: Path | None = None,
+    log_path: Path | None = None,
+    log_file_name: str = "grading.log",
+    enable_transparent: bool = True,
 ) -> dict[str, Any]:
     """Grade a single student (wrapper around grade_question_batch).
 
@@ -399,7 +444,9 @@ def grade_single_student(
         persist_dir: Directory for persistent indexes.
         config_path: Path to sources configuration YAML file.
         index_backend: Index backend to use ("chromadb" or "in-memory").
-        log_file: Optional path to log file for unbuffered output.
+        log_path: Directory where log files are written (default: logs).
+        log_file_name: Name of the main log file (default: grading.log).
+        enable_transparent: If True, write transparency traces to transparency.log.
 
     Returns:
         Single grading result dictionary.
@@ -413,7 +460,9 @@ def grade_single_student(
         config_path=config_path,
         index_backend=index_backend,
         execution_mode="sequential",
-        log_file=log_file,
+        log_path=log_path,
+        log_file_name=log_file_name,
+        enable_transparent=enable_transparent,
     )
 
     return results[0]
@@ -447,4 +496,4 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"⚠ Test failed: {e}")
     else:
-        print(f"⚠ Test files not found")
+        print("⚠ Test files not found")
