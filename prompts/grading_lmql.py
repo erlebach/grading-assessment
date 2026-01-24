@@ -50,6 +50,7 @@ def format_grading_prompt(
     grading_record: dict[str, Any],
     evidence_spans: list[dict[str, Any]],
     student_answer: str,
+    criteria_map: dict[str, str] | None = None,
 ) -> str:
     """Format the prompt for LMQL grading with citation enforcement.
 
@@ -57,19 +58,32 @@ def format_grading_prompt(
         grading_record: Dictionary containing assigned scores per criterion.
         evidence_spans: List of evidence dictionaries with source_id and text.
         student_answer: Student's answer text.
+        criteria_map: Optional mapping of criterion_id to title for formatting.
 
     Returns:
         Formatted prompt string.
 
     """
-    # Extract evidence IDs and format evidence
+    # Extract evidence with sequential numbering and criterion labels
     evidence_lines = []
-    for evidence in evidence_spans:
+    for idx, evidence in enumerate(evidence_spans, start=1):
         source_id = evidence["source_id"]
         text = evidence["text"]
-        evidence_lines.append(f"[{source_id}]: {text}")
 
-    evidence_text = "\n".join(evidence_lines)
+        # Get criterion label if available
+        criterion_id = evidence.get("retrieved_for_criterion", "unknown")
+        if criteria_map and criterion_id in criteria_map:
+            criterion_label = criteria_map[criterion_id]
+        else:
+            criterion_label = criterion_id.replace("_", " ").title()
+
+        # Format with sequential numbering and criterion context
+        evidence_lines.append(
+            f"[{idx}] {source_id}: {text}\n"
+            f"    (Retrieved for: {criterion_label})"
+        )
+
+    evidence_text = "\n\n".join(evidence_lines)
 
     # Format grading record with keyword information
     criteria_lines = []
@@ -101,9 +115,14 @@ def format_grading_prompt(
 You MUST:
 - Explain each awarded criterion
 - Use only the provided evidence spans
-- Attach citations to every sentence using evidence IDs in [brackets]
+- Attach citations to every sentence using sequential evidence numbers [1], [2], [3], etc.
 - Never introduce new facts or information not in the evidence
 - Include information about which keywords were found and which were missing
+
+GRADING RULES (TEMPORARY - TODO: EXPAND LATER):
+- Grade out of a maximum score of 10 points
+- Award either full credit (10 points) or zero points (0 points)
+- No partial credit at this time
 
 GRADING RECORD (already decided):
 {criteria_text}
@@ -122,12 +141,13 @@ Generate a JSON explanation with this exact structure:
   "sentences": [
     {{
       "text": "Your explanation sentence here.",
-      "citations": ["evidence_id_1", "evidence_id_2"]
+      "citations": ["1", "2"]
     }}
   ]
 }}
 
-CRITICAL: Every sentence MUST include at least one citation from the available evidence.
+CRITICAL: Every sentence MUST include at least one citation using the sequential numbers shown in the evidence list above.
+Use the sequential numbering [1], [2], [3], etc. directly in your citations.
 Include information about keyword matches in your explanation to help the student understand what was checked.
 """
 
