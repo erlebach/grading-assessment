@@ -1,4 +1,4 @@
-## Current Grading Strategy
+****## Current Grading Strategy
 
 ### Step 1: Score each dimension (keyword + semantic, 50-50)
 

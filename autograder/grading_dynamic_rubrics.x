@@ -58,4 +58,10 @@
 #                         interpreted relative to the autograder/ directory (default: logs)
 
 
-uv run python -m grading_dynamic_rubrics.cli grade-question --question q01 --rubrics-config grading_dynamic_rubrics/config/rubrics.yaml --submissions-dir grading_dynamic_rubrics/submissions --sources-config grading_dynamic_rubrics/config/sources.yaml --output grading_dynamic_rubrics/results/q01_results.json --log
+uv run python -m grading_dynamic_rubrics.cli grade-question \
+    --question 			q02 \
+    --rubrics-config 	grading_dynamic_rubrics/config/rubrics.yaml \
+    --submissions-dir 	grading_dynamic_rubrics/submissions \
+    --sources-config 	grading_dynamic_rubrics/config/sources.yaml \
+    --output 			grading_dynamic_rubrics/results/q01_results.json \
+    --log
