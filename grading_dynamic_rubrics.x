@@ -63,5 +63,5 @@ uv run python -m grading_dynamic_rubrics.cli grade-question \
     --rubrics-config 	grading_dynamic_rubrics/config/rubrics.yaml \
     --submissions-dir 	grading_dynamic_rubrics/submissions \
     --sources-config 	grading_dynamic_rubrics/config/sources.yaml \
-    --output 			grading_dynamic_rubrics/results/q01_results.json \
+    --output 			grading_dynamic_rubrics/results/q02_results.json \
     --log
