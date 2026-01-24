@@ -360,16 +360,18 @@ def _grade_student_core(
         result["answer_type"] = answer_type
 
     # Add remaining fields
-    result.update({
-        "question_text": question_text,
-        "answer": student_answer,
-        "score": grading_result["total_score"],
-        "max_score": grading_result["max_score"],
-        "rubric_items": rubric_items,
-        "citations": [ev["source_id"] for ev in grading_result["evidence_used"]],
-        "feedback": grading_result["feedback"],
-        "timings": step_timings,
-    })
+    result.update(
+        {
+            "question_text": question_text,
+            "answer": student_answer,
+            "score": grading_result["total_score"],
+            "max_score": grading_result["max_score"],
+            "rubric_items": rubric_items,
+            "citations": [ev["source_id"] for ev in grading_result["evidence_used"]],
+            "feedback": grading_result["feedback"],
+            "timings": step_timings,
+        }
+    )
 
     return result
 
@@ -474,6 +476,11 @@ def grade_question_batch(
             answer_type = metadata.get("answer_type")
         if answer_type is None:
             answer_type = submission.get("answer_type")
+        if answer_type != "good":
+            log_print(
+                f"[Grading] Skipping {student_id} for {question_id} ({answer_type})"
+            )
+            continue
 
         answer_type_str = f" ({answer_type})" if answer_type else ""
         log_print(
