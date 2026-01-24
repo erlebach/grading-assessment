@@ -1,13 +1,31 @@
-# Rubric path configuration
-# Maps question IDs to their rubric file paths
-
 rubrics:
   q01:
-    path: "../../rubrics/q01.yaml"
-    description: "Question 1: Mutual Information"
+    path: ../../rubrics/q01.yaml
+    description: 'Question 1: Mutual Information'
   q02:
-    path: "../../rubrics/q02.yaml"
-    description: "Question 2: Data Quality"
+    path: ../../rubrics/q02.yaml
+    description: 'Question 2: Data Quality'
   q03:
-    path: "../../rubrics/q03.yaml"
-    description: "Question 3: Data Quality"
+    path: ../../rubrics/q03.yaml
+    description: 'Question 3: Data Quality'
+  q04:
+    path: /Users/erlebach/src/2026/grading_assessment/autograder/rubrics_dynamic/yaml/q04.yaml
+    description: 'Question 4: 4. Why is it not physically meaningful to say that...'
+  q05:
+    path: /Users/erlebach/src/2026/grading_assessment/autograder/rubrics_dynamic/yaml/q05.yaml
+    description: 'Question 5: 5. A measurement scale can preserve only ordering ...'
+  q06:
+    path: /Users/erlebach/src/2026/grading_assessment/autograder/rubrics_dynamic/yaml/q06.yaml
+    description: 'Question 6: 6. The Stevens transformation rules differ by attr...'
+  q07:
+    path: /Users/erlebach/src/2026/grading_assessment/autograder/rubrics_dynamic/yaml/q07.yaml
+    description: 'Question 7: 7. Define discrete vs continuous attributes as pre...'
+  q08:
+    path: /Users/erlebach/src/2026/grading_assessment/autograder/rubrics_dynamic/yaml/q08.yaml
+    description: 'Question 8: 8. What is an asymmetric attribute? Provide one ex...'
+  q09:
+    path: /Users/erlebach/src/2026/grading_assessment/autograder/rubrics_dynamic/yaml/q09.yaml
+    description: 'Question 9: 9. Compare three dataset types discussed: record (...'
+  q10:
+    path: /Users/erlebach/src/2026/grading_assessment/autograder/rubrics_dynamic/yaml/q10.yaml
+    description: 'Question 10: 10. The slides list several data quality problems ...'

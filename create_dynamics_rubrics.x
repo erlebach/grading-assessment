@@ -14,7 +14,10 @@ echo "Creating dynamic rubrics with LLM..."
 echo ""
 
 # Pass all arguments to the Python script
-uv run python -m gp.create_dynamic_rubrics_for_each_question "$@"
+uv run python -m grading_pipeline.create_dynamic_rubrics_for_each_question \
+    --source-file grading_pipeline/sources/slides_data_type_quality.pdf \
+    --rubrics-dir rubrics_dynamic \
+    --questions-file ten_questions.md
 
 echo ""
 echo "✓ Rubric generation complete!"

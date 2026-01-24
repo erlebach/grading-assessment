@@ -173,7 +173,11 @@ def setup_grading_environment(
     rubric_path: Path,
     config_path: Path,
 ) -> tuple[
-    MultiIndexRetriever, dict[str, Any], dict[str, float], list[str] | None, dict[str, float | int]
+    MultiIndexRetriever,
+    dict[str, Any],
+    dict[str, float],
+    list[str] | None,
+    dict[str, float | int],
 ]:
     """Setup grading environment for a question (in-memory indexes).
 
@@ -271,7 +275,9 @@ def _grade_student_core(
     for criterion in rubric.get("criteria", []):
         if criterion.get("evidence_required", False):
             criterion_id = str(criterion.get("criterion_id", "")).strip() or None
-            query = f"{criterion['description']} {student_answer}"
+            # Use only student answer for semantic retrieval
+            # (criterion description is used separately for keyword matching)
+            query = student_answer
             top_k_per_index = int(retrieval_params.get("top_k_per_index", 10))
             final_top_k = int(retrieval_params.get("final_top_k", 5))
             similarity_threshold = float(
@@ -347,6 +353,14 @@ def _grade_student_core(
     result = {
         "student_id": student_id,
         "question_id": grading_result["question_id"],
+    }
+
+    # Include answer_type right after question_id if provided
+    if answer_type is not None:
+        result["answer_type"] = answer_type
+
+    # Add remaining fields
+    result.update({
         "question_text": question_text,
         "answer": student_answer,
         "score": grading_result["total_score"],
@@ -355,11 +369,7 @@ def _grade_student_core(
         "citations": [ev["source_id"] for ev in grading_result["evidence_used"]],
         "feedback": grading_result["feedback"],
         "timings": step_timings,
-    }
-
-    # Include answer_type if provided
-    if answer_type is not None:
-        result["answer_type"] = answer_type
+    })
 
     return result
 
@@ -440,10 +450,12 @@ def grade_question_batch(
             transparent_handle.flush()
 
     # Setup environment (in-memory indexes)
-    retriever, rubric, timing, index_subset, retrieval_params = setup_grading_environment(
-        question_id,
-        rubric_path,
-        config_path,
+    retriever, rubric, timing, index_subset, retrieval_params = (
+        setup_grading_environment(
+            question_id,
+            rubric_path,
+            config_path,
+        )
     )
     if enable_transparent:
         retriever.enable_transparency(transparent_write)
