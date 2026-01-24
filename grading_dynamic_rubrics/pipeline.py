@@ -8,7 +8,6 @@ This module extends grading_pipeline.pipeline to support:
 """
 
 import json
-import logging
 import time
 from datetime import datetime
 from pathlib import Path
@@ -18,19 +17,13 @@ from llama_index.core import VectorStoreIndex
 
 from grader.grade_question import extract_keywords, load_rubric
 from grader.lmql_grading import LMQLGrader
-from grading_dynamic_rubrics.criterion_loader import (
-    load_criterion_descriptions,
-    load_criterion_titles,
-)
 from grading_pipeline.index_builder_in_memory import (
     InMemoryVectorStore,
     build_multi_indexes_in_memory,
     load_multi_indexes_in_memory,
 )
 from grading_pipeline.pipeline import write_results
-from retrieval_core.multi_retriever import MultiIndexRetriever
-
-logger = logging.getLogger(__name__)
+from retrieval_core.multi_retriever import MultiIndexRetriever, _write_retriever_log
 
 
 def _load_retrieval_params_from_config(cfg: dict[str, Any]) -> dict[str, float | int]:
@@ -275,40 +268,32 @@ def _grade_student_core(
     step_timings: dict[str, float] = {}
     overall_start = time.time()
 
-    # Load criterion descriptions for multi-dimensional reranking queries
-    question_id = rubric.get("question_id", "unknown")
-    criterion_descriptions = load_criterion_descriptions(question_id)
-    criterion_titles = load_criterion_titles(question_id)
-    logger.debug(
-        f"Loaded {len(criterion_descriptions)} criterion descriptions for {question_id}"
-    )
-
     # Retrieve evidence for rubric with dual-index and reranking
     step_start = time.time()
     evidence_by_criterion = {}
 
+    # print("DEBUG"); quit()
     for criterion in rubric.get("criteria", []):
         if criterion.get("evidence_required", False):
             criterion_id = str(criterion.get("criterion_id", "")).strip() or None
-            # Use criterion description as reranker query (not student answer)
-            # This enables dimension-specific evidence retrieval
-            query = criterion_descriptions.get(criterion_id)
-            if query is None:
-                # Fallback to criterion description from rubric if JSON not available
-                query = criterion.get("description", student_answer)
-            if query == "":
-                # Fallback to student answer if description is empty
-                query = student_answer
+            # Use student answer as the query for evidence retrieval
+            query = student_answer
 
-            logger.debug(
-                f"Using criterion description as query for {criterion_id}: "
-                f"{query[:100]}..."
-            )
+            # Use criterion description for reranking
+            rerank_query = criterion.get("description", "")
+
+            # Log query being sent to retriever
+            _write_retriever_log(f"[QUERY_DIAGNOSIS] CRITERION_ID={criterion_id}\n")
+            _write_retriever_log(f"[QUERY_DIAGNOSIS] QUERY_TO_RETRIEVER={query[:80]}...\n")
+            _write_retriever_log(f"[QUERY_DIAGNOSIS] RERANK_QUERY={rerank_query[:80]}...\n")
+            _write_retriever_log(f"[QUERY_DIAGNOSIS] QUERY_LENGTH={len(query)}\n")
+
             top_k_per_index = int(retrieval_params.get("top_k_per_index", 10))
             final_top_k = int(retrieval_params.get("final_top_k", 5))
             similarity_threshold = float(
                 retrieval_params.get("similarity_threshold", 0.0)
             )
+            print(f"==> retriever.retrieve, {query=}")
             evidence = retriever.retrieve(
                 query=query,
                 top_k_per_index=top_k_per_index,
@@ -316,6 +301,7 @@ def _grade_student_core(
                 similarity_threshold=similarity_threshold,
                 index_subset=index_subset,
                 trace_label=criterion_id,
+                rerank_query=rerank_query,
             )
             # Tag evidence with criterion_id for later formatting
             for ev in evidence:
