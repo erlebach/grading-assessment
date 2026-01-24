@@ -101,6 +101,7 @@ class LMQLGrader:
         grading_record: dict[str, Any],
         evidence_spans: list[dict[str, Any]],
         student_answer: str,
+        criteria_map: dict[str, str] | None = None,
         max_retries: int = 3,
     ) -> dict[str, Any]:
         """Generate citation-enforced explanation for grading decision (async).
@@ -109,6 +110,7 @@ class LMQLGrader:
             grading_record: Dictionary mapping criterion_id to score information.
             evidence_spans: List of evidence dictionaries with source_id and text.
             student_answer: Student's answer text.
+            criteria_map: Optional mapping of criterion_id to title for formatting.
             max_retries: Maximum number of retry attempts if validation fails.
 
         Returns:
@@ -118,11 +120,13 @@ class LMQLGrader:
             - valid: Whether explanation passed validation
 
         """
-        # Get valid evidence IDs
-        valid_evidence_ids = [e["source_id"] for e in evidence_spans]
+        # Get valid evidence IDs (sequential numbers as strings: "1", "2", "3", ...)
+        valid_evidence_ids = [str(i) for i in range(1, len(evidence_spans) + 1)]
 
         # Format prompt
-        prompt = format_grading_prompt(grading_record, evidence_spans, student_answer)
+        prompt = format_grading_prompt(
+            grading_record, evidence_spans, student_answer, criteria_map=criteria_map
+        )
 
         # Try to generate valid explanation
         for attempt in range(max_retries):
@@ -181,6 +185,7 @@ class LMQLGrader:
         grading_record: dict[str, Any],
         evidence_spans: list[dict[str, Any]],
         student_answer: str,
+        criteria_map: dict[str, str] | None = None,
         max_retries: int = 3,
     ) -> dict[str, Any]:
         """Generate citation-enforced explanation for grading decision (synchronous).
@@ -189,6 +194,7 @@ class LMQLGrader:
             grading_record: Dictionary mapping criterion_id to score information.
             evidence_spans: List of evidence dictionaries with source_id and text.
             student_answer: Student's answer text.
+            criteria_map: Optional mapping of criterion_id to title for formatting.
             max_retries: Maximum number of retry attempts if validation fails.
 
         Returns:
@@ -198,11 +204,13 @@ class LMQLGrader:
             - valid: Whether explanation passed validation
 
         """
-        # Get valid evidence IDs
-        valid_evidence_ids = [e["source_id"] for e in evidence_spans]
+        # Get valid evidence IDs (sequential numbers as strings: "1", "2", "3", ...)
+        valid_evidence_ids = [str(i) for i in range(1, len(evidence_spans) + 1)]
 
         # Format prompt
-        prompt = format_grading_prompt(grading_record, evidence_spans, student_answer)
+        prompt = format_grading_prompt(
+            grading_record, evidence_spans, student_answer, criteria_map=criteria_map
+        )
 
         # Try to generate valid explanation
         for attempt in range(max_retries):
@@ -262,6 +270,7 @@ class LMQLGrader:
         student_answer: str,
         evidence_by_criterion: dict[str, list[dict[str, Any]]],
         scores: dict[str, dict[str, Any]],
+        criterion_titles: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         """Generate complete grading with citation-enforced feedback.
 
@@ -270,29 +279,34 @@ class LMQLGrader:
             student_answer: Student's answer text.
             evidence_by_criterion: Evidence retrieved for each criterion.
             scores: Assigned scores per criterion.
+            criterion_titles: Optional mapping of criterion_id to title.
 
         Returns:
             Complete grading result with scores and cited feedback.
 
         """
-        # Flatten evidence spans for prompt
+        # Flatten evidence spans WITHOUT deduplication (keep all per-criterion evidence)
         all_evidence = []
         for evidence_list in evidence_by_criterion.values():
             all_evidence.extend(evidence_list)
 
-        # Remove duplicates (keep first occurrence)
-        seen_ids = set()
-        unique_evidence = []
-        for evidence in all_evidence:
-            if evidence["source_id"] not in seen_ids:
-                unique_evidence.append(evidence)
-                seen_ids.add(evidence["source_id"])
+        # Build criterion title map for formatting
+        if criterion_titles is None:
+            criterion_titles = {}
+        for criterion in rubric.get("criteria", []):
+            criterion_id = criterion.get("criterion_id")
+            if criterion_id and criterion_id not in criterion_titles:
+                criterion_titles[criterion_id] = criterion.get("title", criterion_id)
+
+        # Evidence is NOT deduplicated - same source can appear for multiple criteria
+        unique_evidence = all_evidence
 
         # Generate explanation with citations
         result = self.generate_explanation(
             grading_record=scores,
             evidence_spans=unique_evidence,
             student_answer=student_answer,
+            criteria_map=criterion_titles,
         )
 
         # Build complete grading result
@@ -316,6 +330,7 @@ class LMQLGrader:
         student_answer: str,
         evidence_by_criterion: dict[str, list[dict[str, Any]]],
         scores: dict[str, dict[str, Any]],
+        criterion_titles: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         """Generate complete grading with citation-enforced feedback (async).
 
@@ -324,29 +339,34 @@ class LMQLGrader:
             student_answer: Student's answer text.
             evidence_by_criterion: Evidence retrieved for each criterion.
             scores: Assigned scores per criterion.
+            criterion_titles: Optional mapping of criterion_id to title.
 
         Returns:
             Complete grading result with scores and cited feedback.
 
         """
-        # Flatten evidence spans for prompt
+        # Flatten evidence spans WITHOUT deduplication (keep all per-criterion evidence)
         all_evidence = []
         for evidence_list in evidence_by_criterion.values():
             all_evidence.extend(evidence_list)
 
-        # Remove duplicates (keep first occurrence)
-        seen_ids = set()
-        unique_evidence = []
-        for evidence in all_evidence:
-            if evidence["source_id"] not in seen_ids:
-                unique_evidence.append(evidence)
-                seen_ids.add(evidence["source_id"])
+        # Build criterion title map for formatting
+        if criterion_titles is None:
+            criterion_titles = {}
+        for criterion in rubric.get("criteria", []):
+            criterion_id = criterion.get("criterion_id")
+            if criterion_id and criterion_id not in criterion_titles:
+                criterion_titles[criterion_id] = criterion.get("title", criterion_id)
+
+        # Evidence is NOT deduplicated - same source can appear for multiple criteria
+        unique_evidence = all_evidence
 
         # Generate explanation with citations (async)
         result = await self.generate_explanation_async(
             grading_record=scores,
             evidence_spans=unique_evidence,
             student_answer=student_answer,
+            criteria_map=criterion_titles,
         )
 
         # Build complete grading result
