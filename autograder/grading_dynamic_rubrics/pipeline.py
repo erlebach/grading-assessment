@@ -338,16 +338,16 @@ def _grade_student_core(
                 {
                     "criterion_id": criterion_id,
                     "criterion_description": criterion.get("description", ""),
+                    "max_score": criterion.get("points", 0),
                     "evidence": evidence_chunks,
                 }
             )
 
     # Build output structure for grading stage
+    # Note: question_text applies to all students, so we include it instead of individual answers
     evidence_output = {
         "question_id": rubric.get("question_id", "unknown"),
-        "student_id": student_id,
-        "answer_type": answer_type,
-        "student_answer": student_answer,
+        "question_text": question_text,
         "grading_context": grading_context,
     }
 
