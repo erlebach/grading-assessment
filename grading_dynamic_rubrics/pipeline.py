@@ -312,84 +312,48 @@ def _grade_student_core(
     step_timings["retrieve_evidence"] = retrieve_time
     step_timings["rerank_evidence"] = 0.0  # Included in retrieve_evidence
 
-    # Apply dynamic rubric scoring (keyword + semantic)
-    step_start = time.time()
-    # Enable debug mode via environment variable
-    import os
+    # Output reranked evidence with criterion context (preprocessing stage)
+    # Build grading_context: one section per criterion with evidence chunks
+    grading_context = []
+    for criterion in rubric.get("criteria", []):
+        criterion_id = criterion.get("criterion_id", "unknown")
+        if criterion.get("evidence_required", False):
+            # Get evidence for this criterion
+            evidence_list = evidence_by_criterion.get(criterion_id, [])
 
-    debug_mode = os.environ.get("GRADING_DEBUG", "").lower() in ("1", "true", "yes")
-    scores = apply_rubric_scoring_dynamic(
-        rubric, student_answer, evidence_by_criterion, debug=debug_mode
-    )
-    step_timings["apply_scoring"] = time.time() - step_start
+            # Format evidence as list with texts and scores as lists
+            # (even single chunks are in lists for uniform structure)
+            evidence_chunks = [
+                {
+                    "source_id": ev.get("source_id", "unknown"),
+                    "texts": [ev.get("text", "")],
+                    "reranker_scores": [ev.get("reranker_score", 0.0)],
+                    "similarity_scores": [ev.get("score", 0.0)],
+                    "indexes": [ev.get("index_id", "unknown")],
+                }
+                for ev in evidence_list
+            ]
 
-    # Generate LMQL-constrained feedback
-    step_start = time.time()
-    lmql_grader = LMQLGrader()
-    grading_result = lmql_grader.grade_with_feedback(
-        rubric=rubric,
-        student_answer=student_answer,
-        evidence_by_criterion=evidence_by_criterion,
-        scores=scores,
-        criterion_titles=criterion_titles,
-    )
-    step_timings["generate_feedback"] = time.time() - step_start
+            grading_context.append(
+                {
+                    "criterion_id": criterion_id,
+                    "criterion_description": criterion.get("description", ""),
+                    "evidence": evidence_chunks,
+                }
+            )
+
+    # Build output structure for grading stage
+    evidence_output = {
+        "question_id": rubric.get("question_id", "unknown"),
+        "student_id": student_id,
+        "answer_type": answer_type,
+        "student_answer": student_answer,
+        "grading_context": grading_context,
+    }
 
     step_timings["total"] = time.time() - overall_start
 
-    # Format result to match expected structure
-    rubric_items = []
-    for cid, info in grading_result["scores"].items():
-        item = {
-            "criterion_id": cid,
-            "score": info["score"],
-            "max_score": info["max_score"],
-            "description": rubric["criteria"][
-                next(
-                    i
-                    for i, c in enumerate(rubric["criteria"])
-                    if c["criterion_id"] == cid
-                )
-            ]["description"],
-        }
-        # Preserve keyword and semantic information
-        if "keywords" in info:
-            item["keywords"] = info.get("keywords", [])
-            item["found_keywords"] = info.get("found_keywords", [])
-            item["missing_keywords"] = info.get("missing_keywords", [])
-        if "keyword_score" in info:
-            item["keyword_score"] = info.get("keyword_score", 0.0)
-        if "semantic_score" in info:
-            item["semantic_score"] = info.get("semantic_score", 0.0)
-        if "combined_score" in info:
-            item["combined_score"] = info.get("combined_score", 0.0)
-
-        rubric_items.append(item)
-
-    result = {
-        "student_id": student_id,
-        "question_id": grading_result["question_id"],
-    }
-
-    # Include answer_type right after question_id if provided
-    if answer_type is not None:
-        result["answer_type"] = answer_type
-
-    # Add remaining fields
-    result.update(
-        {
-            "question_text": question_text,
-            "answer": student_answer,
-            "score": grading_result["total_score"],
-            "max_score": grading_result["max_score"],
-            "rubric_items": rubric_items,
-            "citations": [ev["source_id"] for ev in grading_result["evidence_used"]],
-            "feedback": grading_result["feedback"],
-            "timings": step_timings,
-        }
-    )
-
-    return result
+    return evidence_output
 
 
 def grade_question_batch(
