@@ -56,6 +56,35 @@ def _load_retrieval_params_from_config(cfg: dict[str, Any]) -> dict[str, float |
     }
 
 
+def validate_rubric(rubric: dict[str, Any]) -> None:
+    """Validate that rubric criterion points sum to exactly 10.
+
+    This ensures that the weighting calculation is correct:
+    final_score = sum(criterion_score * (max_score / 10))
+
+    Args:
+        rubric: Rubric dictionary with criteria list.
+
+    Raises:
+        ValueError: If criteria points do not sum to 10.
+    """
+    total_points = sum(
+        criterion.get("points", 0)
+        for criterion in rubric.get("criteria", [])
+    )
+
+    if total_points != 10:
+        criteria_details = [
+            f"{c.get('criterion_id', 'unknown')}: {c.get('points', 0)} points"
+            for c in rubric.get("criteria", [])
+        ]
+        raise ValueError(
+            f"Invalid rubric for {rubric.get('question_id', 'unknown')}: "
+            f"Criterion points must sum to 10 (got {total_points}).\n"
+            f"Criteria:\n  " + "\n  ".join(criteria_details)
+        )
+
+
 def apply_rubric_scoring_dynamic(
     rubric: dict[str, Any],
     student_answer: str,
@@ -233,6 +262,9 @@ def setup_grading_environment(
 
     # Load rubric
     rubric = load_rubric(rubric_path)
+
+    # Validate rubric structure
+    validate_rubric(rubric)
 
     timing = {"index_setup": build_time}
 
