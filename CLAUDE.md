@@ -49,3 +49,8 @@ See `AGENT.md` for model-agnostic constraints.
 - Always verify code changes against grade-spec.md. 
 - If a code change requires a change in grading logic, 
 - update grade-spec.md first before writing any code."
+
+## Tasks
+
+- Never overwrite TASK_LIST.md or TASKS.md. Always append new tasks or update existing ones using the Edit tool.
+- If I request the creation of TASK_LIST.md or TASKS.md, please ask for confirmation. 
