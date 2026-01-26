@@ -99,6 +99,30 @@ def main():
     parser.add_argument(
         "--verbose", action="store_true", help="Print detailed output"
     )
+    parser.add_argument(
+        "--include_question",
+        type=lambda x: x.lower() in ("true", "1", "yes"),
+        default=True,
+        help="Include question text in LLM prompt (default: True)",
+    )
+    parser.add_argument(
+        "--include_criterion_description",
+        type=lambda x: x.lower() in ("true", "1", "yes"),
+        default=True,
+        help="Include criterion description in LLM prompt (default: True)",
+    )
+    parser.add_argument(
+        "--save_prompts",
+        type=lambda x: x.lower() in ("true", "1", "yes"),
+        default=False,
+        help="Save full LLM prompts to JSON files for analysis (default: False)",
+    )
+    parser.add_argument(
+        "--prompts_output_dir",
+        type=Path,
+        default=None,
+        help="Directory to save prompt JSON files (default: same as --output parent directory)",
+    )
 
     args = parser.parse_args()
 
@@ -122,15 +146,6 @@ def main():
         if args.verbose:
             print("Grading student (this may take a moment)...", file=sys.stderr)
 
-        result = grade_student_with_evidence(
-            student_id=submission.get("student_id", args.student),
-            student_answer=submission.get("answer", ""),
-            question_text=submission.get("question_text", ""),
-            rubric={},  # Not used in this approach
-            evidence_context=evidence_context,
-            answer_type=args.answer_type,
-        )
-
         # Determine output path
         if args.output:
             output_path = Path(args.output)
@@ -142,6 +157,25 @@ def main():
                 results_dir /
                 f"{args.student}_{args.question}_{args.answer_type}_grades.json"
             )
+
+        # Determine prompts output directory
+        prompts_dir = args.prompts_output_dir
+        if args.save_prompts and not prompts_dir:
+            # Default to a "prompts" subdirectory next to the output file
+            prompts_dir = output_path.parent / "prompts"
+
+        result = grade_student_with_evidence(
+            student_id=submission.get("student_id", args.student),
+            student_answer=submission.get("answer", ""),
+            question_text=submission.get("question_text", ""),
+            rubric={},  # Not used in this approach
+            evidence_context=evidence_context,
+            answer_type=args.answer_type,
+            include_question=args.include_question,
+            include_criterion_description=args.include_criterion_description,
+            save_prompts=args.save_prompts,
+            prompts_output_dir=prompts_dir,
+        )
 
         # Output results
         if args.verbose:
@@ -160,7 +194,7 @@ def main():
             print(f"\nIncluded in output:", file=sys.stderr)
             print(f"  - question_text: ✓", file=sys.stderr)
             print(f"  - student_answer: ✓", file=sys.stderr)
-            print(f"  - total_score: {result['total_score']}/{result['max_score']}", file=sys.stderr)
+            print(f"  - total_score: {result['total_score']}/{result['max_score']}", file=sys.stderr, flush=True)
         else:
             print(result_json)
 
@@ -171,7 +205,7 @@ def main():
             print(f"  Question: {result['question_id']}", file=sys.stderr)
             print(f"  Answer Type: {result['answer_type']}", file=sys.stderr)
             print(f"  Total Score: {result['total_score']}/{result['max_score']}", file=sys.stderr)
-            print(f"  Criteria Graded: {len(result['criterion_results'])}", file=sys.stderr)
+            print(f"  Criteria Graded: {len(result['criterion_results'])}", file=sys.stderr, flush=True)
             for crit in result["criterion_results"]:
                 print(
                     f"    - {crit['criterion_id']}: "

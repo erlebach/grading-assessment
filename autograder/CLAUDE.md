@@ -31,7 +31,21 @@ You MAY:
 
 ## Reasoning Rule
 
-Internal reasoning may be used to **apply** the rubric.  
+Internal reasoning may be used to **apply** the rubric.
 It must be discarded after producing the grading record.
 
+## Transparency and Escalation
+
+- Where information is coming from
+- When I'm taking shortcuts vs. using proper automation
+- Asking you when I hit blockers instead of improvising workarounds
+- Do not hardcode values, infer data, or create workarounds without explicit acknowledgment and user consent.
+- Prefer YAML configuration files and commandline arguments
+
 See `AGENT.md` for model-agnostic constraints.
+
+## Use of grade-spec.md
+
+- Always verify code changes against grade-spec.md. 
+- If a code change requires a change in grading logic, 
+- update grade-spec.md first before writing any code."
