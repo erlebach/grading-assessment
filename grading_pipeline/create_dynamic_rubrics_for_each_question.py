@@ -191,6 +191,81 @@ def generate_rubric_with_llm(
     raise ValueError("Unexpected error in retry loop")
 
 
+def validate_criterion_independence(
+    dimensions: list[dict],
+    llm: Any,
+    verbose: bool = False,
+) -> tuple[bool, str, list[str]]:
+    """Validate that criteria have non-overlapping deduction targets.
+
+    Uses LLM to analyze criterion descriptions and detect overlaps.
+
+    Args:
+        dimensions: List of dimension dicts with title, points, description
+        llm: LLM instance for validation
+        verbose: Enable verbose output
+
+    Returns:
+        Tuple of (is_valid, feedback_message, list_of_overlaps)
+        - is_valid: True if no overlaps detected
+        - feedback_message: Explanation for regeneration
+        - list_of_overlaps: Specific overlapping elements found
+
+    """
+    # Build validation prompt
+    criteria_text = "\n\n".join(
+        [
+            f"Criterion {i + 1}: {d['title']} ({d['points']} points)\n{d['description']}"
+            for i, d in enumerate(dimensions)
+        ]
+    )
+
+    validation_prompt = f"""Analyze these grading criteria for overlapping deduction targets.
+
+CRITERIA:
+{criteria_text}
+
+TASK:
+Identify if any two criteria would deduct points for the SAME missing element or issue.
+
+For example:
+- If Criterion A deducts for "missing alternative names" and Criterion B also deducts for "not providing alternative names", that's an overlap.
+- If Criterion A evaluates "conceptual understanding" and Criterion B evaluates "terminology", those are distinct (no overlap).
+
+Respond ONLY in valid JSON format:
+{{
+  "has_overlap": true/false,
+  "overlapping_elements": ["element1", "element2", ...],
+  "explanation": "Brief explanation of overlaps found"
+}}
+
+JSON Response:"""
+
+    try:
+        response = llm.complete(validation_prompt)
+        json_text = extract_json_from_response(response.text)
+        result = json.loads(json_text)
+
+        has_overlap = result.get("has_overlap", False)
+        overlaps = result.get("overlapping_elements", [])
+        explanation = result.get("explanation", "")
+
+        if has_overlap:
+            feedback = (
+                f"OVERLAP DETECTED: {explanation}\n"
+                f"Overlapping elements: {', '.join(overlaps)}\n"
+                "Please regenerate with truly distinct criteria."
+            )
+            return False, feedback, overlaps
+        else:
+            return True, "Criteria are independent", []
+
+    except Exception as e:
+        if verbose:
+            print(f"  Validation error: {e}, assuming valid", flush=True)
+        return True, "Validation failed, proceeding", []
+
+
 def slugify(text: str) -> str:
     """Convert text to a slug suitable for criterion_id.
 
@@ -609,6 +684,30 @@ def main() -> None:
         # Generate rubric with LLM
         try:
             rubric_json = generate_rubric_with_llm(prompt, llm, verbose=args.verbose)
+
+            # VALIDATE for overlaps
+            is_valid, feedback, overlaps = validate_criterion_independence(
+                rubric_json["dimensions"], llm, verbose=args.verbose
+            )
+
+            if not is_valid:
+                if args.verbose:
+                    print(f"  Validation failed: {feedback}", flush=True)
+                # Add feedback to prompt and retry
+                prompt += f"\n\n{feedback}"
+                rubric_json = generate_rubric_with_llm(prompt, llm, verbose=args.verbose)
+
+                # Re-validate (only once)
+                is_valid, feedback, overlaps = validate_criterion_independence(
+                    rubric_json["dimensions"], llm, verbose=args.verbose
+                )
+                if not is_valid:
+                    print(f"  ✗ Still overlapping after retry: {feedback}", flush=True)
+                    continue
+            else:
+                if args.verbose:
+                    print(f"  ✓ Validation passed: {feedback}", flush=True)
+
         except Exception as e:
             print(f"  ✗ Error generating rubric: {e}", flush=True)
             continue

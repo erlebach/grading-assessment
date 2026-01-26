@@ -16,8 +16,13 @@ from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from llama_index.embeddings.openai import OpenAIEmbedding
 from llama_index.llms.anthropic import Anthropic
 from llama_index.llms.gemini import Gemini
-from llama_index.llms.ollama import Ollama
 from llama_index.llms.openai import OpenAI
+
+# Ollama import is conditional - done lazily in configure_llm() to avoid proxy initialization errors
+try:
+    from llama_index.llms.ollama import Ollama
+except ImportError:
+    Ollama = None  # Will be handled in configure_llm() if needed
 
 
 def load_env_config() -> dict[str, str]:
@@ -80,6 +85,11 @@ def configure_llm(provider: str = "ollama", model: str | None = None) -> Any:
         model_name = model or "models/gemini-2.5-flash"
         return Gemini(model=model_name, api_key=api_key)
     elif provider == "ollama":
+        if Ollama is None:
+            raise ImportError(
+                "Ollama provider requested but ollama package is not available. "
+                "Install with: pip install ollama"
+            )
         model_name = model or config["lmql_model"]
         base_url = config["ollama_base_url"]
         return Ollama(model=model_name, base_url=base_url, request_timeout=120.0)
