@@ -352,17 +352,17 @@ def grade_student_with_evidence(
     successful_results = [r for r in criterion_results if not r.get("grading_failed", False)]
     failed_results = [r for r in criterion_results if r.get("grading_failed", False)]
 
-    # Calculate weighted total score based only on successful criteria
-    # Adjust max_score to only include successful criteria, so weights sum to original total
+    # Calculate total score as direct sum of criterion points
+    # Each criterion is evaluated on 0-10 scale, then converted to its allocated point value
+    # Example: 3-point criterion with llm_score=8 contributes (8/10)*3=2.4 points
     if successful_results:
-        total_max_score_successful = sum(r["max_score"] for r in successful_results)
         total_score = 0
+        total_max_score_successful = sum(r["max_score"] for r in successful_results)
 
         for r in successful_results:
-            # Recalculate weighted score with adjusted max_score
-            weight = r["max_score"] / total_max_score_successful if total_max_score_successful > 0 else 0
-            adjusted_weighted_score = (r["llm_score"] / 10.0) * weight * total_max_score_successful
-            total_score += adjusted_weighted_score
+            # Convert 0-10 score to criterion's point scale via direct multiplication
+            criterion_score = (r["llm_score"] / 10.0) * r["max_score"]
+            total_score += criterion_score
     else:
         total_score = 0
         total_max_score_successful = 0
