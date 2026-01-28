@@ -17,6 +17,7 @@ from llama_index.embeddings.openai import OpenAIEmbedding
 from llama_index.llms.anthropic import Anthropic
 from llama_index.llms.gemini import Gemini
 from llama_index.llms.openai import OpenAI
+from llama_index.core.llms import ChatMessage
 
 # Ollama import is conditional - done lazily in configure_llm() to avoid proxy initialization errors
 try:
@@ -29,6 +30,37 @@ try:
     from llama_index.llms.llama_cpp import LlamaCPP
 except ImportError:
     LlamaCPP = None  # Will be handled in configure_llm() if needed
+
+
+def gpt_oss_messages_to_prompt(messages: list[ChatMessage]) -> str:
+    """Convert messages to gpt-oss chat template format.
+
+    This template is used by the gpt-oss:20b model in Ollama.
+    Format: <|start|>role<|message|>content<|end|>
+
+    Args:
+        messages: List of ChatMessage objects
+
+    Returns:
+        Formatted prompt string
+    """
+    prompt_parts = []
+
+    for msg in messages:
+        role = msg.role
+        content = msg.content or ""
+
+        if role == "system":
+            prompt_parts.append(f"<|start|>system<|message|>{content}<|end|>")
+        elif role == "user":
+            prompt_parts.append(f"<|start|>user<|message|>{content}<|end|>")
+        elif role == "assistant":
+            prompt_parts.append(f"<|start|>assistant<|message|>{content}<|end|>")
+
+    # Add the start of the assistant's response
+    prompt_parts.append("<|start|>assistant<|message|>")
+
+    return "\n".join(prompt_parts)
 
 
 def load_env_config() -> dict[str, str]:
@@ -121,6 +153,11 @@ def configure_llm(provider: str = "ollama", model: str | None = None) -> Any:
             raise FileNotFoundError(
                 f"LlamaCPP model file not found: {model_path}"
             )
+
+        # Default stop sequences for gpt-oss model (similar to Ollama's behavior)
+        default_stop_sequences = ["<|return|>", "<|end|>", "<|endoftext|>"]
+        stop_sequences = config["llamacpp_stop_sequences"] or default_stop_sequences
+
         llm_kwargs = {
             "model_path": model_path,
             "temperature": config["llamacpp_temperature"],
@@ -129,13 +166,18 @@ def configure_llm(provider: str = "ollama", model: str | None = None) -> Any:
                 "n_gpu_layers": config["llamacpp_n_gpu_layers"],
             },
             "max_new_tokens": config["llamacpp_max_tokens"],
+            # Use custom chat template for gpt-oss model
+            "messages_to_prompt": gpt_oss_messages_to_prompt,
+            # Add default system prompt to match Ollama behavior
+            "system_prompt": "You are a helpful assistant.",
         }
 
-        # Add stop sequences if configured
-        if config["llamacpp_stop_sequences"]:
-            llm_kwargs["generate_kwargs"] = {
-                "stop": config["llamacpp_stop_sequences"]
-            }
+        # Add stop sequences to generate_kwargs
+        llm_kwargs["generate_kwargs"] = {
+            "stop": stop_sequences,
+            "temperature": config["llamacpp_temperature"],
+            "max_tokens": config["llamacpp_max_tokens"],
+        }
 
         return LlamaCPP(**llm_kwargs)
     else:

@@ -14,6 +14,7 @@ import argparse
 import csv
 import json
 import random
+import sys
 import time
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
@@ -23,7 +24,11 @@ from typing import Any, Optional
 import yaml
 from tabulate import tabulate
 
+# Add parent directory to path to import config module
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 from config.llm_config import configure_llm
+from llama_index.core.llms import ChatMessage
 
 
 @dataclass
@@ -67,7 +72,7 @@ class ProviderStatistics:
 class BenchmarkRunner:
     """Manages LLM benchmarking across providers."""
 
-    def __init__(self, config_path: str = "config/llm_benchmark_prompts.yaml"):
+    def __init__(self, config_path: str = "llamacpp_ollama/config/llm_benchmark_prompts.yaml"):
         """Initialize benchmark runner.
 
         Args:
@@ -165,10 +170,12 @@ class BenchmarkRunner:
 
         try:
             start_time = time.time()
-            response = llm.complete(prompt_text)
+            # Use chat method for proper formatting and stop sequence handling
+            messages = [ChatMessage(role="user", content=prompt_text)]
+            response = llm.chat(messages)
             inference_time = time.time() - start_time
 
-            response_text = str(response)
+            response_text = str(response.message.content)
             response_length = len(response_text)
 
             # Estimate tokens (rough approximation: 1 token ≈ 4 characters)
@@ -580,7 +587,7 @@ def main():
     )
     parser.add_argument(
         "--config",
-        default="config/llm_benchmark_prompts.yaml",
+        default="llamacpp_ollama/config/llm_benchmark_prompts.yaml",
         help="Path to prompts configuration file",
     )
     parser.add_argument(
