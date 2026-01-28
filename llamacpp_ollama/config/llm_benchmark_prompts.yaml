@@ -1,0 +1,98 @@
+# LLM Benchmark Prompts Configuration
+# Test prompts organized by complexity for comparing Ollama vs Llama.cpp performance
+
+# Configuration settings
+config:
+  repetitions: 3  # Number of times to run each prompt
+  warmup_iterations: 1  # Warmup runs to discard from statistics
+  max_tokens: 512  # Maximum tokens to generate
+  temperature: 0.7  # Sampling temperature
+  timeout_seconds: 60  # Timeout for each inference
+
+# Test prompts organized by category
+prompts:
+  # Short prompts (< 50 tokens) - Quick responses
+  - id: short_1
+    category: short
+    complexity: simple
+    prompt: "What is the capital of France?"
+    expected_tokens: 10
+
+  - id: short_2
+    category: short
+    complexity: simple
+    prompt: "Explain what a Python list is in one sentence."
+    expected_tokens: 25
+
+  - id: short_3
+    category: short
+    complexity: simple
+    prompt: "Write a function signature for calculating the area of a circle."
+    expected_tokens: 20
+
+  # Medium prompts (50-200 tokens) - Moderate complexity
+  - id: medium_1
+    category: medium
+    complexity: moderate
+    prompt: |
+      Explain the difference between a list and a tuple in Python.
+      Include at least two key differences and when you would use each.
+    expected_tokens: 100
+
+  - id: medium_2
+    category: medium
+    complexity: moderate
+    prompt: |
+      Write a Python function that takes a list of numbers and returns
+      the sum of all even numbers in the list. Include error handling
+      for invalid inputs.
+    expected_tokens: 150
+
+  - id: medium_3
+    category: medium
+    complexity: moderate
+    prompt: |
+      What is the Big O time complexity of binary search? Explain why
+      it has this complexity and compare it to linear search.
+    expected_tokens: 120
+
+  # Long prompts (200-500 tokens) - Complex tasks
+  - id: long_1
+    category: long
+    complexity: complex
+    prompt: |
+      You are grading a student's answer to the question: "Explain the SOLID principles in software engineering."
+
+      The student wrote: "SOLID stands for five principles. Single Responsibility means a class should do one thing.
+      Open/Closed means you can add features without changing existing code. Liskov Substitution means subclasses
+      should work like their parent classes. Interface Segregation means don't force classes to implement methods
+      they don't need. Dependency Inversion means depend on abstractions not concrete implementations."
+
+      Grade this answer on a scale of 0-10 and provide specific feedback on what was done well and what could be improved.
+    expected_tokens: 250
+
+  - id: long_2
+    category: long
+    complexity: complex
+    prompt: |
+      Design a data structure for a simple library management system that needs to:
+      1. Store books with title, author, ISBN, and availability status
+      2. Track which members have borrowed which books
+      3. Support efficient lookup by ISBN and by member ID
+      4. Handle book reservations when a book is currently borrowed
+
+      Describe the main classes/structures you would use and their key methods.
+      Explain your design choices and any trade-offs.
+    expected_tokens: 300
+
+  - id: long_3
+    category: long
+    complexity: complex
+    prompt: |
+      A student is learning about database normalization. They have a table with columns:
+      StudentID, StudentName, CourseID, CourseName, InstructorID, InstructorName, Grade
+
+      This table has several normalization issues. Identify the problems, explain which
+      normal forms are being violated, and describe how you would restructure this into
+      properly normalized tables. Show the final table structure and explain why it's better.
+    expected_tokens: 280
