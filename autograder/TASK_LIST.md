@@ -758,3 +758,81 @@ Suggested timeline:
 - Week 5: Complete Phase 5, buffer/polish
 
 ---
+
+## PHASE 6: LLM Provider Migration (1-2 days)
+
+### T6.1: Add llama.cpp Provider Support
+**Title:** Implement llama.cpp as an LLM provider option
+
+**Description:**
+Add llama.cpp (llama-cpp-python) as a supported provider in the LLM configuration system:
+- Add llama.cpp import and configuration in `config/llm_config.py`
+- Update `configure_llm()` function to handle "llamacpp" provider
+- Add environment variables for llama.cpp configuration (model path, context size, etc.)
+- Update `load_env_config()` to include llama.cpp settings
+- Maintain compatibility with existing providers (openai, anthropic, gemini, ollama)
+
+**Deliverables:**
+- Updated `config/llm_config.py` with llama.cpp support
+- Environment variable documentation for llama.cpp settings
+- Updated configuration loading logic
+- Example `.env` entries for llama.cpp
+
+**Acceptance Criteria:**
+- [ ] llama.cpp can be selected as provider via `configure_llm("llamacpp")`
+- [ ] Configuration loads model path and parameters from environment
+- [ ] Existing providers remain functional
+- [ ] Error handling for missing model files
+- [ ] Documentation of required environment variables
+- [ ] Compatible with llama-cpp-python package
+
+**Dependencies:** None
+
+**Effort:** 4-6 hours
+
+**Notes:**
+- llama.cpp requires local model file path (GGUF format)
+- Consider parameters: n_ctx (context size), n_gpu_layers, temperature
+- Environment variables: LLAMACPP_MODEL_PATH, LLAMACPP_N_CTX, etc.
+- llama-cpp-python is already installed via pip
+
+---
+
+### T6.2: Create llama.cpp Integration Tests
+**Title:** Test llama.cpp provider integration
+
+**Description:**
+Create comprehensive tests for llama.cpp provider:
+- Unit tests for configuration loading
+- Integration tests for basic inference
+- Error handling tests (missing model, invalid parameters)
+- Performance/smoke tests to verify model loads and generates responses
+- Comparison tests with existing providers (if applicable)
+
+**Deliverables:**
+- `tests/test_llama_cpp.py` with comprehensive test suite
+- Test fixtures for model configuration
+- Documentation of test requirements (model file needed for tests)
+- Mock tests for cases where model is unavailable
+
+**Acceptance Criteria:**
+- [ ] Tests verify llama.cpp provider initializes correctly
+- [ ] Tests verify basic text generation works
+- [ ] Tests handle missing model file gracefully
+- [ ] Tests verify configuration parameter passing
+- [ ] Tests can run with or without actual model file (mocked)
+- [ ] All tests passing with >80% coverage of llama.cpp code paths
+- [ ] Documentation explains how to run tests with real models
+
+**Dependencies:** T6.1
+
+**Effort:** 4-6 hours
+
+**Notes:**
+- Consider using pytest fixtures for model setup
+- Mock the llama.cpp model for CI/CD (large model files)
+- Include end-to-end test with small test model if available
+- Document how to obtain and configure test models
+- Test both successful and error scenarios
+
+---

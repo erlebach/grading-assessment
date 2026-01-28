@@ -24,6 +24,12 @@ try:
 except ImportError:
     Ollama = None  # Will be handled in configure_llm() if needed
 
+# LlamaCPP import is conditional - requires llama-index-llms-llama-cpp package
+try:
+    from llama_index.llms.llama_cpp import LlamaCPP
+except ImportError:
+    LlamaCPP = None  # Will be handled in configure_llm() if needed
+
 
 def load_env_config() -> dict[str, str]:
     """Load configuration from $HOME/.env file.
@@ -52,6 +58,12 @@ def load_env_config() -> dict[str, str]:
         "lmql_model": os.getenv("LMQL_MODEL", "gpt-oss:20b"),
         "ollama_base_url": os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
         "ollama_num_parallel": ollama_num_parallel or "",
+        "llamacpp_model_path": os.getenv("LLAMACPP_MODEL_PATH", ""),
+        "llamacpp_n_ctx": int(os.getenv("LLAMACPP_N_CTX", "2048")),
+        "llamacpp_n_gpu_layers": int(os.getenv("LLAMACPP_N_GPU_LAYERS", "0")),
+        "llamacpp_temperature": float(os.getenv("LLAMACPP_TEMPERATURE", "0.7")),
+        "llamacpp_max_tokens": int(os.getenv("LLAMACPP_MAX_TOKENS", "512")),
+        "llamacpp_stop_sequences": os.getenv("LLAMACPP_STOP_SEQUENCES", "").split(",") if os.getenv("LLAMACPP_STOP_SEQUENCES") else None,
         "embedding_provider": os.getenv("EMBEDDING_PROVIDER", "sentence-transformer"),
         "embedding_model": os.getenv(
             "EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2"
@@ -63,8 +75,9 @@ def configure_llm(provider: str = "ollama", model: str | None = None) -> Any:
     """Configure and return an LLM instance.
 
     Args:
-        provider: LLM provider name ("openai", "anthropic", "gemini", or "ollama").
-        model: Optional model name. If None, uses default for provider.
+        provider: LLM provider name ("openai", "anthropic", "gemini", "ollama", or "llamacpp").
+        model: Optional model name/path. For llamacpp, this should be the path to the GGUF model file.
+               If None, uses default for provider.
 
     Returns:
         Configured LLM instance.
@@ -93,6 +106,38 @@ def configure_llm(provider: str = "ollama", model: str | None = None) -> Any:
         model_name = model or config["lmql_model"]
         base_url = config["ollama_base_url"]
         return Ollama(model=model_name, base_url=base_url, request_timeout=120.0)
+    elif provider == "llamacpp":
+        if LlamaCPP is None:
+            raise ImportError(
+                "LlamaCPP provider requested but llama-cpp package is not available. "
+                "Install with: pip install llama-index-llms-llama-cpp llama-cpp-python"
+            )
+        model_path = model or config["llamacpp_model_path"]
+        if not model_path:
+            raise ValueError(
+                "LLAMACPP_MODEL_PATH must be set in environment or provided as model parameter"
+            )
+        if not Path(model_path).exists():
+            raise FileNotFoundError(
+                f"LlamaCPP model file not found: {model_path}"
+            )
+        llm_kwargs = {
+            "model_path": model_path,
+            "temperature": config["llamacpp_temperature"],
+            "model_kwargs": {
+                "n_ctx": config["llamacpp_n_ctx"],
+                "n_gpu_layers": config["llamacpp_n_gpu_layers"],
+            },
+            "max_new_tokens": config["llamacpp_max_tokens"],
+        }
+
+        # Add stop sequences if configured
+        if config["llamacpp_stop_sequences"]:
+            llm_kwargs["generate_kwargs"] = {
+                "stop": config["llamacpp_stop_sequences"]
+            }
+
+        return LlamaCPP(**llm_kwargs)
     else:
         raise ValueError(f"Unknown provider: {provider}")
 

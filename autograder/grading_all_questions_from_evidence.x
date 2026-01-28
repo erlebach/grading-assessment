@@ -35,5 +35,5 @@ uv run python grading_all_questions_from_evidence.py \
    --submission_folder_path grading_dynamic_rubrics/submissions \
    --output_dir my_results_improved_retry \
    --student_id student_001 \
-   --save_prompts True
+   --save_prompts True \
    --verbose

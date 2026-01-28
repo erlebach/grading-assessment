@@ -1,5 +1,9 @@
 # Claude Code Rules (Project-Local)
 
+## Session_id
+
+session_id: autograder_2026-01-25
+
 This file defines non-negotiable constraints for Claude Code operating within this repository.
 
 ## Authority Hierarchy
