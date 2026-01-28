@@ -6,7 +6,7 @@ This directory contains the LLM and embedding model configuration system for the
 
 The configuration system supports multiple providers for both LLMs and embeddings:
 
-- **LLMs**: OpenAI, Anthropic Claude, Google Gemini, Ollama (local models)
+- **LLMs**: OpenAI, Anthropic Claude, Google Gemini, Ollama (local models), llama.cpp (local models)
 - **Embeddings**: OpenAI, SentenceTransformer (local models)
 
 ## Configuration File
@@ -15,7 +15,7 @@ Create a `~/.env` file with your configuration:
 
 ```bash
 # LLM Provider Configuration
-# Options: "openai", "anthropic", "gemini", "ollama"
+# Options: "openai", "anthropic", "gemini", "ollama", "llamacpp"
 LMQL_BACKEND=ollama
 
 # LLM Model (provider-specific)
@@ -136,6 +136,66 @@ GEMINI_API_KEY=...
 - `models/gemini-1.5-flash` - Fast and cost-effective
 - `models/gemini-1.5-pro` - More capable, slower
 - `models/gemini-2.0-flash-exp` - Latest experimental model
+
+#### 5. llama.cpp (Local Inference)
+
+**Advantages:**
+- Free and local
+- No API keys required
+- Direct model file loading (GGUF format)
+- Efficient CPU and GPU inference
+- Full control over model and parameters
+- No internet required after model download
+
+**Disadvantages:**
+- Requires downloading model files (can be large, 4-32GB)
+- Setup more complex than Ollama
+- May require manual GPU configuration
+
+**Setup:**
+```bash
+# Install llama-cpp-python (already installed)
+pip install llama-cpp-python llama-index-llms-llama-cpp
+
+# Download a GGUF model file from HuggingFace
+# Example: https://huggingface.co/TheBloke
+# Popular models:
+# - Llama 2 7B GGUF: https://huggingface.co/TheBloke/Llama-2-7B-GGUF
+# - Mistral 7B GGUF: https://huggingface.co/TheBloke/Mistral-7B-Instruct-v0.2-GGUF
+# - Qwen 2.5 7B GGUF: https://huggingface.co/Qwen/Qwen2.5-7B-Instruct-GGUF
+
+# Place the model file in a known location, e.g.:
+# ~/models/mistral-7b-instruct-v0.2.Q4_K_M.gguf
+```
+
+**Configuration:**
+```bash
+LMQL_BACKEND=llamacpp
+LLAMACPP_MODEL_PATH=/Users/yourname/models/mistral-7b-instruct-v0.2.Q4_K_M.gguf
+LLAMACPP_N_CTX=2048              # Context window size (default: 2048)
+LLAMACPP_N_GPU_LAYERS=0          # Number of layers to offload to GPU (0=CPU only)
+LLAMACPP_TEMPERATURE=0.7          # Sampling temperature (default: 0.7)
+LLAMACPP_MAX_TOKENS=512          # Max tokens to generate (default: 512)
+```
+
+**GPU Acceleration (Optional):**
+```bash
+# For GPU support, install with GPU backend:
+# CUDA (NVIDIA)
+CMAKE_ARGS="-DLLAMA_CUDA=on" pip install llama-cpp-python
+
+# Metal (Apple Silicon)
+CMAKE_ARGS="-DLLAMA_METAL=on" pip install llama-cpp-python
+
+# Then set GPU layers in config:
+LLAMACPP_N_GPU_LAYERS=35  # Offload 35 layers to GPU
+```
+
+**Model Quantization Formats:**
+- `Q4_K_M` - 4-bit quantization, medium quality (recommended, ~4GB)
+- `Q5_K_M` - 5-bit quantization, better quality (~5GB)
+- `Q8_0` - 8-bit quantization, high quality (~7GB)
+- `f16` - 16-bit float, highest quality (~14GB)
 
 ### Embedding Providers
 
@@ -282,24 +342,71 @@ OPENAI_API_KEY=sk-...
 - Sufficient disk space (~500MB for models)
 - Write access to `~/.cache/huggingface/`
 
+### llama.cpp Model Not Found
+
+```
+Error: LlamaCPP model file not found: /path/to/model.gguf
+```
+
+**Solution:**
+1. Verify the model file exists at the specified path
+2. Check the LLAMACPP_MODEL_PATH environment variable
+3. Download a GGUF model from HuggingFace (e.g., TheBloke's models)
+4. Ensure the path is absolute, not relative
+
+### llama.cpp Import Error
+
+```
+Error: LlamaCPP provider requested but llama-cpp package is not available
+```
+
+**Solution:** Install the required packages:
+```bash
+pip install llama-index-llms-llama-cpp llama-cpp-python
+```
+
+For GPU support (CUDA):
+```bash
+CMAKE_ARGS="-DLLAMA_CUDA=on" pip install llama-cpp-python --force-reinstall --no-cache-dir
+```
+
+For GPU support (Apple Metal):
+```bash
+CMAKE_ARGS="-DLLAMA_METAL=on" pip install llama-cpp-python --force-reinstall --no-cache-dir
+```
+
 ## Performance Comparison
 
-| Provider | Speed | Cost | Quality | Local |
-|----------|-------|------|---------|-------|
-| Ollama (gpt-oss:20b) | Fast | Free | Good | Yes |
-| OpenAI (gpt-4o-mini) | Fast | $$ | Excellent | No |
-| Anthropic (Claude) | Medium | $$$ | Excellent | No |
-| Gemini (1.5-flash) | Very Fast | $ | Excellent | No |
-| SentenceTransformer | Very Fast | Free | Good | Yes |
+| Provider | Speed | Cost | Quality | Local | GPU Support |
+|----------|-------|------|---------|-------|-------------|
+| Ollama (gpt-oss:20b) | Fast | Free | Good | Yes | Yes |
+| llama.cpp (7B Q4) | Fast | Free | Good | Yes | Yes |
+| OpenAI (gpt-4o-mini) | Fast | $$ | Excellent | No | N/A |
+| Anthropic (Claude) | Medium | $$$ | Excellent | No | N/A |
+| Gemini (1.5-flash) | Very Fast | $ | Excellent | No | N/A |
+| SentenceTransformer | Very Fast | Free | Good | Yes | Yes |
 
 ## Recommended Configurations
 
-### Development (Free, Local)
+### Development (Free, Local - Ollama)
 
 ```bash
 LMQL_BACKEND=ollama
 LMQL_MODEL=gpt-oss:20b
 OLLAMA_BASE_URL=http://localhost:11434
+EMBEDDING_PROVIDER=sentence-transformer
+EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2
+```
+
+### Development (Free, Local - llama.cpp)
+
+```bash
+LMQL_BACKEND=llamacpp
+LLAMACPP_MODEL_PATH=/path/to/your/model.gguf
+LLAMACPP_N_CTX=2048
+LLAMACPP_N_GPU_LAYERS=35  # Use GPU if available, 0 for CPU only
+LLAMACPP_TEMPERATURE=0.7
+LLAMACPP_MAX_TOKENS=512
 EMBEDDING_PROVIDER=sentence-transformer
 EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2
 ```
