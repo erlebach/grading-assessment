@@ -31,6 +31,62 @@ from config.llm_config import configure_llm
 from llama_index.core.llms import ChatMessage
 
 
+def extract_json_answer(response_text: str) -> tuple[str, str]:
+    """Extract answer from JSON response.
+
+    Args:
+        response_text: Raw response text that may contain JSON
+
+    Returns:
+        Tuple of (extracted_answer, full_response_text)
+        - extracted_answer: Content from JSON "answer" field, or full text if no JSON
+        - full_response_text: Complete response including any thinking/reasoning
+    """
+    try:
+        # Try to parse as JSON
+        data = json.loads(response_text)
+        if isinstance(data, dict) and "answer" in data:
+            return data["answer"], response_text
+    except json.JSONDecodeError:
+        # Not valid JSON, try to find JSON in the text
+        import re
+        json_match = re.search(r'\{[^}]*"answer"[^}]*:.*?\}', response_text, re.DOTALL)
+        if json_match:
+            try:
+                data = json.loads(json_match.group(0))
+                if "answer" in data:
+                    return data["answer"], response_text
+            except json.JSONDecodeError:
+                pass
+
+    # Fallback: return full text as answer
+    return response_text, response_text
+
+
+def get_token_count(raw_response: dict, provider: str) -> int:
+    """Extract actual token count from raw LLM response.
+
+    Args:
+        raw_response: Raw response dict from LLM
+        provider: Provider name ("ollama" or "llamacpp")
+
+    Returns:
+        Number of completion tokens generated
+    """
+    try:
+        if provider == "ollama":
+            # Ollama format: 'eval_count' field
+            return raw_response.get("eval_count", 0)
+        elif provider == "llamacpp":
+            # LlamaCPP format: usage.completion_tokens
+            usage = raw_response.get("usage", {})
+            return usage.get("completion_tokens", 0)
+    except (KeyError, AttributeError, TypeError):
+        pass
+
+    return 0  # Fallback if we can't extract
+
+
 @dataclass
 class PerformanceMetrics:
     """Metrics for a single LLM inference test."""
@@ -40,9 +96,10 @@ class PerformanceMetrics:
     prompt_category: str
     model_load_time_sec: float
     inference_time_sec: float
-    tokens_generated: int
+    tokens_generated: int  # Actual token count from LLM (includes thinking)
     tokens_per_sec: float
-    response_text: str
+    response_text: str  # Full response including thinking/reasoning
+    extracted_answer: str  # Extracted answer from JSON or full text
     response_length_chars: int
     success: bool
     error_message: Optional[str]
@@ -161,6 +218,7 @@ class BenchmarkRunner:
             tokens_generated=0,
             tokens_per_sec=0.0,
             response_text="",
+            extracted_answer="",
             response_length_chars=0,
             success=False,
             error_message=None,
@@ -175,17 +233,27 @@ class BenchmarkRunner:
             response = llm.chat(messages)
             inference_time = time.time() - start_time
 
+            # Get full response text
             response_text = str(response.message.content)
             response_length = len(response_text)
 
-            # Estimate tokens (rough approximation: 1 token ≈ 4 characters)
-            tokens_generated = response_length // 4
+            # Extract JSON answer if present
+            extracted_answer, _ = extract_json_answer(response_text)
+
+            # Get actual token count from raw response (includes thinking tokens)
+            tokens_generated = get_token_count(response.raw, provider)
+
+            # Fallback to character-based estimate if token count not available
+            if tokens_generated == 0:
+                tokens_generated = response_length // 4
+
             tokens_per_sec = tokens_generated / inference_time if inference_time > 0 else 0.0
 
             metrics.inference_time_sec = inference_time
             metrics.tokens_generated = tokens_generated
             metrics.tokens_per_sec = tokens_per_sec
             metrics.response_text = response_text
+            metrics.extracted_answer = extracted_answer
             metrics.response_length_chars = response_length
             metrics.success = True
 
@@ -232,15 +300,16 @@ class BenchmarkRunner:
             test_prompts = [p for p in self.prompts if p["category"] in categories]
             print(f"\n✓ Filtered to {len(test_prompts)} prompts in categories: {categories}")
 
-        print(f"\n{'='*60}")
-        print(f"Starting Benchmark Suite")
-        print(f"{'='*60}")
-        print(f"Providers: {', '.join(providers)}")
-        print(f"Prompts: {len(test_prompts)}")
-        print(f"Repetitions: {repetitions}")
-        print(f"Warmup iterations: {warmup_iterations}")
-        print(f"Total tests: {len(providers) * len(test_prompts) * (repetitions + warmup_iterations)}")
-        print(f"{'='*60}\n")
+        print(f"\n{'='*60}", flush=True)
+        print(f"Starting Benchmark Suite", flush=True)
+        print(f"{'='*60}", flush=True)
+        print(f"Start time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", flush=True)
+        print(f"Providers: {', '.join(providers)}", flush=True)
+        print(f"Prompts: {len(test_prompts)}", flush=True)
+        print(f"Repetitions: {repetitions}", flush=True)
+        print(f"Warmup iterations: {warmup_iterations}", flush=True)
+        print(f"Total tests: {len(providers) * len(test_prompts) * (repetitions + warmup_iterations)}", flush=True)
+        print(f"{'='*60}\n", flush=True)
 
         results = []
 
@@ -250,9 +319,10 @@ class BenchmarkRunner:
         print(f"Randomized provider order: {' → '.join(test_order)}\n")
 
         for provider in test_order:
-            print(f"\n{'─'*60}")
-            print(f"Testing Provider: {provider.upper()}")
-            print(f"{'─'*60}")
+            print(f"\n{'─'*60}", flush=True)
+            print(f"Testing Provider: {provider.upper()}", flush=True)
+            print(f"Start time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", flush=True)
+            print(f"{'─'*60}", flush=True)
 
             # Cold start test (measure model loading time)
             if not skip_cold_start:
@@ -287,15 +357,17 @@ class BenchmarkRunner:
                     if rep < repetitions - 1:
                         time.sleep(2)
 
-            print(f"\n✓ Completed all tests for {provider}")
+            print(f"\n✓ Completed all tests for {provider}", flush=True)
+            print(f"End time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", flush=True)
 
         self.results = results
-        print(f"\n{'='*60}")
-        print(f"Benchmark Complete")
-        print(f"{'='*60}")
-        print(f"Total results collected: {len(results)}")
-        print(f"Successful tests: {sum(1 for r in results if r.success)}")
-        print(f"Failed tests: {sum(1 for r in results if not r.success)}\n")
+        print(f"\n{'='*60}", flush=True)
+        print(f"Benchmark Complete", flush=True)
+        print(f"{'='*60}", flush=True)
+        print(f"End time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", flush=True)
+        print(f"Total results collected: {len(results)}", flush=True)
+        print(f"Successful tests: {sum(1 for r in results if r.success)}", flush=True)
+        print(f"Failed tests: {sum(1 for r in results if not r.success)}\n", flush=True)
 
         return results
 

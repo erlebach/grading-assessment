@@ -3,7 +3,7 @@
 **Project**: Benchmark and compare Ollama vs Llama.cpp performance with OSS 20B model
 **Session**: autograder_2026-01-25
 **Created**: 2026-01-28
-**Last Updated**: 2026-01-28 10:15
+**Last Updated**: 2026-01-28 14:56
 
 ---
 
@@ -18,7 +18,11 @@
 | **Phase 5: CLI** | 2 | 2 | ✅ Complete |
 | **Phase 6: Testing** | 4 | 4 | ✅ Complete |
 | **Phase 7: Documentation** | 2 | 2 | ✅ Complete |
-| **TOTAL** | **21** | **21** | **✅ 100% Complete** |
+| **Phase 8: Constrained Generation** | 7 | 7 | ✅ Complete |
+| **Phase 9: Fair Comparison** | 3 | 3 | ✅ Complete |
+| **Phase 10: Batch Inference** | 6 | 1 | 🔄 In Progress |
+| **Phase 11: Quality & Optimization** | 3 | 0 | ⏳ Pending |
+| **TOTAL** | **43** | **32** | **🔄 74% Complete** |
 
 ## Detailed Task Status
 
@@ -45,25 +49,80 @@
 | T6.4 | Integration Test - Full Benchmark | ✅ Complete | High |
 | T7.1 | Analyze Results | ✅ Complete | High |
 | T7.2 | Create README Documentation | ✅ Complete | Medium |
+| **T8.1** | **Investigate JSON Output Issues** | ✅ Complete | High |
+| **T8.2** | **Implement GBNF JSON Grammar (LlamaCPP)** | ✅ Complete | High |
+| **T8.3** | **Enable JSON Mode (Ollama)** | ✅ Complete | High |
+| **T8.4** | **Implement Actual Token Counting** | ✅ Complete | High |
+| **T8.5** | **Add JSON Extraction Functions** | ✅ Complete | Medium |
+| **T8.6** | **Add Progress Indicators/Timestamps** | ✅ Complete | Medium |
+| **T8.7** | **Remove Custom Chat Template** | ✅ Complete | High |
+| **T9.1** | **Run Fair Comparison Benchmark** | ✅ Complete | High |
+| **T9.2** | **Analyze Token-Accurate Results** | ✅ Complete | High |
+| **T9.3** | **Update Documentation** | ✅ Complete | Medium |
+| **T10.1** | **Design Batch Benchmark Architecture** | ✅ Complete | High |
+| **T10.2** | **Implement Sequential Baseline** | ✅ Complete | High |
+| **T10.3** | **Implement Batch Inference (n=4,8)** | ⏳ Pending | High |
+| **T10.4** | **Add CPU Time Measurement** | ⏳ Pending | Medium |
+| **T10.5** | **Run Batch Benchmarks** | ⏳ Pending | High |
+| **T10.6** | **Analyze Batch Speedup Results** | ⏳ Pending | High |
+| **T11.1** | **Fix LlamaCPP Whitespace Padding** | ⏳ Pending | High |
+| **T11.2** | **Implement Incremental Results Writing** | ⏳ Pending | High |
+| **T11.3** | **Add Run Description to Reports** | ⏳ Pending | Medium |
 
 ## Additional Work Completed
 
 | Task | Description | Status |
 |------|-------------|--------|
-| **LlamaCPP Chat Template Fix** | Added custom `gpt_oss_messages_to_prompt()` function to properly format chat messages for gpt-oss model | ✅ Complete |
+| **LlamaCPP Chat Template Fix** | Added custom `gpt_oss_messages_to_prompt()` function (later removed in T8.7) | ✅ Complete (Superseded) |
 | **Stop Sequences Configuration** | Configured proper stop sequences (`<|return|>`, `<|end|>`, `<|endoftext|>`) for LlamaCPP | ✅ Complete |
 | **Output Directory Fix** | Fixed hardcoded path from `llamacpp_ollama/results/` to `results/` | ✅ Complete |
-| **Comprehensive Benchmarks** | Ran full benchmarks across all categories (short, medium, long) with 3 repetitions | ✅ Complete |
-| **Performance Analysis** | Analyzed results showing LlamaCPP is 7.6x faster overall with dramatic improvements on medium/long prompts | ✅ Complete |
+| **Initial Benchmarks (Unconstrained)** | Ran full benchmarks WITHOUT grammar constraints (both providers) | ✅ Complete |
+| **Initial Performance Analysis** | Analyzed unconstrained results - found issues with meta-commentary | ✅ Complete |
+| **GBNF JSON Grammar Implementation** | Implemented JSON grammar for LlamaCPP using `LlamaGrammar.from_string()` | ✅ Complete |
+| **Ollama JSON Mode Enable** | Enabled `json_mode=True` for fair comparison with LlamaCPP | ✅ Complete |
+| **Actual Token Counting** | Replaced character approximation with real API token counts | ✅ Complete |
+| **JSON Extraction Functions** | Added `extract_json_answer()` to parse JSON responses | ✅ Complete |
+| **Progress Monitoring** | Added timestamps and unbuffered output (`-u` flag, `flush=True`) | ✅ Complete |
+| **Chat Template Removal** | Removed custom chat template in favor of default + grammar | ✅ Complete |
+| **Fair Benchmark Launch** | Started benchmark with both providers using JSON constraints | 🔄 In Progress |
 
 ## Key Findings
 
-**LlamaCPP Performance Results:**
+### Initial Findings (Unconstrained Mode - MISLEADING)
+**⚠️ Note**: These results were from UNFAIR comparison (no grammar constraints):
+
 - **7.6x faster** overall than Ollama (660% improvement)
 - **13.4x faster** on medium prompts
 - **7.5x faster** on long prompts with 71.1 tokens/sec throughput
-- **100% success rate** across all 27 tests
-- All LLM responses saved in JSON/CSV for analysis
+- **BUT**: Token counts were misleading (Ollama hides thinking, LlamaCPP includes it)
+
+### Corrected Understanding
+**✅ What We Actually Learned**:
+
+1. **Both models generate similar reasoning** - Ollama stores in hidden `thinking` field
+2. **Token count differences were artifacts** - not true speed differences
+3. **Ollama does NOT automatically apply grammar** - must enable `json_mode=True`
+4. **GBNF grammar = logit masking** - forces valid JSON at inference level
+5. **Fair comparison requires equal constraints** - both with or both without grammar
+
+### Fair Comparison Results (Completed)
+**✅ Results from T9.1** - Both providers with JSON grammar enabled
+
+**Winner: LlamaCPP (1.57x faster overall)**
+
+| Provider | Mean Time | Tokens/sec | P95 Latency |
+|----------|-----------|------------|-------------|
+| Ollama | 13.8s | 16.8 | 36.9s |
+| LlamaCPP | 8.8s | 28.3 | 18.6s |
+
+**By Category**:
+- **Short**: Ollama 2.9s (5.8 tok/s) vs LlamaCPP 3.3s (26.6 tok/s)
+- **Medium**: Ollama 16.3s (18.9 tok/s) vs LlamaCPP 13.8s (29.1 tok/s)
+- **Long**: Ollama 22.3s (25.8 tok/s) vs **LlamaCPP 9.3s (29.1 tok/s)** ← 2.4x faster
+
+**Quality Issue Found**: LlamaCPP pads responses with ~500 whitespace tokens after JSON (needs fix in T11.1)
+
+**Recommendation**: Use **LlamaCPP** for grading pipeline (1.57x faster, 2.4x on long prompts, more consistent)
 
 ---
 
@@ -75,24 +134,27 @@
 **Description**: Verify all required components are available and properly configured.
 
 **Checklist**:
+
 - [ ] Verify Ollama server is running: `curl http://localhost:11434/api/tags`
 - [ ] Verify Llama.cpp model file exists and is accessible:
   ```bash
   ls -lh /Users/erlebach/data/llm_models/gpt-oss-20b-Q4_K_M.gguf
   ```
+
 - [ ] Check Metal GPU support for Llama.cpp:
   ```bash
   python -c "from llama_cpp import Llama; print('Metal support OK')"
   ```
-  - If errors, run: `./fix_llamacpp.sh`
+
+    - If errors, run: `./fix_llamacpp.sh`
 - [ ] Verify environment variables in `~/.env`:
-  - `OLLAMA_BASE_URL=http://localhost:11434`
-  - `LMQL_MODEL=gpt-oss:20b`
-  - `LLAMACPP_MODEL_PATH=/Users/erlebach/data/llm_models/gpt-oss-20b-Q4_K_M.gguf`
-  - `LLAMACPP_N_CTX=4096`
-  - `LLAMACPP_N_GPU_LAYERS=35`
-  - `LLAMACPP_TEMPERATURE=0.7`
-  - `LLAMACPP_MAX_TOKENS=512`
+    - `OLLAMA_BASE_URL=http://localhost:11434`
+    - `LMQL_MODEL=gpt-oss:20b`
+    - `LLAMACPP_MODEL_PATH=/Users/erlebach/data/llm_models/gpt-oss-20b-Q4_K_M.gguf`
+    - `LLAMACPP_N_CTX=4096`
+    - `LLAMACPP_N_GPU_LAYERS=35`
+    - `LLAMACPP_TEMPERATURE=0.7`
+    - `LLAMACPP_MAX_TOKENS=512`
 
 **Acceptance Criteria**: All commands execute without errors, confirming both systems are ready for testing.
 
@@ -126,22 +188,24 @@ python -c "import tabulate, yaml; print('Dependencies OK')"
 **Description**: Create YAML configuration file with test prompts across three complexity categories.
 
 **Requirements**:
+
 - **Metadata section**: version, created_date, description
 - **Short prompts** (< 50 tokens): 2-3 simple questions
-  - Example: "What is 2+2? Answer with just the number."
-  - Example: "Define 'machine learning' in one sentence."
+    - Example: "What is 2+2? Answer with just the number."
+    - Example: "Define 'machine learning' in one sentence."
 - **Medium prompts** (50-200 tokens): 2-3 moderate complexity tasks
-  - Example: "Explain the difference between supervised and unsupervised learning in 2-3 sentences."
+    - Example: "Explain the difference between supervised and unsupervised learning in 2-3 sentences."
 - **Long prompts** (200-500 tokens): 2-3 complex tasks
-  - Example: Grading assessment task with detailed instructions
+    - Example: Grading assessment task with detailed instructions
 - **Test configuration section**:
-  - `repetitions: 3`
-  - `warmup_iterations: 1`
-  - `max_tokens: 512`
-  - `temperature: 0.7`
-  - `timeout_sec: 60`
+    - `repetitions: 3`
+    - `warmup_iterations: 1`
+    - `max_tokens: 512`
+    - `temperature: 0.7`
+    - `timeout_sec: 60`
 
 **Acceptance Criteria**:
+
 - YAML file is valid and parseable
 - Contains 6-9 total prompts across 3 categories
 - Each prompt has: category, complexity, prompt text, expected_tokens
@@ -196,6 +260,7 @@ class BenchmarkRunner:
 ```
 
 **Requirements**:
+
 - Load YAML using `yaml.safe_load()`
 - Validate required sections exist (metadata, prompts, test_config)
 - Store prompts organized by category
@@ -203,6 +268,7 @@ class BenchmarkRunner:
 - Raise clear errors if configuration is invalid
 
 **Acceptance Criteria**:
+
 - Successfully loads valid YAML configuration
 - Raises informative errors for invalid/missing configuration
 - Returns structured data ready for benchmarking
@@ -228,6 +294,7 @@ def initialize_llm(self, provider: str):
 ```
 
 **Requirements**:
+
 - Import and use `configure_llm()` from `../config/llm_config.py`
 - Support both "ollama" and "llamacpp" providers
 - Time model loading (cold start metric)
@@ -235,6 +302,7 @@ def initialize_llm(self, provider: str):
 - Store LLM instances for reuse in warm tests
 
 **Acceptance Criteria**:
+
 - Both providers initialize successfully
 - Initialization time is captured accurately
 - Errors are caught and reported clearly
@@ -262,6 +330,7 @@ def run_single_test(
 ```
 
 **Requirements**:
+
 - Start timer before inference
 - Call LLM with prompt (use `.complete()` or similar method)
 - End timer after response received
@@ -272,11 +341,13 @@ def run_single_test(
 - If is_warmup=True, mark in output but don't count in stats
 
 **Retry Logic**:
+
 - Max 2 retries on failure
 - Delay 2 seconds between retries
 - Record final error if all retries fail
 
 **Acceptance Criteria**:
+
 - Successfully runs inference on both providers
 - Timing is accurate (uses `time.perf_counter()`)
 - All metrics are collected correctly
@@ -304,28 +375,31 @@ def run_benchmark_suite(
 ```
 
 **Execution Strategy**:
+
 1. **Warm-up phase** (unless skip_cold_start):
-   - Run warmup_iterations for each prompt (results discarded)
+    - Run warmup_iterations for each prompt (results discarded)
 2. **Cold start tests** (unless skip_cold_start):
-   - Reinitialize models fresh
-   - Run each prompt once per provider
-   - Measure total time including model loading
+    - Reinitialize models fresh
+    - Run each prompt once per provider
+    - Measure total time including model loading
 3. **Warm tests**:
-   - Reuse loaded models
-   - Run each prompt N times (repetitions)
-   - Randomize provider order to avoid bias
-   - Add 2-second delay between tests
+    - Reuse loaded models
+    - Run each prompt N times (repetitions)
+    - Randomize provider order to avoid bias
+    - Add 2-second delay between tests
 4. **Progress reporting** (if verbose):
-   - Print progress after each test
-   - Show running time estimates
+    - Print progress after each test
+    - Show running time estimates
 
 **Fair Comparison Controls**:
+
 - Randomize provider order: `random.shuffle(["ollama", "llamacpp"])`
 - Sequential execution (not parallel)
 - Same prompts for both providers
 - Same parameters (temp=0.7, max_tokens=512)
 
 **Acceptance Criteria**:
+
 - All prompts tested on both providers
 - Repetitions executed correctly
 - Progress is reported clearly (if verbose)
@@ -348,6 +422,7 @@ def calculate_statistics(self, results: List[PerformanceMetrics]) -> dict:
 
 **Statistics to Calculate**:
 Per provider (Ollama, Llama.cpp):
+
 - **Inference time**: mean, median, std dev, min, max
 - **Tokens per second**: mean, median, std dev
 - **Percentiles**: P95, P99 latency
@@ -356,15 +431,18 @@ Per provider (Ollama, Llama.cpp):
 - **Error count**: Number of failed tests
 
 Per category (short, medium, long):
+
 - Same metrics as above, grouped by prompt category
 
 **Comparison**:
+
 - Winner by average inference time
 - Winner by throughput (tokens/sec)
 - Winner by consistency (lower CV)
 - Percentage differences
 
 **Acceptance Criteria**:
+
 - All statistics calculated correctly
 - Results organized by provider and category
 - Clear winner identification
@@ -435,6 +513,7 @@ def generate_markdown_report(
 ```
 
 **Report Sections**:
+
 1. **Title and metadata**
 2. **Configuration table** (models, settings)
 3. **Overall summary table** (key metrics comparison)
@@ -445,6 +524,7 @@ def generate_markdown_report(
 **Output**: `{output_dir}/report.md`
 
 **Acceptance Criteria**:
+
 - Valid Markdown formatting
 - Tables are properly aligned
 - Clear winner identification
@@ -513,6 +593,7 @@ def print_terminal_summary(self, statistics: dict):
 ```
 
 **Acceptance Criteria**:
+
 - Clear, readable terminal output
 - Tables properly aligned
 - Winner clearly identified
@@ -542,6 +623,7 @@ def print_terminal_summary(self, statistics: dict):
 **Use**: `argparse` library
 
 **Acceptance Criteria**:
+
 - All arguments parsed correctly
 - Help message is clear and complete
 - Defaults work as expected
@@ -571,11 +653,13 @@ def main():
 ```
 
 **Error Handling**:
+
 - Wrap in try/except to catch and report errors
 - Provide helpful error messages
 - Exit with proper exit codes (0=success, 1=error)
 
 **Acceptance Criteria**:
+
 - Complete end-to-end execution
 - All outputs generated correctly
 - Errors handled gracefully
@@ -599,6 +683,7 @@ python -c "from compare_llm_performance import BenchmarkRunner; \
 ```
 
 **Acceptance Criteria**:
+
 - Prints expected number of prompts
 - No errors or exceptions
 
@@ -620,6 +705,7 @@ python -c "from compare_llm_performance import BenchmarkRunner; \
 ```
 
 **Acceptance Criteria**:
+
 - Both LLMs initialize without errors
 - Success message printed
 
@@ -638,6 +724,7 @@ python compare_llm_performance.py --categories short --repetitions 1
 ```
 
 **Expected Output**:
+
 - Terminal shows progress
 - Creates output directory with timestamp
 - Generates results.json with 2 test results (1 per provider)
@@ -646,6 +733,7 @@ python compare_llm_performance.py --categories short --repetitions 1
 - Terminal displays final summary
 
 **Acceptance Criteria**:
+
 - All output files created
 - No errors during execution
 - Results look reasonable (positive times, plausible token counts)
@@ -665,6 +753,7 @@ python compare_llm_performance.py --repetitions 3 --verbose
 ```
 
 **Expected Results**:
+
 - All prompts tested on both providers
 - 3 repetitions per prompt
 - Verbose output shows progress
@@ -672,6 +761,7 @@ python compare_llm_performance.py --repetitions 3 --verbose
 - All output files complete and properly formatted
 
 **Acceptance Criteria**:
+
 - All tests complete successfully
 - Results are consistent across repetitions
 - Clear performance differences identified
@@ -688,6 +778,7 @@ python compare_llm_performance.py --repetitions 3 --verbose
 **Description**: Review benchmark results to identify performance characteristics and issues.
 
 **Analysis Tasks**:
+
 - Compare average latency (Ollama vs Llama.cpp)
 - Compare throughput (tokens/sec)
 - Check consistency (coefficient of variation)
@@ -697,6 +788,7 @@ python compare_llm_performance.py --repetitions 3 --verbose
 - Look for patterns (e.g., Llama.cpp slower on long prompts?)
 
 **Questions to Answer**:
+
 1. Which provider is faster overall?
 2. By how much (percentage)?
 3. Is one more consistent than the other?
@@ -706,6 +798,7 @@ python compare_llm_performance.py --repetitions 3 --verbose
 **Deliverable**: Analysis notes in `results/analysis_notes.md`
 
 **Acceptance Criteria**:
+
 - Clear understanding of performance differences
 - Root cause hypothesis for any Llama.cpp issues
 - Recommendations for optimization or provider choice
@@ -720,6 +813,7 @@ python compare_llm_performance.py --repetitions 3 --verbose
 **Description**: Create comprehensive README for the benchmark tool.
 
 **Sections**:
+
 1. **Overview**: What this tool does
 2. **Prerequisites**: System requirements and setup
 3. **Installation**: Dependencies and configuration
@@ -731,37 +825,706 @@ python compare_llm_performance.py --repetitions 3 --verbose
 9. **Results Summary**: Key findings from initial benchmarks
 
 **Acceptance Criteria**:
+
 - Complete, clear documentation
 - Examples that can be copy-pasted
 - Helpful for future users
 
 ---
 
+## Phase 8: Constrained Generation & JSON Mode
+
+### T8.1: Investigate JSON Output Issues
+**Status**: ✅ Complete
+**Priority**: High
+**Dependencies**: T6.4, T7.1
+**Description**: Investigate why LlamaCPP generates meta-commentary instead of direct JSON responses.
+
+**Findings**:
+
+- LlamaCPP was generating reasoning/thinking text instead of JSON
+- Root cause: Missing GBNF grammar constraints
+- Ollama appeared cleaner due to hidden `thinking` field in responses
+- Both models actually generate similar amounts of reasoning
+
+**Key Discovery**:
+
+From `constrained_grammars.md` and Perplexity research:
+
+- Ollama uses GBNF grammar constraints when `format: json` is set
+- LlamaCPP requires explicit `LlamaGrammar` object
+- Without grammar: models rely on instruction following (unreliable)
+- With grammar: logit masking forces valid JSON token selection
+
+**Acceptance Criteria**: ✅ Root cause identified and documented
+
+---
+
+### T8.2: Implement GBNF JSON Grammar for LlamaCPP
+**Status**: ✅ Complete
+**Priority**: High
+**Dependencies**: T8.1
+**Location**: `config/llm_config.py`
+**Description**: Implement GBNF JSON grammar constraint for LlamaCPP to force valid JSON output.
+
+**Implementation**:
+
+```python
+from llama_cpp import LlamaGrammar
+
+json_grammar = LlamaGrammar.from_string(r'''
+root   ::= object
+value  ::= object | array | string | number | ("true" | "false" | "null") ws
+object ::= "{" ws (string ":" ws value ("," ws string ":" ws value)*)? "}" ws
+...
+''')
+
+llm_kwargs["generate_kwargs"] = {
+    "grammar": json_grammar,
+    ...
+}
+```
+
+**Key Features**:
+
+- Uses BNF grammar specification for JSON
+- Forces token selection to only JSON-valid tokens (logit masking)
+- Equivalent to `--grammar-file json.gbnf` in CLI
+- Works at the inference engine level, not prompt level
+
+**Test Results**:
+
+- ✅ Generates valid JSON: `{"answer": "Paris"}`
+- ✅ No meta-commentary
+- ✅ Only 13 tokens (efficient)
+
+**Acceptance Criteria**: ✅ LlamaCPP reliably generates valid JSON
+
+---
+
+### T8.3: Enable JSON Mode for Ollama
+**Status**: ✅ Complete
+**Priority**: High
+**Dependencies**: T8.1
+**Location**: `config/llm_config.py`
+**Description**: Enable Ollama's JSON mode to apply GBNF grammar constraints for fair comparison.
+
+**Important Correction**:
+
+- **FALSE**: "Ollama automatically applies GBNF grammar constraints"
+- **TRUE**: Ollama only applies grammar when explicitly requested via `json_mode=True` or `format: json`
+
+**Implementation**:
+```python
+return Ollama(
+    model=model_name,
+    base_url=base_url,
+    request_timeout=120.0,
+    json_mode=True  # Enable JSON constrained generation
+)
+```
+
+**Fair Comparison**:
+
+- **Before**: Ollama (no grammar) vs LlamaCPP (no grammar) - unfair due to different chat templates
+- **After**: Ollama (grammar) vs LlamaCPP (grammar) - both use same constraint mechanism
+
+**Acceptance Criteria**: ✅ Both providers use GBNF grammar constraints
+
+---
+
+### T8.4: Implement Actual Token Counting
+**Status**: ✅ Complete
+**Priority**: High
+**Dependencies**: T8.1
+**Location**: `llamacpp_ollama/compare_llm_performance.py`
+**Description**: Replace character-based token estimation with actual token counts from LLM APIs.
+
+**Implementation**:
+```python
+def get_token_count(raw_response: dict, provider: str) -> int:
+    """Extract actual token count from raw LLM response."""
+    if provider == "ollama":
+        return raw_response.get("eval_count", 0)
+    elif provider == "llamacpp":
+        usage = raw_response.get("usage", {})
+        return usage.get("completion_tokens", 0)
+    return 0
+```
+
+**Key Changes**:
+
+- Counts ALL tokens including thinking/reasoning
+- No more `tokens = chars // 4` approximation
+- Fair comparison of true inference speed
+- Extracts from `response.raw` API responses
+
+**Example**:
+
+- Ollama: 72 tokens (actual count, includes hidden thinking)
+- LlamaCPP: 13 tokens (actual count with grammar)
+
+**Acceptance Criteria**: ✅ Using real token counts from APIs
+
+---
+
+### T8.5: Add JSON Extraction Functions
+**Status**: ✅ Complete
+**Priority**: Medium
+**Dependencies**: T8.2
+**Location**: `llamacpp_ollama/compare_llm_performance.py`
+**Description**: Implement functions to extract clean answers from JSON responses.
+
+**Implementation**:
+```python
+def extract_json_answer(response_text: str) -> tuple[str, str]:
+    """Extract answer from JSON response.
+
+    Returns:
+        Tuple of (extracted_answer, full_response_text)
+    """
+    # Try to parse as JSON
+    # Extract "answer" field
+    # Fallback to full text if no JSON found
+```
+
+**New Fields in PerformanceMetrics**:
+
+- `response_text`: Full response including thinking/reasoning
+- `extracted_answer`: Clean answer from JSON "answer" field
+
+**Acceptance Criteria**: ✅ Can extract clean answers from JSON responses
+
+---
+
+### T8.6: Add Progress Indicators and Timestamps
+**Status**: ✅ Complete
+**Priority**: Medium
+**Dependencies**: None
+**Location**: `llamacpp_ollama/compare_llm_performance.py`
+**Description**: Add timestamps and unbuffered output to track benchmark progress.
+
+**Implementation**:
+
+- Added `Start time:` and `End time:` timestamps at:
+  - Overall benchmark start/end
+  - Each provider start/end
+- Added `flush=True` to all print statements
+- Run Python with `-u` (unbuffered) flag
+- Helps distinguish between frozen/running/complete states
+
+**Example Output**:
+```
+============================================================
+Starting Benchmark Suite
+============================================================
+Start time: 2026-01-28 13:30:45
+Providers: ollama, llamacpp
+...
+End time: 2026-01-28 13:45:12
+```
+
+**Acceptance Criteria**: ✅ Can monitor benchmark progress in real-time
+
+---
+
+### T8.7: Remove Custom Chat Template
+**Status**: ✅ Complete
+**Priority**: High
+**Dependencies**: T8.2
+**Location**: `config/llm_config.py`
+**Description**: Remove problematic custom `messages_to_prompt` function that caused meta-commentary.
+
+**Rationale**:
+
+- Custom template was causing model to narrate reasoning process
+- Default template + JSON grammar works better
+- Let LlamaCPP use model's built-in chat template
+
+**Changes**:
+
+- Removed: `"messages_to_prompt": gpt_oss_messages_to_prompt`
+- Added: `"grammar": json_grammar` (replaces template-based control)
+- Result: Clean JSON output without meta-commentary
+
+**Acceptance Criteria**: ✅ Using default chat template with grammar constraints
+
+---
+
+## Phase 9: Fair Comparison & Final Analysis
+
+### T9.1: Run Fair Comparison Benchmark
+**Status**: 🔄 In Progress
+**Priority**: High
+**Dependencies**: T8.2, T8.3, T8.4, T8.6
+**Location**: `llamacpp_ollama/`
+**Description**: Run comprehensive benchmark with both providers using JSON mode for fair comparison.
+
+**Configuration**:
+
+- Ollama: `json_mode=True` (GBNF grammar enabled)
+- LlamaCPP: `grammar=json_grammar` (GBNF grammar enabled)
+- All prompts request JSON format: `{"answer": "..."}`
+- Actual token counting from API responses
+- Progress indicators with timestamps
+
+**Command**:
+```bash
+python3 -u compare_llm_performance.py \
+  --config config/llm_benchmark_prompts.yaml \
+  --providers ollama,llamacpp \
+  --categories short,medium,long \
+  --repetitions 2 \
+  --verbose
+```
+
+**Expected Outcomes**:
+
+- Both providers generate valid JSON
+- Token counts include all generated tokens (thinking + answer)
+- Fair speed comparison with same constraints
+- Clean JSON extraction for answer comparison
+
+**Acceptance Criteria**: ⏳ Fair benchmark completes with both providers using grammar
+
+---
+
+### T9.2: Analyze Token-Accurate Results
+**Status**: ⏳ Pending
+**Priority**: High
+**Dependencies**: T9.1
+**Description**: Analyze benchmark results with accurate token counts and JSON constraints.
+
+**Analysis Focus**:
+
+1. **True Speed Comparison**:
+
+    - Compare inference time with equal grammar constraints
+    - Tokens/sec with actual token counts
+    - Impact of JSON grammar on performance
+
+2. **Token Generation Patterns**:
+
+    - How many tokens does each provider actually generate?
+    - Are token counts similar with grammar constraints?
+    - Does grammar reduce verbosity equally?
+
+3. **Quality Assessment**:
+
+    - JSON validity rate
+    - Answer extraction success rate
+    - Consistency across repetitions
+
+4. **Grading Use Case Projection**:
+
+    -  Performance on long prompts (rubrics + answers)
+    - Reliability with constrained generation
+    - Recommendation for production use
+
+**Deliverable**: Updated `results/analysis_notes.md` with fair comparison findings
+
+**Acceptance Criteria**: ⏳ Complete analysis with accurate token counts
+
+---
+
+### T9.3: Update Documentation with Findings
+**Status**: ⏳ Pending
+**Priority**: Medium
+**Dependencies**: T9.2
+**Locations**: `README.md`, `results/analysis_notes.md`, `TASK_LIST.md`
+**Description**: Update all documentation with constrained generation findings.
+
+**Updates Needed**:
+
+1. **README.md**:
+
+    - Explain JSON mode configuration for both providers
+    - Document GBNF grammar implementation
+    - Add note about Ollama's optional grammar (not automatic)
+    - Link to `constrained_grammars.md`
+
+2. **analysis_notes.md**:
+
+    - Add section on constrained vs unconstrained comparison
+    - Update performance numbers with actual token counts
+    - Explain grammar impact on speed and quality
+    - Revise recommendations based on fair comparison
+
+3. **TASK_LIST.md**:
+
+    - Mark T9.1, T9.2, T9.3 as complete when done
+    - Update summary statistics
+    - Add lessons learned section
+
+**Key Points to Document**:
+
+- Ollama does NOT automatically apply grammar constraints
+- JSON mode must be explicitly enabled for both providers
+- GBNF grammar = logit masking at inference level
+- Actual token counts essential for fair comparison
+- Both providers generate similar reasoning (thinking vs content)
+
+**Acceptance Criteria**: ✅ All documentation reflects accurate findings
+
+---
+
+## Phase 10: Batch Inference Benchmarking
+
+### T10.1: Design Batch Benchmark Architecture
+**Status**: ✅ Complete
+**Priority**: High
+**Location**: `llamacpp_ollama/batch_benchmark.py`
+**Description**: Design architecture for batch inference benchmarking to measure speedup from processing multiple requests simultaneously.
+
+**Design Requirements**:
+
+- Measure both wall-clock and CPU time
+- Compare sequential (batch_size=1) vs batch processing (batch_size=4,8)
+- Use identical prompts N times for objective comparison
+- Calculate speedup vs ideal (batch_size)
+- Report efficiency percentage (actual_speedup / ideal_speedup * 100)
+
+**Metrics to Collect**:
+
+- Wall-clock time (what users experience)
+- CPU time (reproducible, system-independent)
+- Total tokens generated
+- Tokens/sec (wall and CPU)
+- Speedup vs sequential baseline
+- Efficiency percentage
+
+**Acceptance Criteria**: ✅ Architecture designed and documented
+
+---
+
+### T10.2: Implement Sequential Baseline
+**Status**: ✅ Complete
+**Priority**: High
+**Dependencies**: T10.1
+**Location**: `llamacpp_ollama/batch_benchmark.py`
+**Description**: Implement baseline sequential inference function that processes prompts one at a time.
+
+**Implementation**:
+```python
+def run_sequential_inference(llm, prompt, n) -> tuple[float, float, list[str], int]:
+    """Run N inferences sequentially.
+    Returns: (wall_time, cpu_time, responses, total_tokens)
+    """
+    # Use time.time() for wall-clock
+    # Use time.process_time() for CPU time
+    # Process one request at a time
+    # Extract token counts from API responses
+```
+
+**Acceptance Criteria**: ✅ Sequential baseline implemented with accurate timing
+
+---
+
+### T10.3: Implement Batch Inference (n=4,8)
+**Status**: ⏳ Pending
+**Priority**: High
+**Dependencies**: T10.2
+**Location**: `llamacpp_ollama/batch_benchmark.py`
+**Description**: Implement true batch processing using llama-cpp-python's native batch API.
+
+**Current Implementation**:
+
+- Using sequential processing with KV cache sharing (relies on identical prompts)
+- llama.cpp recognizes identical prefixes and shares computation
+
+**Needed Improvement**:
+
+- Use llama-cpp-python's `Llama` class directly with `n_batch` parameter
+- Configure proper batch processing:
+  ```python
+  from llama_cpp import Llama
+  llm = Llama(
+      model_path=model_path,
+      n_batch=batch_size,  # Enable batch processing
+      n_ctx=4096,
+      n_gpu_layers=35
+  )
+  ```
+
+- Use `.create_completion()` with batch of identical prompts
+- Measure true parallel processing speedup
+
+**Acceptance Criteria**: ⏳ Batch inference uses native llama.cpp batch API
+
+---
+
+### T10.4: Add CPU Time Measurement
+**Status**: ⏳ Pending
+**Priority**: Medium
+**Dependencies**: T10.2, T10.3
+**Location**: `llamacpp_ollama/batch_benchmark.py`
+**Description**: Ensure all timing measurements include both wall-clock and CPU time.
+
+**Implementation**:
+
+- Use `time.process_time()` for CPU time (user + system time spent in process)
+- Use `time.time()` for wall-clock time (actual elapsed time)
+- Report both metrics separately
+- Calculate tokens/sec for both
+
+**Benefits**:
+
+- **CPU time** is reproducible across different system loads
+- **Wall-clock time** is what users actually experience
+- Comparison helps identify if slowdowns are from CPU contention vs model processing
+
+**Acceptance Criteria**: ⏳ All results report both wall-clock and CPU time
+
+---
+
+### T10.5: Run Batch Benchmarks
+**Status**: ⏳ Pending
+**Priority**: High
+**Dependencies**: T10.3, T10.4
+**Description**: Run batch inference benchmarks with batch sizes 4 and 8 across short, medium, and long prompts.
+
+**Test Plan**:
+
+```bash
+cd llamacpp_ollama
+python3 -u batch_benchmark.py \
+    --batch-sizes 4,8 \
+    --prompts short,medium,long \
+    --verbose 2>&1 | tee batch_results_$(date +%Y%m%d_%H%M%S).log
+```
+
+**Expected Behavior**:
+
+- Batch size 4 should show ~2-3x speedup (50-75% efficiency)
+- Batch size 8 should show ~3-6x speedup (37-75% efficiency)
+- Longer prompts may show better batch efficiency (more computation to parallelize)
+
+**Acceptance Criteria**: ⏳ Benchmark completes and produces results for all batch sizes
+
+---
+
+### T10.6: Analyze Batch Speedup Results
+**Status**: ⏳ Pending
+**Priority**: High
+**Dependencies**: T10.5
+**Description**: Analyze batch benchmark results and determine optimal batch size for grading pipeline.
+
+**Analysis Questions**:
+
+1. What speedup does batch_size=4 achieve? (ideal: 4x)
+2. What speedup does batch_size=8 achieve? (ideal: 8x)
+3. Do longer prompts benefit more from batching?
+4. What is the efficiency percentage for each batch size?
+5. Is there diminishing returns beyond batch_size=4?
+
+**Recommendations to Generate**:
+
+- Optimal batch size for grading pipeline
+- Expected throughput improvement
+- Memory considerations (batch size vs context window)
+
+**Acceptance Criteria**: ⏳ Analysis complete with recommendation for production use
+
+---
+
+## Phase 11: Quality & Optimization
+
+### T11.1: Fix LlamaCPP Whitespace Padding
+**Status**: ✅ Partially Complete (50%)
+**Priority**: High
+**Location**: `config/llm_config.py`
+**Description**: Fix LlamaCPP generating excessive whitespace after JSON responses.
+
+**Current Issue**:
+
+- LlamaCPP generates valid JSON: `{"answer":"Paris"}`
+- Then pads with whitespace until hitting max_tokens=512
+- Wastes tokens and time (~500 extra tokens per response)
+
+**Root Cause**:
+
+- Grammar allows whitespace after JSON: `ws ::= [ \t\n]*`
+- Model continues generating until max_tokens
+
+**Solutions Attempted**:
+
+1. ❌ **Stricter stop sequences**: Added `}\n` → caused initialization hang
+2. ✅ **Lower max_tokens**: Reduced from 512 to 256 (50% reduction in padding)
+3. ❌ **Grammar refinement**: Modified grammar to limit trailing ws → caused segfault
+4. ⏳ **Use `finish_reason`**: Not yet tested
+
+**Current State**:
+
+- ✅ max_tokens reduced to 256 (prevents >256 token padding)
+- ⏳ Need to test actual impact on responses
+- ⏳ May need different approach for full fix (e.g., post-processing trimming)
+
+**Acceptance Criteria**: 🔄 LlamaCPP generates <100 tokens for simple JSON responses (currently: ~256 max vs 512 before)
+
+---
+
+### T11.2: Implement Incremental Results Writing
+**Status**: ⏳ Pending
+**Priority**: High
+**Location**: `llamacpp_ollama/compare_llm_performance.py`, `batch_benchmark.py`
+**Description**: Write results incrementally to avoid data loss on crashes/interruptions.
+
+**Current Problem**:
+
+- Results buffered in memory
+- Only written at end of benchmark
+- If process crashes, **all data is lost**
+
+**Implementation**:
+
+```python
+def run_benchmark_suite(...):
+    results_file = output_dir / "results.jsonl"  # JSON Lines format
+
+    for test in tests:
+        result = run_single_test(...)
+
+        # Write immediately after each test
+        with open(results_file, "a") as f:
+            f.write(json.dumps(asdict(result)) + "\n")
+            f.flush()  # Force write to disk
+```
+
+**Benefits**:
+
+- No data loss on crashes
+- Can monitor progress by tailing results file
+- Easy to resume interrupted benchmarks
+
+**Acceptance Criteria**: ⏳ Results written after each test completion
+
+---
+
+### T11.3: Add Run Description to Reports
+**Status**: ⏳ Pending
+**Priority**: Medium
+**Location**: Report generation code
+**Description**: Add meaningful descriptions to result folders and reports to distinguish different runs.
+
+**Current Problem**:
+
+- Folders named `llm_comparison_20260128_144338/`
+- No description of what each run tested
+- Difficult to distinguish: "Was this with grammar? Without? Batch size 4?"
+
+**Implementation**:
+
+1. **Add --description CLI flag**:
+   ```bash
+   python compare_llm_performance.py \
+       --description "Fair comparison: both providers with JSON grammar" \
+       ...
+   ```
+
+2. **Include in folder name**:
+   ```
+   results/fair_json_comparison_20260128_144338/
+   results/batch_size_4_20260128_150000/
+   ```
+
+3. **Add to report header**:
+   ```markdown
+   # LLM Performance Comparison Report
+
+   **Run Description**: Fair comparison with both providers using JSON grammar constraints
+   **Generated**: 2026-01-28 14:54:53
+   ```
+
+4. **Add metadata to results.json**:
+   ```json
+   {
+     "metadata": {
+       "description": "Fair comparison: both providers with JSON grammar",
+       "timestamp": "2026-01-28T14:54:53",
+       ...
+     }
+   }
+   ```
+
+**Acceptance Criteria**: ⏳ All reports include run description
+
+---
+
 ## Summary
 
-**Total Tasks**: 23
-**High Priority**: 13
-**Medium Priority**: 7
+**Total Tasks**: 43 (Updated 2026-01-28 14:56)
+**Completed**: 32
+**In Progress**: 1
+**Pending**: 10
+**High Priority**: 29
+**Medium Priority**: 13
 **Low Priority**: 1
 
-**Estimated Completion Order**:
-1. Phase 1: Prerequisites (T1.1, T1.2)
-2. Phase 2: Configuration (T2.1)
-3. Phase 3: Core Implementation (T3.1 → T3.6)
-4. Phase 4: Output (T4.1 → T4.4)
-5. Phase 5: CLI (T5.1, T5.2)
-6. Phase 6: Testing (T6.1 → T6.4)
-7. Phase 7: Analysis (T7.1, T7.2)
+**Completion Status by Phase**:
 
-**Next Steps**:
-1. Start with T1.1 to verify prerequisites
-2. Install dependencies (T1.2)
-3. Create YAML config (T2.1)
-4. Begin core implementation starting with T3.1
+1. ✅ Phase 1: Prerequisites (T1.1, T1.2) - Complete
+2. ✅ Phase 2: Configuration (T2.1) - Complete
+3. ✅ Phase 3: Core Implementation (T3.1 → T3.6) - Complete
+4. ✅ Phase 4: Output (T4.1 → T4.4) - Complete
+5. ✅ Phase 5: CLI (T5.1, T5.2) - Complete
+6. ✅ Phase 6: Testing (T6.1 → T6.4) - Complete
+7. ✅ Phase 7: Documentation (T7.1, T7.2) - Complete
+8. ✅ Phase 8: Constrained Generation (T8.1 → T8.7) - Complete
+9. ✅ Phase 9: Fair Comparison (T9.1 → T9.3) - Complete
+10. 🔄 Phase 10: Batch Inference (T10.1 → T10.6) - In Progress
+11. ⏳ Phase 11: Quality & Optimization (T11.1 → T11.3) - Pending
+
+**Total Tasks**: 31 (Updated 2026-01-28)
+**Completed**: 28
+**In Progress**: 1
+**Pending**: 2
+**High Priority**: 21
+**Medium Priority**: 9
+**Low Priority**: 1
+
+**Completion Status by Phase**:
+
+1. ✅ Phase 1: Prerequisites (T1.1, T1.2) - Complete
+2. ✅ Phase 2: Configuration (T2.1) - Complete
+3. ✅ Phase 3: Core Implementation (T3.1 → T3.6) - Complete
+4. ✅ Phase 4: Output (T4.1 → T4.4) - Complete
+5. ✅ Phase 5: CLI (T5.1, T5.2) - Complete
+6. ✅ Phase 6: Testing (T6.1 → T6.4) - Complete
+7. ✅ Phase 7: Documentation (T7.1, T7.2) - Complete
+8. ✅ Phase 8: Constrained Generation (T8.1 → T8.7) - Complete
+9. 🔄 Phase 9: Fair Comparison (T9.1 → T9.3) - In Progress
+
+**Current Status**:
+
+- **Phase 9**: ✅ Complete - Fair comparison shows LlamaCPP 1.57x faster
+- **Phase 10**: 🔄 In Progress - Batch inference benchmarking
+  - **T10.1, T10.2**: ✅ Architecture designed and sequential baseline implemented
+  - **T10.3**: ⏳ Need to implement native llama.cpp batch API
+  - **T10.5**: ⏳ Ready to run batch benchmarks once T10.3 complete
+- **Phase 11**: ⏳ Pending - Quality improvements needed (whitespace padding, incremental writes)
+
+**Key Achievements**:
+
+- ✅ Implemented GBNF JSON grammar for constrained generation
+- ✅ Fixed token counting to use actual API counts (not approximation)
+- ✅ Completed fair comparison: LlamaCPP 1.57x faster, 2.4x on long prompts
+- ✅ Added progress monitoring with timestamps and unbuffered output
+- ✅ Documented constrained generation mechanism (logit masking)
+- ✅ Designed batch inference benchmark architecture
+- 🔄 Implementing native batch processing for throughput testing
+
+**Lessons Learned**:
+
+1. **Ollama does NOT automatically apply grammar** - must explicitly enable `json_mode=True`
+2. **GBNF grammar = logit masking** at inference level (not prompt-based)
+3. **Token counts matter** - both providers generate reasoning, but Ollama hides it in `thinking` field
+4. **Custom chat templates can hurt** - removed in favor of default + grammar constraints
+5. **Quantization affects instruction following** - grammar constraints bypass this issue
 
 ---
 
 **Notes**:
+
 - All file paths are relative to `llamacpp_ollama/` directory
 - Configuration references `../config/llm_config.py` from parent autograder directory
 - Follow CLAUDE.md principles: YAML configs, no hardcoding, transparency

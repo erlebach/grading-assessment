@@ -15,19 +15,19 @@ prompts:
   - id: short_1
     category: short
     complexity: simple
-    prompt: "What is the capital of France?"
+    prompt: 'What is the capital of France? Respond with JSON: {"answer": "your answer here"}'
     expected_tokens: 10
 
   - id: short_2
     category: short
     complexity: simple
-    prompt: "Explain what a Python list is in one sentence."
+    prompt: 'Explain what a Python list is in one sentence. Respond with JSON: {"answer": "your answer here"}'
     expected_tokens: 25
 
   - id: short_3
     category: short
     complexity: simple
-    prompt: "Write a function signature for calculating the area of a circle."
+    prompt: 'Write a function signature for calculating the area of a circle. Respond with JSON: {"answer": "your answer here"}'
     expected_tokens: 20
 
   # Medium prompts (50-200 tokens) - Moderate complexity
@@ -37,6 +37,7 @@ prompts:
     prompt: |
       Explain the difference between a list and a tuple in Python.
       Include at least two key differences and when you would use each.
+      Respond with JSON: {"answer": "your explanation here"}
     expected_tokens: 100
 
   - id: medium_2
@@ -46,6 +47,7 @@ prompts:
       Write a Python function that takes a list of numbers and returns
       the sum of all even numbers in the list. Include error handling
       for invalid inputs.
+      Respond with JSON: {"answer": "your code here"}
     expected_tokens: 150
 
   - id: medium_3
@@ -54,6 +56,7 @@ prompts:
     prompt: |
       What is the Big O time complexity of binary search? Explain why
       it has this complexity and compare it to linear search.
+      Respond with JSON: {"answer": "your explanation here"}
     expected_tokens: 120
 
   # Long prompts (200-500 tokens) - Complex tasks
@@ -69,6 +72,7 @@ prompts:
       they don't need. Dependency Inversion means depend on abstractions not concrete implementations."
 
       Grade this answer on a scale of 0-10 and provide specific feedback on what was done well and what could be improved.
+      Respond with JSON: {"answer": "your grading and feedback here"}
     expected_tokens: 250
 
   - id: long_2
@@ -83,6 +87,7 @@ prompts:
 
       Describe the main classes/structures you would use and their key methods.
       Explain your design choices and any trade-offs.
+      Respond with JSON: {"answer": "your design description here"}
     expected_tokens: 300
 
   - id: long_3
@@ -95,4 +100,5 @@ prompts:
       This table has several normalization issues. Identify the problems, explain which
       normal forms are being violated, and describe how you would restructure this into
       properly normalized tables. Show the final table structure and explain why it's better.
+      Respond with JSON: {"answer": "your analysis and restructuring here"}
     expected_tokens: 280
