@@ -3,7 +3,7 @@
 
 import sys
 import time
-from config.llm_config import configure_llm, load_env_config
+from config.llm_config import configure_llm, load_env_config, filter_gpt_oss_output
 
 def test_llamacpp():
     """Test llama.cpp model loading and inference."""
@@ -44,7 +44,11 @@ def test_llamacpp():
         response = llm.complete(test_prompt)
         inference_time = time.time() - start_time
         print(f"   ✓ Response generated in {inference_time:.2f} seconds")
-        print(f"   Response: {response.text[:200]}")
+
+        # Apply output filtering to remove thinking/analysis channels
+        filtered_response = filter_gpt_oss_output(response.text)
+        print(f"\n   Raw response (first 300 chars):\n   {response.text[:300]}")
+        print(f"\n   Filtered response (first 300 chars):\n   {filtered_response[:300]}")
     except Exception as e:
         print(f"   ✗ Error during inference: {e}")
         import traceback
