@@ -78,6 +78,39 @@ def gpt_oss_messages_to_prompt(messages: list[ChatMessage]) -> str:
     return "\n".join(prompt_parts)
 
 
+def filter_gpt_oss_output(output: str) -> str:
+    """Filter GPT-OSS output to remove thinking/analysis channels.
+
+    The model generates output with channel markers like:
+    - <|channel|>analysis ... <|end|> (thinking/reasoning - filtered out)
+    - <|channel|>final ... <|end|> (actual answer - kept)
+    - <think> ... </think> (thinking tags - filtered out)
+
+    Args:
+        output: Raw output from GPT-OSS model
+
+    Returns:
+        Filtered output with thinking/analysis removed
+    """
+    import re
+
+    # Remove <|channel|>analysis ... <|end|> blocks
+    output = re.sub(r'<\|channel\|>analysis.*?<\|end\|>', '', output, flags=re.DOTALL)
+
+    # Remove <think> ... </think> blocks
+    output = re.sub(r'<think>.*?</think>', '', output, flags=re.DOTALL)
+
+    # Extract content from <|channel|>final blocks if present
+    final_match = re.search(r'<\|channel\|>final\s*(.*?)\s*<\|end\|>', output, re.DOTALL)
+    if final_match:
+        output = final_match.group(1)
+
+    # Clean up extra whitespace
+    output = output.strip()
+
+    return output
+
+
 def load_env_config() -> dict[str, str]:
     """Load configuration from $HOME/.env file.
 
@@ -106,10 +139,14 @@ def load_env_config() -> dict[str, str]:
         "ollama_base_url": os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
         "ollama_num_parallel": ollama_num_parallel or "",
         "llamacpp_model_path": os.getenv("LLAMACPP_MODEL_PATH", ""),
-        "llamacpp_n_ctx": int(os.getenv("LLAMACPP_N_CTX", "2048")),
+        "llamacpp_n_ctx": int(os.getenv("LLAMACPP_N_CTX", "8192")),  # GPT-OSS spec: 8192
         "llamacpp_n_gpu_layers": int(os.getenv("LLAMACPP_N_GPU_LAYERS", "0")),
-        "llamacpp_temperature": float(os.getenv("LLAMACPP_TEMPERATURE", "0.7")),
-        "llamacpp_max_tokens": int(os.getenv("LLAMACPP_MAX_TOKENS", "256")),  # Reduced from 512 to prevent whitespace padding
+        "llamacpp_temperature": float(os.getenv("LLAMACPP_TEMPERATURE", "0.8")),  # GPT-OSS spec: 0.8
+        "llamacpp_top_k": int(os.getenv("LLAMACPP_TOP_K", "40")),  # GPT-OSS spec: 40
+        "llamacpp_top_p": float(os.getenv("LLAMACPP_TOP_P", "0.9")),  # GPT-OSS spec: 0.9
+        "llamacpp_repeat_last_n": int(os.getenv("LLAMACPP_REPEAT_LAST_N", "64")),  # GPT-OSS spec: 64
+        "llamacpp_repeat_penalty": float(os.getenv("LLAMACPP_REPEAT_PENALTY", "1.1")),  # GPT-OSS spec: 1.1
+        "llamacpp_max_tokens": int(os.getenv("LLAMACPP_MAX_TOKENS", "2048")),
         "llamacpp_stop_sequences": os.getenv("LLAMACPP_STOP_SEQUENCES", "").split(",") if os.getenv("LLAMACPP_STOP_SEQUENCES") else None,
         "embedding_provider": os.getenv("EMBEDDING_PROVIDER", "sentence-transformer"),
         "embedding_model": os.getenv(
@@ -176,46 +213,34 @@ def configure_llm(provider: str = "ollama", model: str | None = None) -> Any:
                 f"LlamaCPP model file not found: {model_path}"
             )
 
-        # Default stop sequences for gpt-oss model (similar to Ollama's behavior)
-        default_stop_sequences = ["<|return|>", "<|end|>", "<|endoftext|>"]
+        # Stop token 199999 is <|endoftext|> for gpt-oss model
+        # This is the primary stop token; <|return|> and <|end|> are secondary
+        default_stop_sequences = [199999]  # Token ID for <|endoftext|>
         stop_sequences = config["llamacpp_stop_sequences"] or default_stop_sequences
 
         llm_kwargs = {
             "model_path": model_path,
-            "temperature": 1.0,  # gpt-oss-20b requires temp=1.0 for proper behavior
+            "temperature": config["llamacpp_temperature"],  # GPT-OSS spec: 0.8
             "model_kwargs": {
-                "n_ctx": config["llamacpp_n_ctx"],
+                "n_ctx": config["llamacpp_n_ctx"],  # GPT-OSS spec: 8192
                 "n_gpu_layers": config["llamacpp_n_gpu_layers"],
-                # NOTE: chat_format parameter removed - causes hanging
-                # The model should use its embedded chat template automatically
+                "n_batch": 512,  # GPT-OSS spec: 512
+                # Tokenizer settings: don't add BOS/EOS tokens automatically
+                "add_bos_token": False,
+                "add_eos_token": False,
                 "verbose": False,
             },
             "max_new_tokens": config["llamacpp_max_tokens"],
-            # System prompt to suppress thinking/meta-commentary
-            "system_prompt": (
-                "You are a helpful assistant. Provide direct answers in the requested format. "
-                "Do NOT explain your reasoning process. Do NOT narrate your thought process. "
-                "Do NOT say things like 'Let's analyze' or 'We need to' or 'I will'. "
-                "Just provide the final answer immediately in the exact format requested."
-            ),
         }
 
-        # Add stop sequences and JSON grammar to generate_kwargs
-        # Use pre-compiled global JSON_GRAMMAR to avoid duplication errors
-        # when configure_llm() is called multiple times during benchmarking
-        # Sampling parameters based on Perplexity research for gpt-oss-20b
-        if JSON_GRAMMAR is None:
-            print("⚠ Warning: JSON_GRAMMAR is None, grammar constraints disabled", flush=True)
-
+        # Sampling parameters exactly as specified for GPT-OSS 20B
         llm_kwargs["generate_kwargs"] = {
             "stop": stop_sequences,
-            "temperature": 1.0,  # gpt-oss-20b requires temp=1.0
-            "max_tokens": config["llamacpp_max_tokens"],
-            "top_k": 128,  # CRITICAL: gpt-oss-20b requires top_k >= 128
-            "repeat_penalty": 1.1,  # Recommended for "agentic" feel
-            # Grammar temporarily disabled - causing hang in llama_decode()
-            # TODO: Debug grammar compatibility with these sampling parameters
-            # "grammar": JSON_GRAMMAR,
+            "temperature": config["llamacpp_temperature"],  # GPT-OSS spec: 0.8
+            "top_k": config["llamacpp_top_k"],  # GPT-OSS spec: 40
+            "top_p": config["llamacpp_top_p"],  # GPT-OSS spec: 0.9
+            "repeat_last_n": config["llamacpp_repeat_last_n"],  # GPT-OSS spec: 64
+            "repeat_penalty": config["llamacpp_repeat_penalty"],  # GPT-OSS spec: 1.1
         }
 
         return LlamaCPP(**llm_kwargs)
