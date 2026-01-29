@@ -23,6 +23,7 @@ You MUST NOT:
 - Generate or modify ratified rubrics.
 - Allow feedback or prose to affect scores.
 - Persist or reuse internal reasoning as justification.
+- Modify `~/.env` or any environment configuration files - user will always do this manually.
 
 ## Allowed Actions
 
