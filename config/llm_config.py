@@ -191,11 +191,12 @@ def configure_llm(provider: str = "ollama", model: str | None = None) -> Any:
                 "verbose": False,
             },
             "max_new_tokens": config["llamacpp_max_tokens"],
-            # System prompt recommended for gpt-oss-20b (from Perplexity research)
+            # System prompt to suppress thinking/meta-commentary
             "system_prompt": (
-                "You are a helpful, harmless, and honest AI assistant. "
-                "You should provide concise, direct answers and use your reasoning "
-                "capabilities to solve complex problems before responding."
+                "You are a helpful assistant. Provide direct answers in the requested format. "
+                "Do NOT explain your reasoning process. Do NOT narrate your thought process. "
+                "Do NOT say things like 'Let's analyze' or 'We need to' or 'I will'. "
+                "Just provide the final answer immediately in the exact format requested."
             ),
         }
 
