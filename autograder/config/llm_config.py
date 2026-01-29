@@ -37,6 +37,8 @@ JSON_GRAMMAR = None
 try:
     from llama_cpp import LlamaGrammar
 
+    # Simplified grammar: just {"answer": "text"} with comprehensive character support
+    # The model handles reasoning internally via proper chat template (harmony/Jinja)
     JSON_GRAMMAR_STR = 'ws ::= [ \\t\\n]*\nvalue ::= [-a-zA-Z0-9 \\t\\n.,!?;:()\\[\\]{}\'"/@#$%&*+=<>_~`\\\\]*\nroot ::= "{" ws "\\"answer\\"" ws ":" ws "\\"" value "\\"" ws "}"\n'
     JSON_GRAMMAR = LlamaGrammar.from_string(JSON_GRAMMAR_STR)
     print(f"✓ JSON_GRAMMAR compiled successfully at module load", flush=True)
@@ -180,30 +182,39 @@ def configure_llm(provider: str = "ollama", model: str | None = None) -> Any:
 
         llm_kwargs = {
             "model_path": model_path,
-            "temperature": config["llamacpp_temperature"],
+            "temperature": 1.0,  # gpt-oss-20b requires temp=1.0 for proper behavior
             "model_kwargs": {
                 "n_ctx": config["llamacpp_n_ctx"],
                 "n_gpu_layers": config["llamacpp_n_gpu_layers"],
+                # NOTE: chat_format parameter removed - causes hanging
+                # The model should use its embedded chat template automatically
+                "verbose": False,
             },
             "max_new_tokens": config["llamacpp_max_tokens"],
-            # NOTE: Removed custom messages_to_prompt - using default chat template
-            # This allows LlamaCPP to use the model's built-in chat template
-            # Add default system prompt to match Ollama behavior
-            "system_prompt": "You are a helpful assistant.",
+            # System prompt recommended for gpt-oss-20b (from Perplexity research)
+            "system_prompt": (
+                "You are a helpful, harmless, and honest AI assistant. "
+                "You should provide concise, direct answers and use your reasoning "
+                "capabilities to solve complex problems before responding."
+            ),
         }
 
         # Add stop sequences and JSON grammar to generate_kwargs
         # Use pre-compiled global JSON_GRAMMAR to avoid duplication errors
         # when configure_llm() is called multiple times during benchmarking
+        # Sampling parameters based on Perplexity research for gpt-oss-20b
         if JSON_GRAMMAR is None:
             print("⚠ Warning: JSON_GRAMMAR is None, grammar constraints disabled", flush=True)
 
         llm_kwargs["generate_kwargs"] = {
             "stop": stop_sequences,
-            "temperature": config["llamacpp_temperature"],
+            "temperature": 1.0,  # gpt-oss-20b requires temp=1.0
             "max_tokens": config["llamacpp_max_tokens"],
-            # Enable JSON grammar constraint (pre-compiled at module level)
-            "grammar": JSON_GRAMMAR,
+            "top_k": 128,  # CRITICAL: gpt-oss-20b requires top_k >= 128
+            "repeat_penalty": 1.1,  # Recommended for "agentic" feel
+            # Grammar temporarily disabled - causing hang in llama_decode()
+            # TODO: Debug grammar compatibility with these sampling parameters
+            # "grammar": JSON_GRAMMAR,
         }
 
         return LlamaCPP(**llm_kwargs)
