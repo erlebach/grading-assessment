@@ -31,6 +31,19 @@ try:
 except ImportError:
     LlamaCPP = None  # Will be handled in configure_llm() if needed
 
+# LlamaCPP GBNF Grammar - Define ONCE at module level to avoid duplication
+# This prevents grammar parsing errors when configure_llm() is called multiple times
+JSON_GRAMMAR = None
+try:
+    from llama_cpp import LlamaGrammar
+
+    JSON_GRAMMAR_STR = 'ws ::= [ \\t\\n]*\nvalue ::= [-a-zA-Z0-9 .,!?]*\nroot ::= "{" ws "\\"answer\\"" ws ":" ws "\\"" value "\\"" ws "}"\n'
+    JSON_GRAMMAR = LlamaGrammar.from_string(JSON_GRAMMAR_STR)
+    print(f"✓ JSON_GRAMMAR compiled successfully at module load", flush=True)
+except Exception as e:
+    print(f"✗ Failed to compile JSON_GRAMMAR: {e}", flush=True)
+    JSON_GRAMMAR = None
+
 
 def gpt_oss_messages_to_prompt(messages: list[ChatMessage]) -> str:
     """Convert messages to gpt-oss chat template format.
@@ -94,7 +107,7 @@ def load_env_config() -> dict[str, str]:
         "llamacpp_n_ctx": int(os.getenv("LLAMACPP_N_CTX", "2048")),
         "llamacpp_n_gpu_layers": int(os.getenv("LLAMACPP_N_GPU_LAYERS", "0")),
         "llamacpp_temperature": float(os.getenv("LLAMACPP_TEMPERATURE", "0.7")),
-        "llamacpp_max_tokens": int(os.getenv("LLAMACPP_MAX_TOKENS", "512")),
+        "llamacpp_max_tokens": int(os.getenv("LLAMACPP_MAX_TOKENS", "256")),  # Reduced from 512 to prevent whitespace padding
         "llamacpp_stop_sequences": os.getenv("LLAMACPP_STOP_SEQUENCES", "").split(",") if os.getenv("LLAMACPP_STOP_SEQUENCES") else None,
         "embedding_provider": os.getenv("EMBEDDING_PROVIDER", "sentence-transformer"),
         "embedding_model": os.getenv(
@@ -137,7 +150,14 @@ def configure_llm(provider: str = "ollama", model: str | None = None) -> Any:
             )
         model_name = model or config["lmql_model"]
         base_url = config["ollama_base_url"]
-        return Ollama(model=model_name, base_url=base_url, request_timeout=120.0)
+        # Enable JSON mode for constrained generation (equivalent to LlamaCPP's grammar)
+        # This applies GBNF grammar constraints to force valid JSON output
+        return Ollama(
+            model=model_name,
+            base_url=base_url,
+            request_timeout=120.0,
+            json_mode=True  # Enable JSON constrained generation
+        )
     elif provider == "llamacpp":
         if LlamaCPP is None:
             raise ImportError(
@@ -166,17 +186,24 @@ def configure_llm(provider: str = "ollama", model: str | None = None) -> Any:
                 "n_gpu_layers": config["llamacpp_n_gpu_layers"],
             },
             "max_new_tokens": config["llamacpp_max_tokens"],
-            # Use custom chat template for gpt-oss model
-            "messages_to_prompt": gpt_oss_messages_to_prompt,
+            # NOTE: Removed custom messages_to_prompt - using default chat template
+            # This allows LlamaCPP to use the model's built-in chat template
             # Add default system prompt to match Ollama behavior
             "system_prompt": "You are a helpful assistant.",
         }
 
-        # Add stop sequences to generate_kwargs
+        # Add stop sequences and JSON grammar to generate_kwargs
+        # Use pre-compiled global JSON_GRAMMAR to avoid duplication errors
+        # when configure_llm() is called multiple times during benchmarking
+        if JSON_GRAMMAR is None:
+            print("⚠ Warning: JSON_GRAMMAR is None, grammar constraints disabled", flush=True)
+
         llm_kwargs["generate_kwargs"] = {
             "stop": stop_sequences,
             "temperature": config["llamacpp_temperature"],
             "max_tokens": config["llamacpp_max_tokens"],
+            # Enable JSON grammar constraint (pre-compiled at module level)
+            "grammar": JSON_GRAMMAR,
         }
 
         return LlamaCPP(**llm_kwargs)

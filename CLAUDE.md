@@ -58,3 +58,4 @@ See `AGENT.md` for model-agnostic constraints.
 
 - Never overwrite TASK_LIST.md or TASKS.md. Always append new tasks or update existing ones using the Edit tool.
 - If I request the creation of TASK_LIST.md or TASKS.md, please ask for confirmation. 
+- As new tasks are created, update the TASK_LIST being worked on to reflect any additional work. 
