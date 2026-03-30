@@ -1,5 +1,32 @@
 # Claude Code Rules (Project-Local)
 
+## Test Pipeline (mandatory before every commit)
+
+Before committing any code, always run the relevant test suite and confirm
+all tests pass. This is non-negotiable.
+
+**Run the full new-pipeline test suite:**
+
+```bash
+.venv/bin/python -m pytest tests/test_models.py tests/test_check_extraction.py -v
+```
+
+**Run all project tests (broader safety check):**
+
+```bash
+.venv/bin/python -m pytest tests/ -v --ignore=tests/tmp_chroma_indexes
+```
+
+Rules:
+- Tests must be written **from the spec** (TASK_LIST.md, config YAML files),
+  not reverse-engineered from the implementation.
+- Every new module in `grading_pipeline/` or `grading_dynamic_rubrics/` must
+  have a corresponding `tests/test_<module>.py` file before the task is closed.
+- Do not commit if any test in `test_models.py` or `test_check_extraction.py`
+  (or later test files for new pipeline modules) is failing.
+
+---
+
 ## Git Commands
 
 The `.git` directory lives one level above the working directory, at
