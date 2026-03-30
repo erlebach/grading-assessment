@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-03-30
 **Branch:** `dynamic_rubrics`
-**Last commit:** T3.3 (scoring algorithm)
+**Last commit:** T3.4 (grade storage and appeal tracking)
 
 ---
 
@@ -60,8 +60,8 @@ and returns clean JSON. Smoke-tested 2026-03-30 — confirmed working.
   → file: `grading_dynamic_rubrics/check_evaluation.py` (updated); `HybridCheckEvaluation` dataclass, `evaluate_check_hybrid()`, `apply_human_override()`
 - [x] **T3.3** — Scoring algorithm
   → file: `grading_dynamic_rubrics/scoring.py` (created); `tests/test_scoring.py` (13 tests)
-- [ ] **T3.4** — Grade storage and appeal tracking
-  → file: `grading_dynamic_rubrics/grade_storage.py` (create)
+- [x] **T3.4** — Grade storage and appeal tracking
+  → file: `grading_dynamic_rubrics/grade_storage.py` (created); `tests/test_grade_storage.py` (18 tests)
 
 ---
 
@@ -77,4 +77,4 @@ and returns clean JSON. Smoke-tested 2026-03-30 — confirmed working.
 
 ## Next time, start by…
 
-1. Implement **T3.4** (grade storage and appeal tracking) — create `grading_dynamic_rubrics/grade_storage.py`.
+1. Proceed with **T4.1** (unit tests for all pipeline functions) — Phase 4 begins.
