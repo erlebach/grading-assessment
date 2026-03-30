@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-03-30
 **Branch:** `dynamic_rubrics`
-**Last commit:** T2.5 (rubric generator pipeline)
+**Last commit:** T3.1 (check evaluation via LLM)
 
 ---
 
@@ -54,8 +54,8 @@ and returns clean JSON. Smoke-tested 2026-03-30 — confirmed working.
 
 ### Phase 3 — Evaluation & Scoring (depends on Phase 2)
 
-- [ ] **T3.1** — Check evaluation via LLM
-  → file: `grading_dynamic_rubrics/check_evaluation.py` (create)
+- [x] **T3.1** — Check evaluation via LLM
+  → file: `grading_dynamic_rubrics/check_evaluation.py` (created)
 - [ ] **T3.2** — Hybrid evaluation with human override
   → file: `grading_dynamic_rubrics/check_evaluation.py` (update)
 - [ ] **T3.3** — Scoring algorithm
@@ -77,4 +77,4 @@ and returns clean JSON. Smoke-tested 2026-03-30 — confirmed working.
 
 ## Next time, start by…
 
-1. Implement **T3.1** (check evaluation via LLM) — `grading_dynamic_rubrics/check_evaluation.py`.
+1. Implement **T3.2** (hybrid evaluation with human override) — `grading_dynamic_rubrics/check_evaluation.py` (update).
