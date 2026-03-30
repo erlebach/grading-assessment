@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-03-30
 **Branch:** `dynamic_rubrics`
-**Last commit:** T3.1 (check evaluation via LLM)
+**Last commit:** T3.3 (scoring algorithm)
 
 ---
 
@@ -58,8 +58,8 @@ and returns clean JSON. Smoke-tested 2026-03-30 — confirmed working.
   → file: `grading_dynamic_rubrics/check_evaluation.py` (created)
 - [x] **T3.2** — Hybrid evaluation with human override
   → file: `grading_dynamic_rubrics/check_evaluation.py` (updated); `HybridCheckEvaluation` dataclass, `evaluate_check_hybrid()`, `apply_human_override()`
-- [ ] **T3.3** — Scoring algorithm
-  → file: `grading_dynamic_rubrics/scoring.py` (create)
+- [x] **T3.3** — Scoring algorithm
+  → file: `grading_dynamic_rubrics/scoring.py` (created); `tests/test_scoring.py` (13 tests)
 - [ ] **T3.4** — Grade storage and appeal tracking
   → file: `grading_dynamic_rubrics/grade_storage.py` (create)
 
@@ -77,4 +77,4 @@ and returns clean JSON. Smoke-tested 2026-03-30 — confirmed working.
 
 ## Next time, start by…
 
-1. Implement **T3.3** (scoring algorithm) — create `grading_dynamic_rubrics/scoring.py`.
+1. Implement **T3.4** (grade storage and appeal tracking) — create `grading_dynamic_rubrics/grade_storage.py`.
