@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-03-30
 **Branch:** `dynamic_rubrics`
-**Last commit:** `8b2d3d9` (T2.1)
+**Last commit:** T2.4 (deduplication)
 
 ---
 
@@ -32,7 +32,9 @@ and returns clean JSON. Smoke-tested 2026-03-30 — confirmed working.
 | T1.2 | `grading_pipeline/models.py`, `schemas.py` | `5fe539f` | Pydantic V2 models: Check, Rubric, CheckEvaluation, GradeResult, Appeal |
 | T1.3 | `data/` directory tree | `395d1ff` | Storage dirs created; naming conventions in `data/README.md` |
 | T2.1 | `grading_pipeline/rubric_generator_template.txt` | `8b2d3d9` | Updated for check-based output with `category` + `checks[]` per dimension |
-| T2.2 | `grading_pipeline/check_extraction.py`, `rubric_schema.py` | (next commit) | Extracts Check objects from LLM JSON; rubric_schema updated for new template |
+| T2.2 | `grading_pipeline/check_extraction.py`, `rubric_schema.py` | `45b1b35` | Extracts Check objects from LLM JSON; rubric_schema updated for new template |
+| T2.3 | `grading_pipeline/categorization.py`, `tests/test_categorization.py` | T2.3 | Validate/override check categories; load from grading_categories.yaml; 3 strategies (error/default/fuzzy) |
+| T2.4 | `grading_pipeline/deduplication.py`, `tests/test_deduplication.py` | T2.4 | Remove duplicate checks; injectable similarity_fn; threshold=0.85; DeduplicationResult with metadata |
 | T6.1 | `config/llm_config.py` | earlier | llama.cpp provider (inactive); Ollama path verified |
 | T11.1 | `llamacpp_ollama/TASK_LIST.md` | earlier | Already closed; Ollama decision documented |
 
@@ -44,12 +46,8 @@ and returns clean JSON. Smoke-tested 2026-03-30 — confirmed working.
 
 - [x] **T2.1** — Rubric generation prompt template updated
 - [x] **T2.2** — Check extraction implemented (`check_extraction.py`, `rubric_schema.py`)
-- [ ] **T2.3** — Category assignment
-  → file: `grading_pipeline/categorization.py` (create)
-  → Note: categories are now embedded in the rubric template output — T2.3 may reduce
-    to validation/override logic rather than a separate LLM call
-- [ ] **T2.4** — Deduplication
-  → file: `grading_pipeline/deduplication.py` (create)
+- [x] **T2.3** — Category validation (`categorization.py`); validates against YAML config, supports error/default/fuzzy strategies
+- [x] **T2.4** — Deduplication (`deduplication.py`); injectable similarity_fn, threshold param, DeduplicationResult with removed_pairs metadata
 - [ ] **T2.5** — Integrate full rubric generation pipeline
   → file: `grading_pipeline/rubric_generator.py` (update/create)
 
@@ -68,11 +66,7 @@ and returns clean JSON. Smoke-tested 2026-03-30 — confirmed working.
 
 ## Blockers & Open Questions
 
-1. **T2.3 scope** — Categories are now produced by the LLM prompt directly (T2.1 template).
-   T2.3 may only need to validate/override categories rather than call the LLM again.
-   Confirm approach before implementing.
-
-2. **Reranking indices** — Per commit `3df9dbf`, reranking was run for at least one question.
+1. **Reranking indices** — Per commit `3df9dbf`, reranking was run for at least one question.
    Confirm which questions have reranked indices before building T3.1 (evaluation pipeline).
 
 3. **grade-spec.md** — Per `CLAUDE.md`, any grading logic changes require updating
@@ -82,7 +76,4 @@ and returns clean JSON. Smoke-tested 2026-03-30 — confirmed working.
 
 ## Next time, start by…
 
-1. Implement **T2.3** (category assignment / validation) — scope is likely small since the
-   LLM template already embeds categories; may just need a validation + fallback path.
-2. Then **T2.4** (deduplication) — remove semantically redundant checks across dimensions.
-3. Then **T2.5** (integrate full pipeline in `rubric_generator.py`).
+1. Implement **T2.5** (integrate full pipeline in `rubric_generator.py`) — chain generate → extract → categorize → deduplicate.
