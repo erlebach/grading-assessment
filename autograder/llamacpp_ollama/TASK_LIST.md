@@ -3,7 +3,8 @@
 **Project**: Benchmark and compare Ollama vs Llama.cpp performance with OSS 20B model
 **Session**: autograder_2026-01-25
 **Created**: 2026-01-28
-**Last Updated**: 2026-01-28 14:56
+**Last Updated**: 2026-03-30
+**STATUS: CLOSED — Decision: Use Ollama. See Final Decision section below.**
 
 ---
 
@@ -20,9 +21,9 @@
 | **Phase 7: Documentation** | 2 | 2 | ✅ Complete |
 | **Phase 8: Constrained Generation** | 7 | 7 | ✅ Complete |
 | **Phase 9: Fair Comparison** | 3 | 3 | ✅ Complete |
-| **Phase 10: Batch Inference** | 6 | 1 | 🔄 In Progress |
-| **Phase 11: Quality & Optimization** | 3 | 0 | ⏳ Pending |
-| **TOTAL** | **43** | **32** | **🔄 74% Complete** |
+| **Phase 10: Batch Inference** | 6 | 1 | ❌ Cancelled |
+| **Phase 11: Quality & Optimization** | 3 | 0 | ❌ Cancelled |
+| **TOTAL** | **43** | **32** | **✅ CLOSED (investigation complete)** |
 
 ## Detailed Task Status
 
@@ -61,13 +62,13 @@
 | **T9.3** | **Update Documentation** | ✅ Complete | Medium |
 | **T10.1** | **Design Batch Benchmark Architecture** | ✅ Complete | High |
 | **T10.2** | **Implement Sequential Baseline** | ✅ Complete | High |
-| **T10.3** | **Implement Batch Inference (n=4,8)** | ⏳ Pending | High |
-| **T10.4** | **Add CPU Time Measurement** | ⏳ Pending | Medium |
-| **T10.5** | **Run Batch Benchmarks** | ⏳ Pending | High |
-| **T10.6** | **Analyze Batch Speedup Results** | ⏳ Pending | High |
-| **T11.1** | **Fix LlamaCPP Whitespace Padding** | ⏳ Pending | High |
-| **T11.2** | **Implement Incremental Results Writing** | ⏳ Pending | High |
-| **T11.3** | **Add Run Description to Reports** | ⏳ Pending | Medium |
+| **T10.3** | **Implement Batch Inference (n=4,8)** | ❌ Cancelled | High |
+| **T10.4** | **Add CPU Time Measurement** | ❌ Cancelled | Medium |
+| **T10.5** | **Run Batch Benchmarks** | ❌ Cancelled | High |
+| **T10.6** | **Analyze Batch Speedup Results** | ❌ Cancelled | High |
+| **T11.1** | **Fix LlamaCPP Whitespace Padding** | ❌ Cancelled | High |
+| **T11.2** | **Implement Incremental Results Writing** | ❌ Cancelled | High |
+| **T11.3** | **Add Run Description to Reports** | ❌ Cancelled | Medium |
 
 ## Additional Work Completed
 
@@ -122,7 +123,20 @@
 
 **Quality Issue Found**: LlamaCPP pads responses with ~500 whitespace tokens after JSON (needs fix in T11.1)
 
-**Recommendation**: Use **LlamaCPP** for grading pipeline (1.57x faster, 2.4x on long prompts, more consistent)
+**Benchmark Recommendation** (superseded): Use LlamaCPP (1.57x faster, 2.4x on long prompts)
+
+---
+
+## ✅ Final Decision (2026-03-30): Use Ollama
+
+Despite LlamaCPP being faster in benchmarks, **Ollama is chosen for the grading pipeline** for the following reasons:
+
+1. **Output quality**: Ollama produces clean JSON output. LlamaCPP generates meta-commentary / thinking chains and pads responses with ~500 whitespace tokens after JSON.
+2. **Reliability**: LlamaCPP required GBNF grammars to constrain output; grammar + sampling params caused `llama_decode()` hangs.
+3. **Channel filtering**: Ollama internally suppresses `<|channel|>analysis...<|end|>` blocks. LlamaCPP exposes them, requiring a custom `filter_gpt_oss_output()` workaround in `config/llm_config.py`.
+4. **Simplicity**: Ollama works out of the box with correct chat template handling.
+
+**Known constraint**: Only one Ollama instance can run at a time on macOS. This means **grading must be sequential** (no parallelism via multiple Ollama processes). Design the grading pipeline accordingly — async batching within a single Ollama connection is fine, but do not attempt multi-process parallelism.
 
 ---
 

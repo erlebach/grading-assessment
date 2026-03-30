@@ -761,7 +761,8 @@ Suggested timeline:
 
 ## PHASE 6: LLM Provider Migration (1-2 days)
 
-### T6.1: Add llama.cpp Provider Support
+### T6.1: Add llama.cpp Provider Support ✅ CLOSED
+**Status:** Implemented but superseded. Decision: Use Ollama. See `llamacpp_ollama/TASK_LIST.md`.
 **Title:** Implement llama.cpp as an LLM provider option
 
 **Description:**
@@ -798,7 +799,8 @@ Add llama.cpp (llama-cpp-python) as a supported provider in the LLM configuratio
 
 ---
 
-### T6.2: Create llama.cpp Integration Tests
+### T6.2: Create llama.cpp Integration Tests ❌ CANCELLED
+**Status:** Cancelled — investigation concluded, Ollama chosen instead.
 **Title:** Test llama.cpp provider integration
 
 **Description:**
