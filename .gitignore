@@ -1,0 +1,48 @@
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Cursor / AI tooling
+.agent/
+.cursorindexingignore
+.specstory/
+
+# macOS
+.DS_Store
+.AppleDouble
+._*
+
+# PDFs and large binaries
+*.pdf
+*.zip
+
+# Scratch / temp files
+autograder/a
+autograder/a1
+autograder/a2
+autograder/aaa
+autograder/o
+autograder/sim.out
+autograder/build.out
+autograder/check.out
+autograder/err
+autograder/err1
+autograder/*.err
+autograder/*.out
+
+# Workspace files
+*.code-workspace
+
+# Loose docs not part of the project
+IMPLEMENTATION_COMPLETE.md
+SNAPSHOT.md
+JOURNAL.md
+MCP Tool Usage Explained.md
+
+# Other repos co-located here
+juzek_grader/
+
+# Plan/spec files not needed in repo
+*.plan.md
