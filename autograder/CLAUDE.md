@@ -1,5 +1,27 @@
 # Claude Code Rules (Project-Local)
 
+## Git Commands
+
+The `.git` directory lives one level above the working directory, at
+`/Users/erlebach/src/2026/grading_assessment/`. Running `git` from inside
+`autograder/` will fail with path-spec or index-lock errors.
+
+**Always run git commands with an explicit `-C` flag:**
+
+```bash
+git -C /Users/erlebach/src/2026/grading_assessment <subcommand> [args]
+```
+
+Examples:
+- `git -C /Users/erlebach/src/2026/grading_assessment status --short`
+- `git -C /Users/erlebach/src/2026/grading_assessment add autograder/grading_pipeline/models.py`
+- `git -C /Users/erlebach/src/2026/grading_assessment commit -m "..."`
+
+File paths passed to `git add` must be relative to the repo root, i.e.
+prefixed with `autograder/` (e.g. `autograder/grading_pipeline/models.py`).
+
+---
+
 ## Session_id
 
 session_id: autograder_2026-01-25
