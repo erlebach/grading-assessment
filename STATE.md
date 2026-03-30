@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-03-30
 **Branch:** `dynamic_rubrics`
-**Last commit:** T2.4 (deduplication)
+**Last commit:** T2.5 (rubric generator pipeline)
 
 ---
 
@@ -35,6 +35,7 @@ and returns clean JSON. Smoke-tested 2026-03-30 — confirmed working.
 | T2.2 | `grading_pipeline/check_extraction.py`, `rubric_schema.py` | `45b1b35` | Extracts Check objects from LLM JSON; rubric_schema updated for new template |
 | T2.3 | `grading_pipeline/categorization.py`, `tests/test_categorization.py` | T2.3 | Validate/override check categories; load from grading_categories.yaml; 3 strategies (error/default/fuzzy) |
 | T2.4 | `grading_pipeline/deduplication.py`, `tests/test_deduplication.py` | T2.4 | Remove duplicate checks; injectable similarity_fn; threshold=0.85; DeduplicationResult with metadata |
+| T2.5 | `grading_pipeline/rubric_generator.py`, `tests/test_rubric_generator.py` | T2.5 | Orchestrates generate→extract→categorize→deduplicate; stores artifacts; GenerationResult dataclass |
 | T6.1 | `config/llm_config.py` | earlier | llama.cpp provider (inactive); Ollama path verified |
 | T11.1 | `llamacpp_ollama/TASK_LIST.md` | earlier | Already closed; Ollama decision documented |
 
@@ -48,8 +49,8 @@ and returns clean JSON. Smoke-tested 2026-03-30 — confirmed working.
 - [x] **T2.2** — Check extraction implemented (`check_extraction.py`, `rubric_schema.py`)
 - [x] **T2.3** — Category validation (`categorization.py`); validates against YAML config, supports error/default/fuzzy strategies
 - [x] **T2.4** — Deduplication (`deduplication.py`); injectable similarity_fn, threshold param, DeduplicationResult with removed_pairs metadata
-- [ ] **T2.5** — Integrate full rubric generation pipeline
-  → file: `grading_pipeline/rubric_generator.py` (update/create)
+- [x] **T2.5** — Integrate full rubric generation pipeline
+  → file: `grading_pipeline/rubric_generator.py` (created)
 
 ### Phase 3 — Evaluation & Scoring (depends on Phase 2)
 
@@ -76,4 +77,4 @@ and returns clean JSON. Smoke-tested 2026-03-30 — confirmed working.
 
 ## Next time, start by…
 
-1. Implement **T2.5** (integrate full pipeline in `rubric_generator.py`) — chain generate → extract → categorize → deduplicate.
+1. Implement **T3.1** (check evaluation via LLM) — `grading_dynamic_rubrics/check_evaluation.py`.
