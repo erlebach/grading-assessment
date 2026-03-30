@@ -13,8 +13,11 @@ import pytest
 
 from grading_dynamic_rubrics.check_evaluation import (
     _parse_llm_response,
+    apply_human_override,
+    evaluate_check_hybrid,
     evaluate_check_llm,
     evaluate_checks_llm,
+    HybridCheckEvaluation,
 )
 from grading_pipeline.models import (
     Check,
@@ -237,3 +240,117 @@ class TestEvaluateChecksLlm:
         results = evaluate_checks_llm([], QUESTION, ANSWER_PASS, llm=llm)
         assert results == []
         llm.complete.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Unit tests: T3.2 — evaluate_check_hybrid / apply_human_override
+# ---------------------------------------------------------------------------
+
+class TestEvaluateCheckHybrid:
+    def test_high_confidence_no_review(self):
+        check = _make_check()
+        llm = _mock_llm({"result": "pass", "evidence": "clear answer", "confidence": 0.95})
+        hybrid = evaluate_check_hybrid(check, QUESTION, ANSWER_PASS, llm=llm)
+
+        assert isinstance(hybrid, HybridCheckEvaluation)
+        assert hybrid.needs_review is False
+        assert hybrid.human_override is None
+        assert hybrid.final_evaluation.result == CheckEvaluationResult.PASS
+
+    def test_low_confidence_flags_for_review(self):
+        check = _make_check()
+        llm = _mock_llm({"result": "unclear", "evidence": "borderline", "confidence": 0.5})
+        hybrid = evaluate_check_hybrid(check, QUESTION, ANSWER_PARTIAL, llm=llm,
+                                       confidence_threshold=0.9)
+
+        assert hybrid.needs_review is True
+        assert hybrid.human_override is None
+
+    def test_confidence_exactly_at_threshold_no_review(self):
+        """confidence == threshold should NOT trigger review (strict less-than)."""
+        check = _make_check()
+        llm = _mock_llm({"result": "pass", "evidence": "ok", "confidence": 0.9})
+        hybrid = evaluate_check_hybrid(check, QUESTION, ANSWER_PASS, llm=llm,
+                                       confidence_threshold=0.9)
+        assert hybrid.needs_review is False
+
+    def test_configurable_threshold(self):
+        check = _make_check()
+        llm = _mock_llm({"result": "pass", "evidence": "ok", "confidence": 0.75})
+        # With threshold=0.8, 0.75 < 0.8 → needs review
+        hybrid_high = evaluate_check_hybrid(check, QUESTION, ANSWER_PASS, llm=llm,
+                                            confidence_threshold=0.8)
+        assert hybrid_high.needs_review is True
+
+        llm2 = _mock_llm({"result": "pass", "evidence": "ok", "confidence": 0.75})
+        # With threshold=0.7, 0.75 >= 0.7 → no review
+        hybrid_low = evaluate_check_hybrid(check, QUESTION, ANSWER_PASS, llm=llm2,
+                                           confidence_threshold=0.7)
+        assert hybrid_low.needs_review is False
+
+    def test_llm_evaluation_stored(self):
+        check = _make_check()
+        llm = _mock_llm({"result": "fail", "evidence": "wrong answer", "confidence": 0.98})
+        hybrid = evaluate_check_hybrid(check, QUESTION, ANSWER_FAIL, llm=llm)
+
+        assert hybrid.llm_evaluation.result == CheckEvaluationResult.FAIL
+        assert hybrid.llm_evaluation.grader == "llm"
+        assert hybrid.confidence_threshold == 0.9  # default
+
+    def test_final_evaluation_returns_llm_when_no_override(self):
+        check = _make_check()
+        llm = _mock_llm({"result": "pass", "evidence": "ok", "confidence": 0.9})
+        hybrid = evaluate_check_hybrid(check, QUESTION, ANSWER_PASS, llm=llm)
+        assert hybrid.final_evaluation is hybrid.llm_evaluation
+
+
+class TestApplyHumanOverride:
+    def _make_hybrid(self, confidence: float = 0.5) -> HybridCheckEvaluation:
+        check = _make_check()
+        llm = _mock_llm({"result": "unclear", "evidence": "borderline", "confidence": confidence})
+        return evaluate_check_hybrid(check, QUESTION, ANSWER_PARTIAL, llm=llm,
+                                     confidence_threshold=0.9)
+
+    def test_override_stores_human_evaluation(self):
+        hybrid = self._make_hybrid()
+        updated = apply_human_override(hybrid, CheckEvaluationResult.PASS, "Clearly passes on review")
+
+        assert updated.human_override is not None
+        assert updated.human_override.result == CheckEvaluationResult.PASS
+        assert updated.human_override.score == 1.0
+        assert updated.human_override.evidence == "Clearly passes on review"
+        assert updated.human_override.grader == "human"
+        assert updated.human_override.confidence == 1.0
+
+    def test_override_clears_needs_review(self):
+        hybrid = self._make_hybrid(confidence=0.4)
+        assert hybrid.needs_review is True
+        updated = apply_human_override(hybrid, CheckEvaluationResult.FAIL, "Definitely wrong")
+        assert updated.needs_review is False
+
+    def test_final_evaluation_returns_human_override(self):
+        hybrid = self._make_hybrid()
+        updated = apply_human_override(hybrid, CheckEvaluationResult.PASS, "Reviewer confirmed pass")
+        assert updated.final_evaluation is updated.human_override
+        assert updated.final_evaluation.result == CheckEvaluationResult.PASS
+
+    def test_llm_evaluation_preserved_after_override(self):
+        hybrid = self._make_hybrid(confidence=0.5)
+        original_llm = hybrid.llm_evaluation
+        updated = apply_human_override(hybrid, CheckEvaluationResult.PASS, "Overriding")
+        assert updated.llm_evaluation is original_llm
+
+    def test_custom_grader_label(self):
+        hybrid = self._make_hybrid()
+        updated = apply_human_override(hybrid, CheckEvaluationResult.FAIL, "Wrong", grader="instructor_jones")
+        assert updated.human_override.grader == "instructor_jones"
+
+    def test_unclear_override_scores_zero(self):
+        hybrid = self._make_hybrid()
+        updated = apply_human_override(hybrid, CheckEvaluationResult.UNCLEAR, "Still borderline")
+        assert updated.human_override.score == 0.0
+
+    def test_fail_override_scores_zero(self):
+        hybrid = self._make_hybrid()
+        updated = apply_human_override(hybrid, CheckEvaluationResult.FAIL, "Wrong")
+        assert updated.human_override.score == 0.0

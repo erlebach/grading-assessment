@@ -1,4 +1,4 @@
-"""T3.1 — Evaluate individual rubric checks against student answers using an LLM.
+"""T3.1 / T3.2 — Evaluate individual rubric checks against student answers.
 
 Public API
 ----------
@@ -11,6 +11,16 @@ evaluate_checks_llm(
     checks, question_text, student_answer,
     evidence=None, llm=None, max_retries=3,
 ) -> list[CheckEvaluation]
+
+evaluate_check_hybrid(
+    check, question_text, student_answer,
+    evidence=None, llm=None, max_retries=3,
+    confidence_threshold=0.9,
+) -> HybridCheckEvaluation
+
+apply_human_override(
+    hybrid, result, evidence, grader="human",
+) -> HybridCheckEvaluation
 """
 
 from __future__ import annotations
@@ -18,6 +28,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+from dataclasses import dataclass, field
 from typing import Any
 
 from grading_pipeline.models import Check, CheckEvaluation, CheckEvaluationResult
@@ -279,3 +290,124 @@ def evaluate_checks_llm(
         results.append(evaluation)
 
     return results
+
+
+# ---------------------------------------------------------------------------
+# T3.2 — Hybrid evaluation (LLM + optional human override)
+# ---------------------------------------------------------------------------
+
+_DEFAULT_CONFIDENCE_THRESHOLD = 0.9
+
+
+@dataclass
+class HybridCheckEvaluation:
+    """Wraps both an LLM evaluation and an optional human override.
+
+    Attributes:
+        llm_evaluation:       The result produced by the LLM.
+        needs_review:         True when LLM confidence < confidence_threshold.
+        confidence_threshold: The threshold used to set ``needs_review``.
+        human_override:       Human-supplied evaluation, if any.  None until
+                              :func:`apply_human_override` is called.
+    """
+
+    llm_evaluation: CheckEvaluation
+    needs_review: bool
+    confidence_threshold: float
+    human_override: CheckEvaluation | None = field(default=None)
+
+    @property
+    def final_evaluation(self) -> CheckEvaluation:
+        """Return human override if present, else the LLM evaluation."""
+        return self.human_override if self.human_override is not None else self.llm_evaluation
+
+
+def evaluate_check_hybrid(
+    check: Check,
+    question_text: str,
+    student_answer: str,
+    evidence: str | None = None,
+    llm: Any = None,
+    max_retries: int = 3,
+    confidence_threshold: float = _DEFAULT_CONFIDENCE_THRESHOLD,
+) -> HybridCheckEvaluation:
+    """Evaluate a check with LLM; flag for human review when confidence is low.
+
+    Args:
+        check:                The Check object to evaluate.
+        question_text:        The original question text.
+        student_answer:       The student's submitted answer.
+        evidence:             Optional reference material / model answer.
+        llm:                  LlamaIndex-compatible LLM instance.
+        max_retries:          Number of LLM call retries on failure.
+        confidence_threshold: Flag ``needs_review`` when LLM confidence is
+                              strictly below this value (default 0.9).
+
+    Returns:
+        HybridCheckEvaluation with llm_evaluation, needs_review flag, and
+        confidence_threshold.  human_override is None until
+        :func:`apply_human_override` is called.
+    """
+    llm_eval = evaluate_check_llm(
+        check=check,
+        question_text=question_text,
+        student_answer=student_answer,
+        evidence=evidence,
+        llm=llm,
+        max_retries=max_retries,
+    )
+
+    needs_review = llm_eval.confidence < confidence_threshold
+
+    if needs_review:
+        logger.info(
+            "Check '%s' flagged for manual review (confidence=%.2f < threshold=%.2f)",
+            check.id, llm_eval.confidence, confidence_threshold,
+        )
+
+    return HybridCheckEvaluation(
+        llm_evaluation=llm_eval,
+        needs_review=needs_review,
+        confidence_threshold=confidence_threshold,
+    )
+
+
+def apply_human_override(
+    hybrid: HybridCheckEvaluation,
+    result: CheckEvaluationResult,
+    evidence: str,
+    grader: str = "human",
+) -> HybridCheckEvaluation:
+    """Apply a human reviewer's decision to a HybridCheckEvaluation.
+
+    Creates a new CheckEvaluation with grader='human' (or custom value) and
+    confidence=1.0 (human decisions are treated as certain), then stores it in
+    ``human_override`` and clears ``needs_review``.
+
+    Args:
+        hybrid:   The HybridCheckEvaluation to update.
+        result:   The human-assessed CheckEvaluationResult.
+        evidence: The human reviewer's explanation.
+        grader:   Identifier for the reviewer (default 'human').
+
+    Returns:
+        A new HybridCheckEvaluation with human_override set and
+        needs_review=False.
+    """
+    score = _SCORE_MAP[result]
+
+    human_eval = CheckEvaluation(
+        check_id=hybrid.llm_evaluation.check_id,
+        result=result,
+        score=score,
+        evidence=evidence,
+        confidence=1.0,
+        grader=grader,
+    )
+
+    return HybridCheckEvaluation(
+        llm_evaluation=hybrid.llm_evaluation,
+        needs_review=False,
+        confidence_threshold=hybrid.confidence_threshold,
+        human_override=human_eval,
+    )
