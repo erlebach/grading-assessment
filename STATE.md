@@ -30,6 +30,8 @@ Several sessions (Jan 28–29) were spent attempting to use `llama-cpp-python` d
 
 **Decision: Use Ollama for the grading pipeline going forward.**
 
+**Known constraint:** Only one Ollama instance can run at a time on macOS. Grading must be sequential — no multi-process parallelism. Async batching within a single connection is acceptable.
+
 ---
 
 ## Open Tasks
