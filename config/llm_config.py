@@ -213,9 +213,9 @@ def configure_llm(provider: str = "ollama", model: str | None = None) -> Any:
                 f"LlamaCPP model file not found: {model_path}"
             )
 
-        # Stop token 199999 is <|endoftext|> for gpt-oss model
-        # This is the primary stop token; <|return|> and <|end|> are secondary
-        default_stop_sequences = [199999]  # Token ID for <|endoftext|>
+        # Stop sequences for gpt-oss model (must be strings, not token IDs)
+        # The model uses these special tokens to signal end of response
+        default_stop_sequences = ["<|endoftext|>", "<|end|>"]
         stop_sequences = config["llamacpp_stop_sequences"] or default_stop_sequences
 
         llm_kwargs = {
@@ -233,15 +233,18 @@ def configure_llm(provider: str = "ollama", model: str | None = None) -> Any:
             "max_new_tokens": config["llamacpp_max_tokens"],
         }
 
-        # Sampling parameters exactly as specified for GPT-OSS 20B
+        # Sampling parameters for GPT-OSS 20B
+        # Note: repeat_last_n is set in model_kwargs (llama.cpp config), not generate_kwargs
         llm_kwargs["generate_kwargs"] = {
             "stop": stop_sequences,
             "temperature": config["llamacpp_temperature"],  # GPT-OSS spec: 0.8
             "top_k": config["llamacpp_top_k"],  # GPT-OSS spec: 40
             "top_p": config["llamacpp_top_p"],  # GPT-OSS spec: 0.9
-            "repeat_last_n": config["llamacpp_repeat_last_n"],  # GPT-OSS spec: 64
             "repeat_penalty": config["llamacpp_repeat_penalty"],  # GPT-OSS spec: 1.1
         }
+
+        # Add repeat_last_n to model_kwargs (llama.cpp config level)
+        llm_kwargs["model_kwargs"]["repeat_last_n"] = config["llamacpp_repeat_last_n"]
 
         return LlamaCPP(**llm_kwargs)
     else:
