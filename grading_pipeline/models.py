@@ -12,7 +12,7 @@ Defines all core data structures with validation:
 from datetime import datetime
 from typing import Optional, Any, Literal
 from enum import Enum
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class CheckCategory(str, Enum):
@@ -65,9 +65,9 @@ class Check(BaseModel):
         description="Source text from original rubric dimension (for audit trail)"
     )
 
-    class Config:
-        title = "Check"
-        json_schema_extra = {
+    model_config = ConfigDict(
+        title="Check",
+        json_schema_extra={
             "example": {
                 "id": "q01_check_1",
                 "text": "Student defines 'object' correctly",
@@ -77,6 +77,7 @@ class Check(BaseModel):
                 "evidence": "Student must demonstrate understanding of 'object' as a collection of attributes"
             }
         }
+    )
 
 
 class Rubric(BaseModel):
@@ -125,9 +126,7 @@ class Rubric(BaseModel):
         description="Rubric version number"
     )
 
-    class Config:
-        title = "Rubric"
-        json_encoders = {datetime: lambda v: v.isoformat()}
+    model_config = ConfigDict(title="Rubric")
 
 
 class CheckEvaluationResult(str, Enum):
@@ -176,20 +175,16 @@ class CheckEvaluation(BaseModel):
         description="When this check was evaluated"
     )
 
-    class Config:
-        title = "Check Evaluation"
-        json_encoders = {datetime: lambda v: v.isoformat()}
+    model_config = ConfigDict(title="Check Evaluation")
 
-    @validator("score")
-    def score_matches_result(cls, v, values):
+    @model_validator(mode="after")
+    def score_matches_result(self) -> "CheckEvaluation":
         """Ensure score matches result."""
-        if "result" in values:
-            result = values["result"]
-            if result == CheckEvaluationResult.PASS and v != 1.0:
-                raise ValueError("Pass result must have score=1.0")
-            elif result == CheckEvaluationResult.FAIL and v != 0.0:
-                raise ValueError("Fail result must have score=0.0")
-        return v
+        if self.result == CheckEvaluationResult.PASS and self.score != 1.0:
+            raise ValueError("Pass result must have score=1.0")
+        elif self.result == CheckEvaluationResult.FAIL and self.score != 0.0:
+            raise ValueError("Fail result must have score=0.0")
+        return self
 
 
 class GradeCalculation(BaseModel):
@@ -231,8 +226,7 @@ class GradeCalculation(BaseModel):
         description="Final score on 0-10 scale"
     )
 
-    class Config:
-        title = "Grade Calculation"
+    model_config = ConfigDict(title="Grade Calculation")
 
 
 class GradeResult(BaseModel):
@@ -295,9 +289,7 @@ class GradeResult(BaseModel):
         description="Grade version (for appeal tracking)"
     )
 
-    class Config:
-        title = "Grade Result"
-        json_encoders = {datetime: lambda v: v.isoformat()}
+    model_config = ConfigDict(title="Grade Result")
 
     def is_appeal(self) -> bool:
         """Check if this is an appeal grade (version > 1)."""
@@ -360,16 +352,14 @@ class Appeal(BaseModel):
         description="When the appeal decision was made"
     )
 
-    class Config:
-        title = "Appeal"
-        json_encoders = {datetime: lambda v: v.isoformat()}
+    model_config = ConfigDict(title="Appeal")
 
-    @validator("new_score")
-    def new_score_higher(cls, v, values):
+    @model_validator(mode="after")
+    def new_score_higher(self) -> "Appeal":
         """Ensure appeals only increase scores."""
-        if "original_score" in values and v < values["original_score"]:
+        if self.new_score < self.original_score:
             raise ValueError("Appeal cannot decrease score (only upward adjustments allowed)")
-        return v
+        return self
 
     def is_approved(self) -> bool:
         """Check if appeal was approved."""

@@ -22,32 +22,32 @@ from .models import (
 
 def get_check_schema() -> dict[str, Any]:
     """Get JSON schema for Check model."""
-    return Check.schema()
+    return Check.model_json_schema()
 
 
 def get_rubric_schema() -> dict[str, Any]:
     """Get JSON schema for Rubric model."""
-    return Rubric.schema()
+    return Rubric.model_json_schema()
 
 
 def get_check_evaluation_schema() -> dict[str, Any]:
     """Get JSON schema for CheckEvaluation model."""
-    return CheckEvaluation.schema()
+    return CheckEvaluation.model_json_schema()
 
 
 def get_grade_calculation_schema() -> dict[str, Any]:
     """Get JSON schema for GradeCalculation model."""
-    return GradeCalculation.schema()
+    return GradeCalculation.model_json_schema()
 
 
 def get_grade_result_schema() -> dict[str, Any]:
     """Get JSON schema for GradeResult model."""
-    return GradeResult.schema()
+    return GradeResult.model_json_schema()
 
 
 def get_appeal_schema() -> dict[str, Any]:
     """Get JSON schema for Appeal model."""
-    return Appeal.schema()
+    return Appeal.model_json_schema()
 
 
 def get_all_schemas() -> dict[str, dict[str, Any]]:
