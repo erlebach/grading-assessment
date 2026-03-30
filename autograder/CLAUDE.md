@@ -28,7 +28,7 @@ all tests pass. This is non-negotiable.
 **Run the full new-pipeline test suite:**
 
 ```bash
-.venv/bin/python -m pytest tests/test_models.py tests/test_check_extraction.py tests/test_categorization.py tests/test_deduplication.py -v
+.venv/bin/python -m pytest tests/test_models.py tests/test_check_extraction.py tests/test_categorization.py tests/test_deduplication.py tests/test_rubric_generator.py -v
 ```
 
 **Run all project tests (broader safety check):**
