@@ -1,5 +1,19 @@
 # Claude Code Rules (Project-Local)
 
+## Session Restart Protocol
+
+When restarting a session, **always read these files first** (in order):
+
+1. `STATE.md` — current branch, last completed task, open tasks, next steps
+2. `TASK_LIST.md` — full task specs (read the relevant task section before starting)
+
+Files updated when a task is completed:
+- `STATE.md` — mark task complete, update "Next time, start by…"
+- `TASK_LIST.md` — mark acceptance criteria checked (append; never overwrite)
+- `CLAUDE.md` — update the test pipeline command to include the new test file
+
+---
+
 ## Test Pipeline (mandatory before every commit)
 
 Before committing any code, always run the relevant test suite and confirm
@@ -8,7 +22,7 @@ all tests pass. This is non-negotiable.
 **Run the full new-pipeline test suite:**
 
 ```bash
-.venv/bin/python -m pytest tests/test_models.py tests/test_check_extraction.py -v
+.venv/bin/python -m pytest tests/test_models.py tests/test_check_extraction.py tests/test_categorization.py tests/test_deduplication.py -v
 ```
 
 **Run all project tests (broader safety check):**
