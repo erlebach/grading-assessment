@@ -63,6 +63,11 @@ and returns clean JSON. Smoke-tested 2026-03-30 — confirmed working.
 - [x] **T3.4** — Grade storage and appeal tracking
   → file: `grading_dynamic_rubrics/grade_storage.py` (created); `tests/test_grade_storage.py` (18 tests)
 
+### Phase 4 — Testing & Validation
+
+- [x] **T4.1** — Unit tests for individual functions
+  → all required test files exist from prior tasks; 183 tests pass
+
 ---
 
 ## Blockers & Open Questions
@@ -77,4 +82,4 @@ and returns clean JSON. Smoke-tested 2026-03-30 — confirmed working.
 
 ## Next time, start by…
 
-1. Proceed with **T4.1** (unit tests for all pipeline functions) — Phase 4 begins.
+1. Proceed with **T4.2** (integration tests for full pipeline) — T4.1 complete.
