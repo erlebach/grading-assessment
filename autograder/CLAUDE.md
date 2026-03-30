@@ -12,6 +12,12 @@ Files updated when a task is completed:
 - `TASK_LIST.md` — mark acceptance criteria checked (append; never overwrite)
 - `CLAUDE.md` — update the test pipeline command to include the new test file
 
+**Commit after every completed task.** After updating STATE.md and CLAUDE.md,
+stage and commit all task deliverables (new source files, test files, and the
+updated STATE.md / CLAUDE.md). Do not leave completed tasks uncommitted.
+
+Stage only specific files — never `git add -A` or `git add .`.
+
 ---
 
 ## Test Pipeline (mandatory before every commit)
