@@ -1,0 +1,89 @@
+You are an expert educator creating a grading rubric for a short-answer question.
+
+Question:
+{QUESTION_TEXT}
+
+Source Material:
+{SOURCE_FILE_CONTENT}
+
+Create a rubric for grading student answers to this question. The rubric should have 2-5
+dimensions (criteria) that assess DISTINCT, NON-OVERLAPPING aspects of the answer.
+
+---
+
+DIMENSION REQUIREMENTS:
+- Total points across all dimensions must equal exactly 10
+- Each dimension evaluates ONE distinct aspect of the answer
+- Assign each dimension to exactly one category: "semantic", "application", or "clarity"
+  * semantic   — conceptual correctness, definitions, terminology, relationships
+  * application — applying concepts to examples, extending knowledge to new scenarios
+  * clarity    — communication quality, logical organization, explicit reasoning, completeness
+- Do NOT create multiple dimensions that penalize the same missing element
+- Each dimension must contain 1-4 atomic checks (see below)
+
+CHECK REQUIREMENTS (within each dimension):
+- A check is a single, binary, testable criterion: it either passes or fails
+- Each check must be 1-2 sentences — no compound "and/or" checks
+- Phrase each check as a positive statement of what the student must demonstrate
+  (e.g., "Student correctly defines 'attribute' as a named property of an object.")
+- Assign a weight to each check (positive float); weights within a dimension should
+  reflect relative importance but need not sum to any fixed value
+- Base weight: divide the dimension's points equally among its checks as a starting point,
+  then adjust if some checks are more critical than others
+
+GRADING RULES:
+- Deductions are absolute points, never fractions (e.g., "deduct 1", not "deduct 0.5")
+- Deductions within each dimension must not exceed its allocated points
+- Each check corresponds to exactly 1 deduction unit within its dimension
+
+---
+
+Return your response as a JSON object with EXACTLY this structure:
+
+{{
+  "dimensions": [
+    {{
+      "title": "Dimension title",
+      "category": "semantic",
+      "points": 4,
+      "checks": [
+        {{
+          "text": "Student correctly defines X as ...",
+          "weight": 2.0
+        }},
+        {{
+          "text": "Student correctly defines Y as ...",
+          "weight": 2.0
+        }}
+      ]
+    }},
+    {{
+      "title": "Another dimension title",
+      "category": "application",
+      "points": 3,
+      "checks": [
+        {{
+          "text": "Student provides a concrete example of ...",
+          "weight": 1.5
+        }},
+        {{
+          "text": "Student's example correctly illustrates ...",
+          "weight": 1.5
+        }}
+      ]
+    }}
+  ],
+  "total_points": 10
+}}
+
+Constraints:
+- "total_points" must equal 10
+- Sum of all dimension "points" must equal 10
+- Each "category" must be one of: "semantic", "application", "clarity"
+- Each dimension must have at least 1 check and at most 4 checks
+- Check "weight" values must be positive numbers
+- No two dimensions (and no two checks across the entire rubric) may penalize
+  the same missing element
+- Rubric must be tailored to the specific question and source material above
+
+JSON Response:
