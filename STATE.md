@@ -56,8 +56,8 @@ and returns clean JSON. Smoke-tested 2026-03-30 — confirmed working.
 
 - [x] **T3.1** — Check evaluation via LLM
   → file: `grading_dynamic_rubrics/check_evaluation.py` (created)
-- [ ] **T3.2** — Hybrid evaluation with human override
-  → file: `grading_dynamic_rubrics/check_evaluation.py` (update)
+- [x] **T3.2** — Hybrid evaluation with human override
+  → file: `grading_dynamic_rubrics/check_evaluation.py` (updated); `HybridCheckEvaluation` dataclass, `evaluate_check_hybrid()`, `apply_human_override()`
 - [ ] **T3.3** — Scoring algorithm
   → file: `grading_dynamic_rubrics/scoring.py` (create)
 - [ ] **T3.4** — Grade storage and appeal tracking
@@ -77,4 +77,4 @@ and returns clean JSON. Smoke-tested 2026-03-30 — confirmed working.
 
 ## Next time, start by…
 
-1. Implement **T3.2** (hybrid evaluation with human override) — `grading_dynamic_rubrics/check_evaluation.py` (update).
+1. Implement **T3.3** (scoring algorithm) — create `grading_dynamic_rubrics/scoring.py`.
