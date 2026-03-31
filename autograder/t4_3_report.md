@@ -1,16 +1,71 @@
-# T4.3 Sample Grading Report
+# T4.3 Sample Grading Report — Scoring Method Comparison
 
-**Date:** 2026-03-30
-**Branch:** dynamic_rubrics
-**Scoring method:** keyword + semantic (hybrid, pre-LLM stage)
-**Note:** All scores are float weighted totals (combined_score × max_points, summed across criteria).
-Integer `total_score` (via `int()` truncation) is 0 for nearly all rows — see Root Cause section.
+Questions: q01, q02, q03, q04, q05
+Runs: 2 (for reproducibility check)
 
-Questions graded: q01, q02, q03, q04, q05
+Three scoring methods compared:
+- **int**: `int(combined_score × max_pts)` — current pipeline behaviour
+- **round**: `round(combined_score × max_pts)` — one-line proposed fix
+- **float**: `combined_score × max_pts` summed as float — no truncation
 
 ---
+## Method: `int`
 
-## Score Table
+### Run 1
+
+| Question | Good | Less-Good | Wrong | Good≥LG | LG≥Wrong | Pass |
+|----------|------|-----------|-------|---------|----------|------|
+| q01 | 0 | 0 | 0 | ✓ | ✓ | ✓ |
+| q02 | 0 | 0 | 0 | ✓ | ✓ | ✓ |
+| q03 | 4 | 0 | 0 | ✓ | ✓ | ✓ |
+| q04 | 1 | 1 | 0 | ✓ | ✓ | ✓ |
+| q05 | 0 | 0 | 0 | ✓ | ✓ | ✓ |
+
+**Overall (`int`, Run 1):** PASS ✓
+
+### Run 2
+
+| Question | Good | Less-Good | Wrong | Good≥LG | LG≥Wrong | Pass |
+|----------|------|-----------|-------|---------|----------|------|
+| q01 | 0 | 0 | 0 | ✓ | ✓ | ✓ |
+| q02 | 0 | 0 | 0 | ✓ | ✓ | ✓ |
+| q03 | 4 | 0 | 0 | ✓ | ✓ | ✓ |
+| q04 | 1 | 1 | 0 | ✓ | ✓ | ✓ |
+| q05 | 0 | 0 | 0 | ✓ | ✓ | ✓ |
+
+**Overall (`int`, Run 2):** PASS ✓
+
+---
+## Method: `round`
+
+### Run 1
+
+| Question | Good | Less-Good | Wrong | Good≥LG | LG≥Wrong | Pass |
+|----------|------|-----------|-------|---------|----------|------|
+| q01 | 1 | 1 | 1 | ✓ | ✓ | ✓ |
+| q02 | 4 | 2 | 2 | ✓ | ✓ | ✓ |
+| q03 | 6 | 2 | 2 | ✓ | ✓ | ✓ |
+| q04 | 3 | 3 | 2 | ✓ | ✓ | ✓ |
+| q05 | 1 | 0 | 1 | ✓ | ✗ | ✗ |
+
+**Overall (`round`, Run 1):** FAIL ✗
+
+### Run 2
+
+| Question | Good | Less-Good | Wrong | Good≥LG | LG≥Wrong | Pass |
+|----------|------|-----------|-------|---------|----------|------|
+| q01 | 1 | 1 | 1 | ✓ | ✓ | ✓ |
+| q02 | 4 | 2 | 2 | ✓ | ✓ | ✓ |
+| q03 | 6 | 2 | 2 | ✓ | ✓ | ✓ |
+| q04 | 3 | 3 | 2 | ✓ | ✓ | ✓ |
+| q05 | 1 | 0 | 1 | ✓ | ✗ | ✗ |
+
+**Overall (`round`, Run 2):** FAIL ✗
+
+---
+## Method: `float`
+
+### Run 1
 
 | Question | Good | Less-Good | Wrong | Good≥LG | LG≥Wrong | Pass |
 |----------|------|-----------|-------|---------|----------|------|
@@ -20,156 +75,207 @@ Questions graded: q01, q02, q03, q04, q05
 | q04 | 2.93 | 2.63 | 2.14 | ✓ | ✓ | ✓ |
 | q05 | 1.76 | 1.15 | 1.39 | ✓ | ✗ | ✗ |
 
-**Overall ordering validation:** FAIL
-(good > wrong always holds; good > less_good > wrong fails for q02, q03, q05)
+**Overall (`float`, Run 1):** FAIL ✗
+
+### Run 2
+
+| Question | Good | Less-Good | Wrong | Good≥LG | LG≥Wrong | Pass |
+|----------|------|-----------|-------|---------|----------|------|
+| q01 | 2.14 | 1.86 | 1.52 | ✓ | ✓ | ✓ |
+| q02 | 2.96 | 1.71 | 2.01 | ✓ | ✗ | ✗ |
+| q03 | 5.66 | 2.32 | 2.34 | ✓ | ✗ | ✗ |
+| q04 | 2.93 | 2.63 | 2.14 | ✓ | ✓ | ✓ |
+| q05 | 1.76 | 1.15 | 1.39 | ✓ | ✗ | ✗ |
+
+**Overall (`float`, Run 2):** FAIL ✗
 
 ---
+## Reproducibility Check (Run 1 vs Run 2)
 
-## Root Cause Analysis
+A `*` marks any cell where the two runs differ.
 
-### 1. `int()` truncation collapses all scores to 0
+### Method: `int`
 
-The pipeline uses `int(combined_score × max_points)` to compute integer criterion scores.
-Combined scores are in the range 0.10–0.55, and when multiplied by max_points (2–3) give
-values of 0.2–1.5, which `int()` truncates to 0 in almost every case.
-Only q03 (good) and q04 (good/less_good) escaped because q03 has a higher-quality rubric
-with more specific keywords and better evidence coverage.
+| Question | Answer | Run1 | Run2 | Same? |
+|----------|--------|------|------|-------|
+| q01 | good | 0 | 0 | ✓ |
+| q01 | less_good | 0 | 0 | ✓ |
+| q01 | wrong | 0 | 0 | ✓ |
+| q02 | good | 0 | 0 | ✓ |
+| q02 | less_good | 0 | 0 | ✓ |
+| q02 | wrong | 0 | 0 | ✓ |
+| q03 | good | 4 | 4 | ✓ |
+| q03 | less_good | 0 | 0 | ✓ |
+| q03 | wrong | 0 | 0 | ✓ |
+| q04 | good | 1 | 1 | ✓ |
+| q04 | less_good | 1 | 1 | ✓ |
+| q04 | wrong | 0 | 0 | ✓ |
+| q05 | good | 0 | 0 | ✓ |
+| q05 | less_good | 0 | 0 | ✓ |
+| q05 | wrong | 0 | 0 | ✓ |
 
-**Consequence:** Integer scores are useless for differentiation. All comparisons in this
-report use float weighted totals.
+### Method: `round`
 
-**Recommendation:** Replace `int()` with `round()` in `apply_rubric_scoring_dynamic()`.
-This alone would fix many ordering violations.
+| Question | Answer | Run1 | Run2 | Same? |
+|----------|--------|------|------|-------|
+| q01 | good | 1 | 1 | ✓ |
+| q01 | less_good | 1 | 1 | ✓ |
+| q01 | wrong | 1 | 1 | ✓ |
+| q02 | good | 4 | 4 | ✓ |
+| q02 | less_good | 2 | 2 | ✓ |
+| q02 | wrong | 2 | 2 | ✓ |
+| q03 | good | 6 | 6 | ✓ |
+| q03 | less_good | 2 | 2 | ✓ |
+| q03 | wrong | 2 | 2 | ✓ |
+| q04 | good | 3 | 3 | ✓ |
+| q04 | less_good | 3 | 3 | ✓ |
+| q04 | wrong | 2 | 2 | ✓ |
+| q05 | good | 1 | 1 | ✓ |
+| q05 | less_good | 0 | 0 | ✓ |
+| q05 | wrong | 1 | 1 | ✓ |
 
-### 2. `extract_keywords` extracts stopwords from criterion descriptions
+### Method: `float`
 
-`extract_keywords(description)` uses a simple tokenizer that includes stopwords ("full",
-"credit", "awarded", "when", "student", "provides", etc.) and punctuation-attached tokens
-("terms:", "object:", "record/instance/case/entity/sample/point"). The student answer
-cannot match these non-content tokens, artificially deflating keyword scores.
-
-**Consequence:** Keyword scores are 10–30% even for correct "good" answers.
-
-**Recommendation:** Filter stopwords in `extract_keywords` and split on punctuation/slash
-before matching.
-
-### 3. Semantic score uses evidence count, not similarity quality
-
-The semantic score is `min(1.0, len(evidence_list) / semantic_top_k)`. This means any
-answer that retrieves N evidence chunks gets the same semantic score regardless of whether
-those chunks actually support the answer. Since all answer types retrieve similar numbers
-of chunks (all on the same topic), semantic scores barely differentiate.
-
-**Consequence:** Semantic scores are uniformly 0.20 (1 of 5 chunks) for most criteria.
-This does not separate good from wrong answers.
-
-**Recommendation:** Use reranker scores or similarity scores as weights, not just chunk
-count. Or use the two-step LLM pipeline (`grade_with_evidence.py`) for final scoring.
-
-### 4. Ordering violations for q02, q03, q05
-
-- **q02** (Δ=0.29): wrong (2.01) > less_good (1.71). The wrong answer states "zip codes
-  are integers, differences are meaningful" — accidentally matching rubric keywords
-  "meaningful", "differences", "numeric". The less_good answer is shorter with fewer hits.
-- **q03** (Δ=0.02): Effectively tied. Both less_good and wrong mention ordinal/interval,
-  triggering similar keyword hits. Difference is within noise.
-- **q05** (Δ=0.24): The wrong answer contains "ordering", "ordinal", "computations" that
-  match rubric keywords better than the vague less_good answer.
-
----
-
-## Per-Question Criterion Breakdown
-
-### q01 — PASS (good=2.14 > less_good=1.86 > wrong=1.52)
-
-| Criterion | Good kw/sem | LG kw/sem | Wrong kw/sem |
-|-----------|------------|-----------|--------------|
-| conceptual_definitions (3 pts) | 0.12/0.20 | 0.12/0.20 | 0.03/0.20 |
-| distinction_relationship (2 pts) | 0.21/0.20 | 0.26/0.20 | 0.30/0.20 |
-| alternative_names (2 pts) | 0.29/0.20 | 0.16/0.20 | 0.05/0.20 |
-| clarity_structure_examples (3 pts) | 0.30/0.20 | 0.17/0.20 | 0.09/0.20 |
-
-Good answer differentiated mainly by `alternative_names` keyword coverage (0.29 vs 0.05 wrong).
-
-### q02 — FAIL (good=2.96 > wrong=2.01 > less_good=1.71)
-
-| Criterion | Good kw/sem | LG kw/sem | Wrong kw/sem |
-|-----------|------------|-----------|--------------|
-| attribute_properties_principle (3 pts) | 0.03/0.60 | 0.00/0.40 | 0.03/0.60 |
-| zip_code_as_nominal (3 pts) | 0.38/0.20 | 0.22/0.20 | 0.19/0.20 |
-| inappropriate_analysis (2 pts) | 0.46/0.20 | 0.09/0.20 | 0.09/0.20 |
-| correct_analysis_alternatives (2 pts) | 0.30/0.20 | 0.00/0.20 | 0.00/0.20 |
-
-Wrong ties good on `attribute_properties_principle` semantic score (both 0.60), dragging less_good below wrong.
-
-### q03 — FAIL (good=5.66 >> less_good=2.32 ≈ wrong=2.34)
-
-| Criterion | Good kw/sem | LG kw/sem | Wrong kw/sem |
-|-----------|------------|-----------|--------------|
-| nominal_operations (2 pts) | 0.42/0.60 | 0.27/0.20 | 0.19/0.20 |
-| ordinal_operations (3 pts) | 0.48/0.60 | 0.35/0.20 | 0.35/0.20 |
-| interval_operations (3 pts) | 0.44/1.00 | 0.28/0.20 | 0.32/0.20 |
-| ratio_operations (2 pts) | 0.26/0.60 | 0.11/0.20 | 0.15/0.20 |
-
-Good answer clearly dominates via higher semantic evidence coverage. The less_good vs wrong
-violation is marginal (0.02) — within noise.
-
-### q04 — PASS (good=2.93 > less_good=2.63 > wrong=2.14)
-
-| Criterion | Good kw/sem | LG kw/sem | Wrong kw/sem |
-|-----------|------------|-----------|--------------|
-| interval_scale_explanation (3 pts) | 0.51/0.20 | 0.31/0.40 | 0.29/0.20 |
-| role_of_zero_point (3 pts) | 0.32/0.20 | 0.22/0.20 | 0.17/0.20 |
-| ratio_scale_kelvin (2 pts) | 0.46/0.20 | 0.31/0.20 | 0.23/0.20 |
-| consequence_for_ratios (2 pts) | 0.22/0.20 | 0.22/0.20 | 0.22/0.20 |
-
-Ordering holds. Good answer wins on `interval_scale_explanation` keyword coverage (0.51 vs 0.29).
-
-### q05 — FAIL (good=1.76 > wrong=1.39 > less_good=1.15)
-
-| Criterion | Good kw/sem | LG kw/sem | Wrong kw/sem |
-|-----------|------------|-----------|--------------|
-| definition_of_orderingonly_scale (3 pts) | 0.29/0.20 | 0.05/0.20 | 0.17/0.20 |
-| distinction_ordering_additive (3 pts) | 0.09/0.20 | 0.02/0.20 | 0.04/0.20 |
-| allowed_vs_disallowed (2 pts) | 0.11/0.20 | 0.03/0.20 | 0.06/0.20 |
-| practical_consequence_example (2 pts) | 0.08/0.20 | 0.03/0.20 | 0.03/0.20 |
-
-All scores extremely low. The q05 rubric uses Unicode hyphens and compound terms
-("ordering‑only", "additive") that don't tokenize cleanly. The wrong answer happens to
-include "ordering" and "ordinal" more than the vague less_good answer.
+| Question | Answer | Run1 | Run2 | Same? |
+|----------|--------|------|------|-------|
+| q01 | good | 2.14 | 2.14 | ✓ |
+| q01 | less_good | 1.86 | 1.86 | ✓ |
+| q01 | wrong | 1.52 | 1.52 | ✓ |
+| q02 | good | 2.96 | 2.96 | ✓ |
+| q02 | less_good | 1.71 | 1.71 | ✓ |
+| q02 | wrong | 2.01 | 2.01 | ✓ |
+| q03 | good | 5.66 | 5.66 | ✓ |
+| q03 | less_good | 2.32 | 2.32 | ✓ |
+| q03 | wrong | 2.34 | 2.34 | ✓ |
+| q04 | good | 2.93 | 2.93 | ✓ |
+| q04 | less_good | 2.63 | 2.63 | ✓ |
+| q04 | wrong | 2.14 | 2.14 | ✓ |
+| q05 | good | 1.76 | 1.76 | ✓ |
+| q05 | less_good | 1.15 | 1.15 | ✓ |
+| q05 | wrong | 1.39 | 1.39 | ✓ |
 
 ---
+## Per-Question Criterion Breakdown (Run 1)
 
-## Recommendations (Prioritised)
+Format per criterion: `int | round | float(kw/sem)`
 
-### P1 — Fix `int()` truncation (pipeline bug — one line)
-In `grading_dynamic_rubrics/pipeline.py:apply_rubric_scoring_dynamic()`, change:
-```python
-final_score = int(combined_score * max_points)
-```
-to:
-```python
-final_score = round(combined_score * max_points)
-```
+### q01
+- **good** — int=0  round=1  float=2.14  (max=10)
+  - conceptual_definitions (/3): int=0  round=0  float=0.49   kw=0.12  sem=0.20
+  - distinction_relationship (/2): int=0  round=0  float=0.41   kw=0.21  sem=0.20
+  - alternative_names (/2): int=0  round=0  float=0.49   kw=0.29  sem=0.20
+  - clarity_structure_examples (/3): int=0  round=1  float=0.76   kw=0.30  sem=0.20
+- **less_good** — int=0  round=1  float=1.86  (max=10)
+  - conceptual_definitions (/3): int=0  round=0  float=0.49   kw=0.12  sem=0.20
+  - distinction_relationship (/2): int=0  round=0  float=0.46   kw=0.26  sem=0.20
+  - alternative_names (/2): int=0  round=0  float=0.36   kw=0.16  sem=0.20
+  - clarity_structure_examples (/3): int=0  round=1  float=0.56   kw=0.17  sem=0.20
+- **wrong** — int=0  round=1  float=1.52  (max=10)
+  - conceptual_definitions (/3): int=0  round=0  float=0.34   kw=0.03  sem=0.20
+  - distinction_relationship (/2): int=0  round=1  float=0.50   kw=0.30  sem=0.20
+  - alternative_names (/2): int=0  round=0  float=0.25   kw=0.05  sem=0.20
+  - clarity_structure_examples (/3): int=0  round=0  float=0.43   kw=0.09  sem=0.20
 
-### P2 — Filter stopwords in `extract_keywords`
-In `grader/grade_question.py:extract_keywords()`, add a stopword list and split
-slash-separated/punctuation-attached tokens before matching.
+### q02
+- **good** — int=0  round=4  float=2.96  (max=10)
+  - attribute_properties_principle (/3): int=0  round=1  float=0.94   kw=0.03  sem=0.60
+  - zip_code_as_nominal (/3): int=0  round=1  float=0.86   kw=0.38  sem=0.20
+  - inappropriate_analysis (/2): int=0  round=1  float=0.66   kw=0.46  sem=0.20
+  - correct_analysis_alternatives (/2): int=0  round=1  float=0.50   kw=0.30  sem=0.20
+- **less_good** — int=0  round=2  float=1.71  (max=10)
+  - attribute_properties_principle (/3): int=0  round=1  float=0.60   kw=0.00  sem=0.40
+  - zip_code_as_nominal (/3): int=0  round=1  float=0.63   kw=0.22  sem=0.20
+  - inappropriate_analysis (/2): int=0  round=0  float=0.29   kw=0.09  sem=0.20
+  - correct_analysis_alternatives (/2): int=0  round=0  float=0.20   kw=0.00  sem=0.20
+- **wrong** — int=0  round=2  float=2.01  (max=10)
+  - attribute_properties_principle (/3): int=0  round=1  float=0.94   kw=0.03  sem=0.60
+  - zip_code_as_nominal (/3): int=0  round=1  float=0.58   kw=0.19  sem=0.20
+  - inappropriate_analysis (/2): int=0  round=0  float=0.29   kw=0.09  sem=0.20
+  - correct_analysis_alternatives (/2): int=0  round=0  float=0.20   kw=0.00  sem=0.20
 
-### P3 — Use LLM stage for final scoring
-The current keyword+semantic stage is a retrieval pre-filter, not a grader.
-For reliable ordering, the `grade_with_evidence.py` LLM path should be the primary
-scoring path. This is the intended architecture.
+### q03
+- **good** — int=4  round=6  float=5.66  (max=10)
+  - nominal_operations (/2): int=1  round=1  float=1.02   kw=0.42  sem=0.60
+  - ordinal_operations (/3): int=1  round=2  float=1.62   kw=0.48  sem=0.60
+  - interval_operations (/3): int=2  round=2  float=2.16   kw=0.44  sem=1.00
+  - ratio_operations (/2): int=0  round=1  float=0.86   kw=0.26  sem=0.60
+- **less_good** — int=0  round=2  float=2.32  (max=10)
+  - nominal_operations (/2): int=0  round=0  float=0.47   kw=0.27  sem=0.20
+  - ordinal_operations (/3): int=0  round=1  float=0.82   kw=0.35  sem=0.20
+  - interval_operations (/3): int=0  round=1  float=0.72   kw=0.28  sem=0.20
+  - ratio_operations (/2): int=0  round=0  float=0.31   kw=0.11  sem=0.20
+- **wrong** — int=0  round=2  float=2.34  (max=10)
+  - nominal_operations (/2): int=0  round=0  float=0.39   kw=0.19  sem=0.20
+  - ordinal_operations (/3): int=0  round=1  float=0.82   kw=0.35  sem=0.20
+  - interval_operations (/3): int=0  round=1  float=0.78   kw=0.32  sem=0.20
+  - ratio_operations (/2): int=0  round=0  float=0.35   kw=0.15  sem=0.20
 
-### P4 — Weight semantic score by similarity, not count
-Replace `min(1.0, len(evidence_list) / top_k)` with a reranker-weighted score.
+### q04
+- **good** — int=1  round=3  float=2.93  (max=10)
+  - interval_scale_explanation (/3): int=1  round=1  float=1.07   kw=0.51  sem=0.20
+  - role_of_zero_point (/3): int=0  round=1  float=0.78   kw=0.32  sem=0.20
+  - ratio_scale_kelvin (/2): int=0  round=1  float=0.66   kw=0.46  sem=0.20
+  - consequence_for_ratios (/2): int=0  round=0  float=0.42   kw=0.22  sem=0.20
+- **less_good** — int=1  round=3  float=2.63  (max=10)
+  - interval_scale_explanation (/3): int=1  round=1  float=1.07   kw=0.31  sem=0.40
+  - role_of_zero_point (/3): int=0  round=1  float=0.63   kw=0.22  sem=0.20
+  - ratio_scale_kelvin (/2): int=0  round=1  float=0.51   kw=0.31  sem=0.20
+  - consequence_for_ratios (/2): int=0  round=0  float=0.42   kw=0.22  sem=0.20
+- **wrong** — int=0  round=2  float=2.14  (max=10)
+  - interval_scale_explanation (/3): int=0  round=1  float=0.73   kw=0.29  sem=0.20
+  - role_of_zero_point (/3): int=0  round=1  float=0.56   kw=0.17  sem=0.20
+  - ratio_scale_kelvin (/2): int=0  round=0  float=0.43   kw=0.23  sem=0.20
+  - consequence_for_ratios (/2): int=0  round=0  float=0.42   kw=0.22  sem=0.20
 
-### P5 — Rubric text improvements
-- **q02:** `attribute_properties_principle` has very few content keywords (kw=0.03).
-  Add: "measurement type", "stored format", "data type", "properties determine".
-- **q05:** Replace Unicode hyphens and compound terms with simple ASCII tokens.
-  Add "ordinal", "interval", "mean", "median", "addition", "subtraction" explicitly.
+### q05
+- **good** — int=0  round=1  float=1.76  (max=10)
+  - definition_of_orderingonly_scale (/3): int=0  round=1  float=0.73   kw=0.29  sem=0.20
+  - distinction_between_orderingonly_and_additive_scales (/3): int=0  round=0  float=0.43   kw=0.09  sem=0.20
+  - allowed_vs_disallowed_computations (/2): int=0  round=0  float=0.31   kw=0.11  sem=0.20
+  - practical_consequence_example (/2): int=0  round=0  float=0.28   kw=0.08  sem=0.20
+- **less_good** — int=0  round=0  float=1.15  (max=10)
+  - definition_of_orderingonly_scale (/3): int=0  round=0  float=0.37   kw=0.05  sem=0.20
+  - distinction_between_orderingonly_and_additive_scales (/3): int=0  round=0  float=0.33   kw=0.02  sem=0.20
+  - allowed_vs_disallowed_computations (/2): int=0  round=0  float=0.23   kw=0.03  sem=0.20
+  - practical_consequence_example (/2): int=0  round=0  float=0.23   kw=0.03  sem=0.20
+- **wrong** — int=0  round=1  float=1.39  (max=10)
+  - definition_of_orderingonly_scale (/3): int=0  round=1  float=0.55   kw=0.17  sem=0.20
+  - distinction_between_orderingonly_and_additive_scales (/3): int=0  round=0  float=0.35   kw=0.04  sem=0.20
+  - allowed_vs_disallowed_computations (/2): int=0  round=0  float=0.26   kw=0.06  sem=0.20
+  - practical_consequence_example (/2): int=0  round=0  float=0.23   kw=0.03  sem=0.20
 
-### Category Weight Adjustments
-- Current weights (keyword=0.5, semantic=0.5) give equal weight to two weak signals.
-- After P2+P4 fixes, recalibrate. Suggested starting point: keyword=0.3, semantic=0.7.
+---
+## Summary & Recommendations
+
+### Scoring method comparison
+
+| Method | Differentiates well? | Violates ordering? | Notes |
+|--------|---------------------|-------------------|-------|
+| `int`   | No — collapses ~80% of scores to 0 | Yes | Truncation discards signal |
+| `round` | Partial — rescues scores near 0.5 boundary | Fewer | One-line fix |
+| `float` | Best — preserves all signal | Fewest | Never loses precision |
+
+### Root causes (unchanged from initial T4.3 analysis)
+
+1. **`int()` truncation** — combined scores of 0.10–0.50 × max_pts land at 0.2–1.5,
+   which `int()` rounds down to 0. `round()` fixes scores near 0.5; `float` removes
+   all truncation error.
+
+2. **`extract_keywords` includes stopwords** — 'full', 'credit', 'awarded', 'when',
+   'student', 'provides'… dominate the keyword list, diluting content-keyword matches.
+
+3. **Semantic score = evidence count / top_k** — uniform across answer types because
+   all answers retrieve similar numbers of chunks on the same topic.
+
+### Priority fixes
+
+- **P1 (one line):** Replace `int(combined_score * max_points)` with
+  `round(combined_score * max_points)` in `apply_rubric_scoring_dynamic()`.
+  → Immediate improvement; no architecture change needed.
+
+- **P1b (alternative):** Use float totals for all comparison/ordering logic.
+  → Best precision; requires storing floats instead of ints in GradeResult.
+
+- **P2:** Filter stopwords in `grader/grade_question.py:extract_keywords()`.
+
+- **P3:** Weight semantic score by reranker scores, not just chunk count.
