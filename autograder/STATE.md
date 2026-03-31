@@ -67,6 +67,8 @@ and returns clean JSON. Smoke-tested 2026-03-30 — confirmed working.
 
 - [x] **T4.1** — Unit tests for individual functions
   → all required test files exist from prior tasks; 183 tests pass
+- [x] **T4.2** — Integration tests for full pipeline
+  → `tests/test_rubric_pipeline.py` (13 tests), `tests/test_grading_pipeline.py` (12 tests), `tests/test_appeal_workflow.py` (15 tests); 223 total pass
 
 ---
 
@@ -82,4 +84,4 @@ and returns clean JSON. Smoke-tested 2026-03-30 — confirmed working.
 
 ## Next time, start by…
 
-1. Proceed with **T4.2** (integration tests for full pipeline) — T4.1 complete.
+1. Proceed with **T4.3** (sample grading test — grade 5 real questions) — T4.2 complete.

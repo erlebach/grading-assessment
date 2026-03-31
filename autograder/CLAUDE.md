@@ -7,14 +7,22 @@ When restarting a session, **always read these files first** (in order):
 1. `STATE.md` — current branch, last completed task, open tasks, next steps
 2. `TASK_LIST.md` — full task specs (read the relevant task section before starting)
 
-Files updated when a task is completed:
+Files updated when a task is completed — **only after all tests pass**:
 - `STATE.md` — mark task complete, update "Next time, start by…"
 - `TASK_LIST.md` — mark acceptance criteria checked (append; never overwrite)
 - `CLAUDE.md` — update the test pipeline command to include the new test file
 
-**Commit after every completed task.** After updating STATE.md and CLAUDE.md,
-stage and commit all task deliverables (new source files, test files, and the
-updated STATE.md / CLAUDE.md). Do not leave completed tasks uncommitted.
+**Order of operations for task completion:**
+1. Write code and tests.
+2. Run the full test suite and confirm all tests pass.
+3. Only then update `STATE.md`, `TASK_LIST.md`, and `CLAUDE.md`.
+4. Commit all deliverables together (source, tests, updated md files).
+
+Do not update `STATE.md` or mark acceptance criteria before tests pass.
+
+**Commit after every completed task.** Stage and commit all task deliverables
+(new source files, test files, and the updated STATE.md / CLAUDE.md).
+Do not leave completed tasks uncommitted.
 
 Stage only specific files — never `git add -A` or `git add .`.
 
