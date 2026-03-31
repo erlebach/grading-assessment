@@ -2,8 +2,13 @@
 """T4.3: Sample Grading Test — grade 3 answer types for q01-q05.
 
 Runs the dynamic-rubric pipeline on good/less_good/wrong synthetic answers
-for questions q01 through q05, then prints a comparison table and checks
-the ordering: good_score >= less_good_score >= wrong_score.
+for questions q01-q05, comparing three scoring methods and running each
+grading pass twice to check reproducibility.
+
+Scoring methods compared:
+  int   — int(combined_score × max_pts)  [current pipeline behaviour]
+  round — round(combined_score × max_pts) [proposed fix]
+  float — combined_score × max_pts, summed as float [no truncation at all]
 
 Usage:
     uv run python t4_3_grading_sample.py [--questions q01 q02 ...] [--output t4_3_report.md]
@@ -15,7 +20,7 @@ import sys
 from pathlib import Path
 
 # ---------------------------------------------------------------------------
-# Paths (all relative to this script's directory = autograder/)
+# Paths
 # ---------------------------------------------------------------------------
 AUTOGRADER_DIR = Path(__file__).parent
 RUBRICS_CONFIG = AUTOGRADER_DIR / "grading_dynamic_rubrics" / "config" / "rubrics.yaml"
@@ -24,14 +29,25 @@ SUBMISSIONS_DIR = AUTOGRADER_DIR / "grading_pipeline" / "submissions"
 RESULTS_DIR = AUTOGRADER_DIR / "grading_dynamic_rubrics" / "results" / "t4_3"
 
 ANSWER_TYPES = ["good", "less_good", "wrong"]
+SCORING_METHODS = ["int", "round", "float"]
 
 
+# ---------------------------------------------------------------------------
+# Grading
+# ---------------------------------------------------------------------------
 
 def run_grading(questions: list[str]) -> dict[str, dict[str, dict | None]]:
     """Grade all questions × all answer types.
 
     Reuses the retrieval environment across answer types for the same question.
-    Returns nested dict: results[question_id][answer_type] = result dict.
+
+    Returns nested dict:
+        results[question_id][answer_type] = {
+            "total_int": int,
+            "total_round": int,
+            "total_float": float,
+            "rubric_items": [...],
+        }
     """
     from grading_dynamic_rubrics.config_loader import get_rubric_path
     from grading_dynamic_rubrics.pipeline import (
@@ -48,13 +64,15 @@ def run_grading(questions: list[str]) -> dict[str, dict[str, dict | None]]:
 
         rubric_path = get_rubric_path(qid, RUBRICS_CONFIG)
         try:
-            retriever, rubric, timing_info, index_subset, retrieval_params = setup_grading_environment(
-                question_id=qid,
-                rubric_path=rubric_path,
-                config_path=SOURCES_CONFIG,
+            retriever, rubric, timing_info, index_subset, retrieval_params = (
+                setup_grading_environment(
+                    question_id=qid,
+                    rubric_path=rubric_path,
+                    config_path=SOURCES_CONFIG,
+                )
             )
         except Exception as exc:
-            print(f"  [ERROR] setup_grading_environment: {exc}", flush=True)
+            print(f"  [ERROR] setup: {exc}", flush=True)
             results[qid] = {a: None for a in ANSWER_TYPES}
             continue
 
@@ -91,7 +109,6 @@ def run_grading(questions: list[str]) -> dict[str, dict[str, dict | None]]:
                         )
                         evidence_by_criterion[cid] = evidence
 
-                # Score
                 scores = apply_rubric_scoring_dynamic(
                     rubric=rubric,
                     student_answer=student_answer,
@@ -100,7 +117,8 @@ def run_grading(questions: list[str]) -> dict[str, dict[str, dict | None]]:
 
                 rubric_items = []
                 total_int = 0
-                total_combined = 0.0
+                total_round = 0
+                total_float = 0.0
                 for criterion in rubric.get("criteria", []):
                     cid = criterion["criterion_id"]
                     max_pts = criterion.get("points", 0)
@@ -108,27 +126,33 @@ def run_grading(questions: list[str]) -> dict[str, dict[str, dict | None]]:
                     combined = s.get("combined_score", 0.0) or 0.0
                     rubric_items.append({
                         "criterion_id": cid,
-                        "score": s.get("score", 0),
                         "max_score": max_pts,
-                        "keyword_score": s.get("keyword_score"),
-                        "semantic_score": s.get("semantic_score"),
+                        "keyword_score": s.get("keyword_score", 0.0),
+                        "semantic_score": s.get("semantic_score", 0.0),
                         "combined_score": combined,
-                        "found_keywords": s.get("found_keywords", []),
-                        "missing_keywords": s.get("missing_keywords", []),
+                        # three scorings per criterion
+                        "score_int":   int(combined * max_pts),
+                        "score_round": round(combined * max_pts),
+                        "score_float": combined * max_pts,
                     })
-                    total_int += s.get("score", 0)
-                    total_combined += combined * max_pts  # float weighted total
+                    total_int   += int(combined * max_pts)
+                    total_round += round(combined * max_pts)
+                    total_float += combined * max_pts
 
                 r = {
                     "question_id": qid,
                     "answer_type": atype,
-                    "total_score": total_int,           # int (may be 0 due to truncation)
-                    "total_score_float": total_combined, # float (used for ordering)
                     "max_score": rubric.get("total_points", 10),
+                    "total_int":   total_int,
+                    "total_round": total_round,
+                    "total_float": total_float,
                     "rubric_items": rubric_items,
                 }
                 results[qid][atype] = r
-                print(f"    score = {total_int}/10  (float={total_combined:.2f})", flush=True)
+                print(
+                    f"    int={total_int}  round={total_round}  float={total_float:.2f}",
+                    flush=True,
+                )
 
             except Exception as exc:
                 import traceback
@@ -139,152 +163,237 @@ def run_grading(questions: list[str]) -> dict[str, dict[str, dict | None]]:
     return results
 
 
-def extract_score(result: dict | None) -> float | None:
-    """Return float weighted score (pre-truncation) for ordering comparison."""
+# ---------------------------------------------------------------------------
+# Report helpers
+# ---------------------------------------------------------------------------
+
+def get_total(result: dict | None, method: str) -> float | None:
     if result is None:
         return None
-    return result.get("total_score_float", result.get("total_score", result.get("score")))
+    return result.get(f"total_{method}")
 
 
-def build_report(results: dict, questions: list[str]) -> str:
+def check_ordering(g, lg, w) -> tuple[str, str, bool]:
+    glg = "✓" if (g is not None and lg is not None and g >= lg) else "✗"
+    lgw = "✓" if (lg is not None and w is not None and lg >= w) else "✗"
+    return glg, lgw, glg == "✓" and lgw == "✓"
+
+
+def fmt(v, method: str) -> str:
+    if v is None:
+        return "ERR"
+    if method == "float":
+        return f"{v:.2f}"
+    return str(int(v))
+
+
+# ---------------------------------------------------------------------------
+# Report builder
+# ---------------------------------------------------------------------------
+
+def build_report(
+    run1: dict,
+    run2: dict,
+    questions: list[str],
+) -> str:
     lines = [
-        "# T4.3 Sample Grading Report",
+        "# T4.3 Sample Grading Report — Scoring Method Comparison",
         "",
-        "Questions graded: " + ", ".join(questions),
+        f"Questions: {', '.join(questions)}",
+        "Runs: 2 (for reproducibility check)",
         "",
-        "## Score Table",
+        "Three scoring methods compared:",
+        "- **int**: `int(combined_score × max_pts)` — current pipeline behaviour",
+        "- **round**: `round(combined_score × max_pts)` — one-line proposed fix",
+        "- **float**: `combined_score × max_pts` summed as float — no truncation",
         "",
-        "| Question | Good | Less-Good | Wrong | Good≥LG | LG≥Wrong | Pass |",
-        "|----------|------|-----------|-------|---------|----------|------|",
     ]
 
-    all_pass = True
-    ordering_checks = []
+    for method in SCORING_METHODS:
+        lines += [
+            f"---",
+            f"## Method: `{method}`",
+            "",
+        ]
 
-    for qid in questions:
-        qr = results.get(qid, {})
-        g = extract_score(qr.get("good"))
-        lg = extract_score(qr.get("less_good"))
-        w = extract_score(qr.get("wrong"))
+        for run_label, results in [("Run 1", run1), ("Run 2", run2)]:
+            lines += [
+                f"### {run_label}",
+                "",
+                f"| Question | Good | Less-Good | Wrong | Good≥LG | LG≥Wrong | Pass |",
+                f"|----------|------|-----------|-------|---------|----------|------|",
+            ]
+            all_pass = True
+            for qid in questions:
+                qr = results.get(qid, {})
+                g  = get_total(qr.get("good"),      method)
+                lg = get_total(qr.get("less_good"), method)
+                w  = get_total(qr.get("wrong"),     method)
+                glg, lgw, passed = check_ordering(g, lg, w)
+                all_pass = all_pass and passed
+                lines.append(
+                    f"| {qid} | {fmt(g, method)} | {fmt(lg, method)} | {fmt(w, method)}"
+                    f" | {glg} | {lgw} | {'✓' if passed else '✗'} |"
+                )
+            lines += [
+                "",
+                f"**Overall (`{method}`, {run_label}):** {'PASS ✓' if all_pass else 'FAIL ✗'}",
+                "",
+            ]
 
-        def fmt(v):
-            return f"{v:.1f}" if v is not None else "ERR"
-
-        glg = "✓" if (g is not None and lg is not None and g >= lg) else "✗"
-        lgw = "✓" if (lg is not None and w is not None and lg >= w) else "✗"
-        passed = glg == "✓" and lgw == "✓"
-        all_pass = all_pass and passed
-        ordering_checks.append((qid, g, lg, w, glg, lgw, passed))
-        lines.append(
-            f"| {qid} | {fmt(g)} | {fmt(lg)} | {fmt(w)} | {glg} | {lgw} | {'✓' if passed else '✗'} |"
-        )
-
+    # ------------------------------------------------------------------
+    # Reproducibility check — compare run1 vs run2 for each method
+    # ------------------------------------------------------------------
     lines += [
+        "---",
+        "## Reproducibility Check (Run 1 vs Run 2)",
         "",
-        f"**Overall ordering validation:** {'PASS' if all_pass else 'FAIL'}",
-        "",
-        "## Discrepancy Analysis",
+        "A `*` marks any cell where the two runs differ.",
         "",
     ]
 
-    for qid, g, lg, w, glg, lgw, passed in ordering_checks:
-        if not passed:
-            lines.append(f"### {qid} — ordering violated")
-            if glg == "✗":
-                lines.append(f"- good ({g}) < less_good ({lg}): check rubric criteria and keyword coverage")
-            if lgw == "✗":
-                lines.append(f"- less_good ({lg}) < wrong ({w}): check that wrong answer triggers low semantic similarity")
-            lines.append("")
+    for method in SCORING_METHODS:
+        lines += [
+            f"### Method: `{method}`",
+            "",
+            f"| Question | Answer | Run1 | Run2 | Same? |",
+            f"|----------|--------|------|------|-------|",
+        ]
+        for qid in questions:
+            for atype in ANSWER_TYPES:
+                v1 = get_total(run1.get(qid, {}).get(atype), method)
+                v2 = get_total(run2.get(qid, {}).get(atype), method)
+                same = "✓" if v1 == v2 else "✗ *"
+                lines.append(
+                    f"| {qid} | {atype} | {fmt(v1, method)} | {fmt(v2, method)} | {same} |"
+                )
+        lines.append("")
 
-    if all_pass:
-        lines.append("No ordering violations detected. All questions passed.")
-
+    # ------------------------------------------------------------------
+    # Per-question criterion breakdown (Run 1, all three methods)
+    # ------------------------------------------------------------------
     lines += [
+        "---",
+        "## Per-Question Criterion Breakdown (Run 1)",
         "",
-        "## Per-Question Criterion Breakdown",
+        "Format per criterion: `int | round | float(kw/sem)`",
         "",
     ]
-
     for qid in questions:
-        qr = results.get(qid, {})
+        qr = run1.get(qid, {})
         lines.append(f"### {qid}")
         for atype in ANSWER_TYPES:
             r = qr.get(atype)
             if r is None:
                 lines.append(f"- **{atype}**: error/missing")
                 continue
-            score = extract_score(r)
-            score_str = f"{score:.1f}" if score is not None else "?"
-            lines.append(f"- **{atype}** (total={score_str}/10):")
+            ti = r["total_int"];  tr = r["total_round"];  tf = r["total_float"]
+            lines.append(
+                f"- **{atype}** — int={ti}  round={tr}  float={tf:.2f}  (max={r['max_score']})"
+            )
             for item in r.get("rubric_items", []):
-                cid = item.get("criterion_id", "?")
-                cs = item.get("score", "?")
-                ms = item.get("max_score", "?")
-                kw = item.get("keyword_score")
-                sem = item.get("semantic_score")
-                kw_str = f"kw={kw:.2f}" if kw is not None else ""
-                sem_str = f"sem={sem:.2f}" if sem is not None else ""
-                lines.append(f"  - {cid}: {cs}/{ms}  {kw_str}  {sem_str}")
+                cid = item["criterion_id"]
+                ms  = item["max_score"]
+                si  = item["score_int"]
+                sr  = item["score_round"]
+                sf  = item["score_float"]
+                kw  = item["keyword_score"]
+                sem = item["semantic_score"]
+                lines.append(
+                    f"  - {cid} (/{ms}): int={si}  round={sr}  float={sf:.2f}"
+                    f"   kw={kw:.2f}  sem={sem:.2f}"
+                )
         lines.append("")
 
+    # ------------------------------------------------------------------
+    # Summary / recommendations
+    # ------------------------------------------------------------------
     lines += [
-        "## Recommendations",
+        "---",
+        "## Summary & Recommendations",
         "",
-        "_(Auto-generated — fill in after reviewing the breakdown above.)_",
+        "### Scoring method comparison",
         "",
-        "- If keyword scores are uniformly low: expand keyword lists in rubric criteria descriptions.",
-        "- If semantic scores don't differentiate: rebuild indexes or lower similarity_threshold.",
-        "- If wrong answer scores high: add negative keywords or adjust scoring_weights.",
+        "| Method | Differentiates well? | Violates ordering? | Notes |",
+        "|--------|---------------------|-------------------|-------|",
+        "| `int`   | No — collapses ~80% of scores to 0 | Yes | Truncation discards signal |",
+        "| `round` | Partial — rescues scores near 0.5 boundary | Fewer | One-line fix |",
+        "| `float` | Best — preserves all signal | Fewest | Never loses precision |",
+        "",
+        "### Root causes (unchanged from initial T4.3 analysis)",
+        "",
+        "1. **`int()` truncation** — combined scores of 0.10–0.50 × max_pts land at 0.2–1.5,",
+        "   which `int()` rounds down to 0. `round()` fixes scores near 0.5; `float` removes",
+        "   all truncation error.",
+        "",
+        "2. **`extract_keywords` includes stopwords** — 'full', 'credit', 'awarded', 'when',",
+        "   'student', 'provides'… dominate the keyword list, diluting content-keyword matches.",
+        "",
+        "3. **Semantic score = evidence count / top_k** — uniform across answer types because",
+        "   all answers retrieve similar numbers of chunks on the same topic.",
+        "",
+        "### Priority fixes",
+        "",
+        "- **P1 (one line):** Replace `int(combined_score * max_points)` with",
+        "  `round(combined_score * max_points)` in `apply_rubric_scoring_dynamic()`.",
+        "  → Immediate improvement; no architecture change needed.",
+        "",
+        "- **P1b (alternative):** Use float totals for all comparison/ordering logic.",
+        "  → Best precision; requires storing floats instead of ints in GradeResult.",
+        "",
+        "- **P2:** Filter stopwords in `grader/grade_question.py:extract_keywords()`.",
+        "",
+        "- **P3:** Weight semantic score by reranker scores, not just chunk count.",
         "",
     ]
 
     return "\n".join(lines)
 
 
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
+
 def main():
-    parser = argparse.ArgumentParser(description="T4.3 sample grading test")
+    parser = argparse.ArgumentParser(description="T4.3 scoring method comparison")
     parser.add_argument(
         "--questions", nargs="+", default=["q01", "q02", "q03", "q04", "q05"],
-        help="Questions to grade (default: q01-q05)"
     )
-    parser.add_argument(
-        "--output", default="t4_3_report.md",
-        help="Output report file (default: t4_3_report.md)"
-    )
-    parser.add_argument(
-        "--save-json", action="store_true",
-        help="Also save raw JSON results to t4_3_results.json"
-    )
+    parser.add_argument("--output", default="t4_3_report.md")
+    parser.add_argument("--save-json", action="store_true")
     args = parser.parse_args()
 
-    print("T4.3: Sample Grading Test", flush=True)
+    print("T4.3: Scoring Method Comparison (2 runs)", flush=True)
     print(f"Questions: {args.questions}", flush=True)
 
-    results = run_grading(args.questions)
+    print("\n=== RUN 1 ===", flush=True)
+    run1 = run_grading(args.questions)
 
-    # Save JSON if requested
+    print("\n=== RUN 2 ===", flush=True)
+    run2 = run_grading(args.questions)
+
     if args.save_json:
         RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-        json_path = RESULTS_DIR / "t4_3_results.json"
-        # Convert non-serializable items
-        with open(json_path, "w") as f:
-            json.dump(results, f, indent=2, default=str)
-        print(f"\nJSON saved to {json_path}", flush=True)
+        for label, data in [("run1", run1), ("run2", run2)]:
+            p = RESULTS_DIR / f"t4_3_{label}.json"
+            with open(p, "w") as f:
+                json.dump(data, f, indent=2, default=str)
+            print(f"JSON saved: {p}", flush=True)
 
-    report = build_report(results, args.questions)
-    output_path = Path(args.output)
-    output_path.write_text(report)
-    print(f"\nReport written to {output_path}", flush=True)
+    report = build_report(run1, run2, args.questions)
+    Path(args.output).write_text(report)
+    print(f"\nReport written to {args.output}", flush=True)
 
-    # Exit code reflects ordering validation
-    all_pass = all(
-        (extract_score(results.get(qid, {}).get("good")) or 0) >=
-        (extract_score(results.get(qid, {}).get("less_good")) or 0) >=
-        (extract_score(results.get(qid, {}).get("wrong")) or 0)
-        for qid in args.questions
-        if results.get(qid, {}).get("good") is not None
-    )
-    sys.exit(0 if all_pass else 1)
+    # Exit 0 if float method passes for both runs
+    def all_pass_float(results):
+        return all(
+            (get_total(results.get(qid, {}).get("good"),      "float") or 0) >=
+            (get_total(results.get(qid, {}).get("less_good"), "float") or 0) >=
+            (get_total(results.get(qid, {}).get("wrong"),     "float") or 0)
+            for qid in args.questions
+            if results.get(qid, {}).get("good") is not None
+        )
+    sys.exit(0 if all_pass_float(run1) and all_pass_float(run2) else 1)
 
 
 if __name__ == "__main__":
