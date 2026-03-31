@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator, model_validator
 
 
 class CheckType(str, Enum):
@@ -25,6 +25,17 @@ class PrecisionLevel(str, Enum):
 
     def to_weight(self) -> float:
         return {"full": 1.0, "partial": 0.5, "none": 0.0}[self.value]
+
+
+class EvaluationMode(str, Enum):
+    SINGLE = "single"
+    MULTI = "multi"
+
+
+class ModelTier(str, Enum):
+    OSS = "oss"
+    FOUNDATIONAL = "foundational"
+    MIXED = "mixed"
 
 
 class ConceptCheck(BaseModel):
@@ -60,6 +71,15 @@ class CriterionV2(BaseModel):
     def total_check_points(self) -> float:
         return sum(c.points for c in self.checks)
 
+    @model_validator(mode="after")
+    def points_match_checks(self) -> "CriterionV2":
+        total = sum(c.points for c in self.checks)
+        if abs(self.points - total) > 0.01:
+            raise ValueError(
+                f"CriterionV2.points ({self.points}) must equal sum of check points ({total})"
+            )
+        return self
+
     model_config = ConfigDict(title="CriterionV2")
 
 
@@ -71,7 +91,7 @@ class RubricV2(BaseModel):
     question_type: str  # matches QuestionType enum value
     version: int = Field(default=1, ge=1)
     criteria: list[CriterionV2] = Field(..., min_length=1)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     iteration: int = Field(default=0, ge=0, description="Karpathy iteration that produced this rubric")
 
     model_config = ConfigDict(title="RubricV2")
@@ -82,17 +102,12 @@ class CheckEvalV2(BaseModel):
 
     check_id: str
     precision: PrecisionLevel
-    score: float = Field(..., ge=0.0, le=1.0)
     rationale: str
 
-    @model_validator(mode="after")
-    def score_matches_precision(self) -> "CheckEvalV2":
-        expected = self.precision.to_weight()
-        if abs(self.score - expected) > 0.01:
-            raise ValueError(
-                f"score {self.score} does not match precision {self.precision} (expected {expected})"
-            )
-        return self
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def score(self) -> float:
+        return self.precision.to_weight()
 
     model_config = ConfigDict(title="CheckEvalV2")
 
@@ -109,9 +124,9 @@ class GradeV2(BaseModel):
     raw_score: float = Field(..., ge=0.0, le=1.0, description="Weighted mean of check scores (0–1)")
     final_score: float = Field(..., ge=0.0, le=10.0, description="raw_score × 10, float, no truncation")
     answer_text: Optional[str] = None
-    graded_at: datetime = Field(default_factory=datetime.utcnow)
-    evaluation_mode: str = Field(default="single", description="'single' or 'multi'")
-    model_tier: str = Field(default="foundational")
+    graded_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    evaluation_mode: EvaluationMode = Field(default=EvaluationMode.SINGLE)
+    model_tier: ModelTier = Field(default=ModelTier.FOUNDATIONAL)
 
     model_config = ConfigDict(title="GradeV2")
 

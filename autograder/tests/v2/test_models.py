@@ -1,5 +1,6 @@
 # tests/v2/test_models.py
 import pytest
+from pydantic import ValidationError
 
 # Import from v2 module
 from v2.models import (
@@ -28,7 +29,7 @@ def test_concept_check_valid():
 
 
 def test_concept_check_rejects_missing_precision_levels():
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         ConceptCheck(
             check_id="c1",
             check_type=CheckType.DEFINITION,
@@ -52,7 +53,7 @@ def test_criterion_v2_valid():
     )
     crit = CriterionV2(
         criterion_id="role_of_zero",
-        points=3,
+        points=1,
         checks=[check],
     )
     assert crit.total_check_points() == 1
@@ -70,7 +71,7 @@ def test_rubric_v2_valid():
             PrecisionLevel.NONE: "none",
         },
     )
-    crit = CriterionV2(criterion_id="crit1", points=3, checks=[check])
+    crit = CriterionV2(criterion_id="crit1", points=1, checks=[check])
     rubric = RubricV2(
         rubric_id="q01_v1",
         question_id="q01",
@@ -86,27 +87,21 @@ def test_check_eval_v2_valid():
     ev = CheckEvalV2(
         check_id="c1",
         precision=PrecisionLevel.FULL,
-        score=1.0,
         rationale="Answer states freezing point convention explicitly.",
     )
     assert ev.score == 1.0
 
 
-def test_check_eval_v2_rejects_score_out_of_range():
-    with pytest.raises(Exception):
-        CheckEvalV2(
-            check_id="c1",
-            precision=PrecisionLevel.FULL,
-            score=1.5,  # invalid
-            rationale="x",
-        )
+def test_precision_to_weight():
+    assert PrecisionLevel.FULL.to_weight() == 1.0
+    assert PrecisionLevel.PARTIAL.to_weight() == 0.5
+    assert PrecisionLevel.NONE.to_weight() == 0.0
 
 
 def test_grade_v2_float_no_truncation():
     ev = CheckEvalV2(
         check_id="c1",
         precision=PrecisionLevel.PARTIAL,
-        score=0.5,
         rationale="partial",
     )
     grade = GradeV2(
