@@ -19,9 +19,19 @@ from llama_index.llms.gemini import Gemini
 from llama_index.llms.openai import OpenAI
 from llama_index.core.llms import ChatMessage
 
-# Ollama import is conditional - done lazily in configure_llm() to avoid proxy initialization errors
+# Ollama import is conditional - the ollama package calls Client() at module load time,
+# which crashes when ALL_PROXY is set to a SOCKS URL but socksio is not installed.
+# Ollama only connects to localhost so it never needs any proxy.
+# We strip only the SOCKS proxy vars for this one import, then restore them.
+# (HTTPS_PROXY is intentionally left in place so HuggingFace model downloads are unaffected.)
 try:
-    from llama_index.llms.ollama import Ollama
+    _socks_keys = ["ALL_PROXY", "all_proxy", "FTP_PROXY", "ftp_proxy",
+                   "GRPC_PROXY", "grpc_proxy"]
+    _saved_socks = {k: os.environ.pop(k) for k in _socks_keys if k in os.environ}
+    try:
+        from llama_index.llms.ollama import Ollama
+    finally:
+        os.environ.update(_saved_socks)
 except ImportError:
     Ollama = None  # Will be handled in configure_llm() if needed
 
