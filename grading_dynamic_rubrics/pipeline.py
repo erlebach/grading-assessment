@@ -63,7 +63,7 @@ def _load_retrieval_params_from_config(cfg: dict[str, Any]) -> dict[str, float |
 #                                  normalised to [0, 1] via sigmoid(x) if needed.
 #                                  Falls back to "count" when no reranker scores are
 #                                  available.
-SEMANTIC_SCORING_MODE: str = "reranker"  # P3 active; set to "count" to restore original
+SEMANTIC_SCORING_MODE: str = "count"  # "count": min(1, evidence_count / top_k); "reranker": P3 weighted
 
 
 def _semantic_score_reranker(
