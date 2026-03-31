@@ -73,7 +73,7 @@ class CriterionV2(BaseModel):
 
     @model_validator(mode="after")
     def points_match_checks(self) -> "CriterionV2":
-        total = sum(c.points for c in self.checks)
+        total = self.total_check_points()
         if abs(self.points - total) > 0.01:
             raise ValueError(
                 f"CriterionV2.points ({self.points}) must equal sum of check points ({total})"
