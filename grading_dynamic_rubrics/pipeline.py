@@ -8,6 +8,7 @@ This module extends grading_pipeline.pipeline to support:
 """
 
 import json
+import math
 import time
 from datetime import datetime
 from pathlib import Path
@@ -62,7 +63,7 @@ def _load_retrieval_params_from_config(cfg: dict[str, Any]) -> dict[str, float |
 #                                  normalised to [0, 1] via sigmoid(x) if needed.
 #                                  Falls back to "count" when no reranker scores are
 #                                  available.
-SEMANTIC_SCORING_MODE: str = "count"  # change to "reranker" to enable P3
+SEMANTIC_SCORING_MODE: str = "reranker"  # P3 active; set to "count" to restore original
 
 
 def _semantic_score_reranker(
@@ -74,12 +75,10 @@ def _semantic_score_reranker(
     CrossEncoder scores are typically in [-inf, +inf]; we normalise with
     sigmoid so the result is always in [0, 1].
     """
-    import math
-
     scores = [
         e.get("reranker_score", e.get("score", None)) for e in evidence_list
     ]
-    scores = [s for s in scores if s is not None]
+    scores = [s for s in scores if s is not None and not math.isnan(s)]
     if not scores:
         # Fall back to count-based score
         return min(1.0, len(evidence_list) / float(semantic_top_k)) if semantic_top_k else 0.0
