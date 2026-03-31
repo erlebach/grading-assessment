@@ -56,6 +56,38 @@ def _load_retrieval_params_from_config(cfg: dict[str, Any]) -> dict[str, float |
     }
 
 
+# P3 switch: controls how the semantic score is computed.
+#   "count"    — current approach: min(1, evidence_count / semantic_top_k)
+#   "reranker" — P3 approach:      mean reranker score across evidence chunks,
+#                                  normalised to [0, 1] via sigmoid(x) if needed.
+#                                  Falls back to "count" when no reranker scores are
+#                                  available.
+SEMANTIC_SCORING_MODE: str = "count"  # change to "reranker" to enable P3
+
+
+def _semantic_score_reranker(
+    evidence_list: list[dict[str, Any]],
+    semantic_top_k: int,
+) -> float:
+    """Compute semantic score from mean reranker score (P3 approach).
+
+    CrossEncoder scores are typically in [-inf, +inf]; we normalise with
+    sigmoid so the result is always in [0, 1].
+    """
+    import math
+
+    scores = [
+        e.get("reranker_score", e.get("score", None)) for e in evidence_list
+    ]
+    scores = [s for s in scores if s is not None]
+    if not scores:
+        # Fall back to count-based score
+        return min(1.0, len(evidence_list) / float(semantic_top_k)) if semantic_top_k else 0.0
+    mean_score = sum(scores) / len(scores)
+    # sigmoid normalisation: sigmoid(x) = 1 / (1 + e^{-x})
+    return 1.0 / (1.0 + math.exp(-mean_score))
+
+
 def validate_rubric(rubric: dict[str, Any]) -> None:
     """Validate that rubric criterion points sum to exactly 10.
 
@@ -139,18 +171,17 @@ def apply_rubric_scoring_dynamic(
 
         # 2. Semantic scoring (0-1)
         #
-        # Per your intended design (and Chu et al. style pipelines):
-        # - similarity / reranker scores are ONLY used to *select spans*
-        # - grading should NOT use those numeric scores
-        #
-        # So here we derive a semantic signal purely from the presence/amount of
-        # retrieved evidence spans, not their similarity/reranker numbers.
+        # SEMANTIC_SCORING_MODE selects the computation:
+        #   "count"    — original approach: presence/count of retrieved spans.
+        #   "reranker" — P3: mean reranker score (sigmoid-normalised) across spans.
         evidence_list = evidence_by_criterion.get(criterion_id, [])
-        if evidence_list:
-            # Scale by how many spans we actually have available up to semantic_top_k.
-            semantic_score = min(1.0, len(evidence_list) / float(semantic_top_k))
-        else:
-            semantic_score = 0.0
+        if SEMANTIC_SCORING_MODE == "reranker":
+            semantic_score = _semantic_score_reranker(evidence_list, semantic_top_k)
+        else:  # "count" — default / original behaviour
+            if evidence_list:
+                semantic_score = min(1.0, len(evidence_list) / float(semantic_top_k))
+            else:
+                semantic_score = 0.0
 
         # 3. Combine scores using weights
         combined_score = (
