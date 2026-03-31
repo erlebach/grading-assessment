@@ -258,6 +258,37 @@ def configure_llm(provider: str = "ollama", model: str | None = None) -> Any:
         raise ValueError(f"Unknown provider: {provider}")
 
 
+def configure_llm_for_tier(tier: str, config_path=None) -> Any:
+    """Return an LLM configured for the given model tier.
+
+    Args:
+        tier: "oss", "foundational", or "mixed".
+        config_path: Override path to rubric_generation.yaml.
+
+    Returns:
+        Configured LLM instance.
+    """
+    import yaml
+    from pathlib import Path as _Path
+
+    if config_path is None:
+        config_path = _Path(__file__).parent / "rubric_generation.yaml"
+
+    with open(config_path) as f:
+        cfg = yaml.safe_load(f)
+
+    tiers = cfg.get("tiers", {})
+    if tier == "mixed":
+        tier_key = "foundational"
+    elif tier in ("oss", "foundational"):
+        tier_key = tier
+    else:
+        raise ValueError(f"Unknown model_tier: {tier!r}. Choose oss | foundational | mixed.")
+
+    tier_cfg = tiers[tier_key]
+    return configure_llm(provider=tier_cfg["provider"], model=tier_cfg["model"])
+
+
 def configure_embedding(
     provider: str = "sentence-transformer", model: str | None = None
 ) -> Any:
