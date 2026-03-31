@@ -1,0 +1,59 @@
+question_id: q03
+question_text: "3. Nominal, ordinal, interval, and ratio attributes differ by which
+  operations are \u201Cmeaningful.\u201D For each type, list which of the following
+  are meaningful: distinctness (=, \u2260), order (<, >), differences (+, \u2212),
+  ratios (\xD7, \xF7)."
+total_points: 10
+scoring_weights:
+  nominal_operations:
+    keyword: 0.5
+    semantic: 0.5
+  ordinal_operations:
+    keyword: 0.5
+    semantic: 0.5
+  interval_operations:
+    keyword: 0.5
+    semantic: 0.5
+  ratio_operations:
+    keyword: 0.5
+    semantic: 0.5
+semantic_decay: linear
+semantic_top_k: 5
+criteria:
+- criterion_id: nominal_operations
+  description: "Full credit if the answer states that for nominal attributes only
+    distinctness (=, \u2260) is meaningful; order, differences, and ratios are NOT
+    meaningful. Deduct 1 point if the answer incorrectly includes order as meaningful
+    for nominal. Deduct 0.5 points if distinctness is omitted."
+  points: 2
+  evidence_required: true
+  evaluation_method: semantic
+- criterion_id: ordinal_operations
+  description: "Full credit if the answer states that for ordinal attributes distinctness
+    and order (<, >) are meaningful, but differences and ratios are NOT meaningful.
+    Deduct 1 point if differences are claimed to be meaningful for ordinal. Deduct
+    0.5 points if order is omitted."
+  points: 3
+  evidence_required: true
+  evaluation_method: semantic
+- criterion_id: interval_operations
+  description: "Full credit if the answer states that for interval attributes distinctness,
+    order, and differences are all meaningful, but ratios are NOT meaningful (no
+    true zero). Deduct 1 point if ratios are claimed to be meaningful for interval.
+    Deduct 0.5 points if differences are omitted."
+  points: 3
+  evidence_required: true
+  evaluation_method: semantic
+- criterion_id: ratio_operations
+  description: "Full credit if the answer states that for ratio attributes all four
+    operations are meaningful: distinctness, order, differences, AND ratios (true
+    zero exists). Deduct 1 point if ratios are not mentioned. Deduct 0.5 points if
+    any of the other three operations is omitted."
+  points: 2
+  evidence_required: true
+  evaluation_method: semantic
+metadata:
+  course: Data Mining
+  assignment: hw01
+  version: '1.0'
+  generated_by: manual

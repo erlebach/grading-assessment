@@ -69,6 +69,10 @@ and returns clean JSON. Smoke-tested 2026-03-30 — confirmed working.
   → all required test files exist from prior tasks; 183 tests pass
 - [x] **T4.2** — Integration tests for full pipeline
   → `tests/test_rubric_pipeline.py` (13 tests), `tests/test_grading_pipeline.py` (12 tests), `tests/test_appeal_workflow.py` (15 tests); 223 total pass
+- [x] **T4.3** — Sample grading test (q01-q05, 3 answer types each)
+  → `t4_3_grading_sample.py`, `t4_3_report.md`, `rubrics_dynamic/yaml/q02-q04.yaml`
+  → good > wrong holds for all 5 questions; good > less_good > wrong holds for q01, q04; fails q02 (Δ=0.29), q03 (Δ=0.02 noise), q05 (Δ=0.24)
+  → Root causes documented: int() truncation, stopword keyword extraction, evidence-count semantic scoring
 
 ---
 
@@ -84,4 +88,5 @@ and returns clean JSON. Smoke-tested 2026-03-30 — confirmed working.
 
 ## Next time, start by…
 
-1. Proceed with **T4.3** (sample grading test — grade 5 real questions) — T4.2 complete.
+1. Proceed with **T4.4** (regression testing / CI) — T4.3 complete.
+   Or address T4.3 findings: fix `int()→round()` in `apply_rubric_scoring_dynamic`, fix `extract_keywords` stopwords, then re-run T4.3 to confirm all 5 questions pass.

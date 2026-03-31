@@ -1,0 +1,61 @@
+question_id: q04
+question_text: "4. Why is it not physically meaningful to say that 10\xB0 is \u201C\
+  twice as warm\u201D as 5\xB0 on the Celsius or Fahrenheit scales, but it is meaningful
+  on the Kelvin scale? State the key role played by the zero point."
+total_points: 10
+scoring_weights:
+  interval_scale_explanation:
+    keyword: 0.5
+    semantic: 0.5
+  role_of_zero_point:
+    keyword: 0.5
+    semantic: 0.5
+  ratio_scale_kelvin:
+    keyword: 0.5
+    semantic: 0.5
+  consequence_for_ratios:
+    keyword: 0.5
+    semantic: 0.5
+semantic_decay: linear
+semantic_top_k: 5
+criteria:
+- criterion_id: interval_scale_explanation
+  description: "Full credit if the answer identifies Celsius and Fahrenheit as interval
+    scales where differences are meaningful but the zero point is arbitrary (not
+    an absence of the property being measured). Deduct 1 point if the answer incorrectly
+    calls Celsius or Fahrenheit a ratio scale. Deduct 1 point if the answer does
+    not mention that the zero is arbitrary or conventional."
+  points: 3
+  evidence_required: true
+  evaluation_method: semantic
+- criterion_id: role_of_zero_point
+  description: "Full credit if the answer clearly explains that a true (absolute)
+    zero is required for ratios to be meaningful, because ratios compare magnitudes
+    relative to a natural origin representing complete absence of the quantity. Deduct
+    1 point if the role of zero is stated vaguely without connecting it to ratio
+    meaningfulness. Deduct 1 point if the answer conflates the zero point with just
+    a scale convention."
+  points: 3
+  evidence_required: true
+  evaluation_method: semantic
+- criterion_id: ratio_scale_kelvin
+  description: "Full credit if the answer identifies Kelvin as a ratio scale with
+    an absolute zero (0 K = complete absence of thermal energy) that makes ratios
+    meaningful. Deduct 1 point if Kelvin is not identified as a ratio scale. Deduct
+    1 point if the significance of 0 K is not explained."
+  points: 2
+  evidence_required: true
+  evaluation_method: semantic
+- criterion_id: consequence_for_ratios
+  description: "Full credit if the answer explicitly concludes that because 0\xB0C
+    and 0\xB0F are not true zeros, the ratio 10\xB0C / 5\xB0C = 2 does not mean
+    'twice as warm,' whereas 10 K / 5 K = 2 does carry physical meaning. Deduct
+    1 point if no concrete conclusion about the ratio is drawn."
+  points: 2
+  evidence_required: true
+  evaluation_method: semantic
+metadata:
+  course: Data Mining
+  assignment: hw01
+  version: '1.0'
+  generated_by: manual
