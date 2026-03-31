@@ -1,0 +1,62 @@
+question_id: q02
+question_text: "2. The slides emphasize that an attribute\u2019s properties\u2014not
+  the apparent data type of its stored values\u2014determine valid analyses and transformations.
+  Explain this principle using the zip code example, and state one analysis that would
+  be inappropriate if you mistakenly treated zip codes as numeric."
+total_points: 10
+scoring_weights:
+  attribute_properties_principle:
+    keyword: 0.5
+    semantic: 0.5
+  zip_code_as_nominal:
+    keyword: 0.5
+    semantic: 0.5
+  inappropriate_analysis:
+    keyword: 0.5
+    semantic: 0.5
+  correct_analysis_alternatives:
+    keyword: 0.5
+    semantic: 0.5
+semantic_decay: linear
+semantic_top_k: 5
+criteria:
+- criterion_id: attribute_properties_principle
+  description: "Full credit if the answer clearly states that the measurement properties
+    of an attribute (what operations are meaningful) determine valid analyses, NOT
+    the storage format or apparent data type. Deduct 1 point if the answer does not
+    explicitly distinguish between storage type and measurement type. Deduct 1 point
+    if the principle is stated vaguely without connecting properties to valid operations."
+  points: 3
+  evidence_required: true
+  evaluation_method: semantic
+- criterion_id: zip_code_as_nominal
+  description: "Full credit if the answer correctly identifies zip codes as nominal
+    (categorical) despite being stored as integers: they support equality/distinctness
+    but not meaningful order, differences, or ratios. Deduct 1 point if the answer
+    does not classify zip codes as nominal. Deduct 1 point if the answer fails to
+    explain why arithmetic operations are not meaningful on zip codes."
+  points: 3
+  evidence_required: true
+  evaluation_method: semantic
+- criterion_id: inappropriate_analysis
+  description: "Full credit if the answer names at least one specific inappropriate
+    analysis when zip codes are treated as numeric, such as computing the mean, standard
+    deviation, correlation, or regression using raw zip code values. Deduct 1 point
+    if no concrete inappropriate analysis is identified. Deduct 1 point if the stated
+    analysis is actually appropriate for nominal data."
+  points: 2
+  evidence_required: true
+  evaluation_method: semantic
+- criterion_id: correct_analysis_alternatives
+  description: "Full credit if the answer mentions appropriate alternatives for nominal
+    data such as mode, contingency tables, chi-square tests, or frequency counts.
+    Deduct 1 point if the answer offers no alternative or suggests an inappropriate
+    one."
+  points: 2
+  evidence_required: true
+  evaluation_method: semantic
+metadata:
+  course: Data Mining
+  assignment: hw01
+  version: '1.0'
+  generated_by: manual
