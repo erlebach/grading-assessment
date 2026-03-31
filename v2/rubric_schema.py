@@ -22,9 +22,9 @@ MAX_CHECKS_PER_CRITERION = 4  # complexity budget (REDESIGN §5)
 class RawPrecisionLevels(BaseModel):
     """Raw precision level descriptions from LLM."""
 
-    full: str
-    partial: str
-    none: str
+    full: str = Field(..., min_length=1)
+    partial: str = Field(..., min_length=1)
+    none: str = Field(..., min_length=1)
 
 
 class RawConceptCheck(BaseModel):
@@ -43,13 +43,6 @@ class RawCriterion(BaseModel):
     criterion_id: str
     points: float = Field(..., gt=0)
     checks: list[RawConceptCheck] = Field(..., min_length=1, max_length=MAX_CHECKS_PER_CRITERION)
-
-    @field_validator("checks")
-    @classmethod
-    def at_least_one(cls, v: list) -> list:
-        if not v:
-            raise ValueError("criterion must have at least one check")
-        return v
 
 
 class RubricV2Response(BaseModel):

@@ -66,7 +66,7 @@ class CriterionV2(BaseModel):
 
     criterion_id: str
     points: float = Field(..., gt=0)
-    checks: list[ConceptCheck] = Field(..., min_length=1)
+    checks: list[ConceptCheck] = Field(..., min_length=1, max_length=4)  # complexity budget from REDESIGN §5
 
     def total_check_points(self) -> float:
         return sum(c.points for c in self.checks)
