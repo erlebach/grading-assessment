@@ -59,6 +59,22 @@ def test_criterion_v2_valid():
     assert crit.total_check_points() == 1
 
 
+def test_criterion_v2_rejects_mismatched_points():
+    check = ConceptCheck(
+        check_id="c1",
+        check_type=CheckType.DEFINITION,
+        concept="x",
+        points=1,
+        precision_levels={
+            PrecisionLevel.FULL: "f",
+            PrecisionLevel.PARTIAL: "p",
+            PrecisionLevel.NONE: "n",
+        },
+    )
+    with pytest.raises(ValidationError):
+        CriterionV2(criterion_id="crit1", points=3, checks=[check])  # 3 ≠ 1
+
+
 def test_rubric_v2_valid():
     check = ConceptCheck(
         check_id="c1",
