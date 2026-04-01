@@ -1,0 +1,637 @@
+---
+title: "Autograder v2 — Grade an Assignment"
+author: ""
+date: today
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    code-fold: false
+    code-tools: true
+    theme: cosmo
+  ipynb: default
+jupyter: python3
+execute:
+  eval: false          # set to true to run all cells on render
+  echo: true
+  warning: false
+---
+
+## Overview
+
+This notebook walks through grading a student assignment end-to-end using the
+Autograder v2 concept-based LLM-judge pipeline.
+
+**You need:**
+
+- A folder of source materials (PDF, MD, TXT) — the course content the questions are drawn from
+- `questions.json` — list of questions with types
+- `answers/student_NNN.json` — one file per student with all their answers
+
+**You will produce:**
+
+- `rubrics/qNN.json` — one rubric per question (generated once, reused for all students)
+- `grades/student_NNN_qNN.json` — raw grade record per student per question
+- `feedback/student_NNN_qNN.json` — full feedback with score, per-check rationale, and improvement suggestions
+
+---
+
+## 0 — Setup
+
+### Install dependencies
+
+```{python}
+# Run once to install the package in editable mode.
+# Assumes you are in the autograder/ directory.
+import subprocess, sys
+subprocess.check_call([sys.executable, "-m", "pip", "install", "-e", ".", "-q"])
+```
+
+### Set your API key
+
+The default model tier is `foundational` (Gemini Flash).
+Set the key in your shell before launching this notebook:
+
+```bash
+export GOOGLE_API_KEY="your-key-here"
+```
+
+Or set it here for this session only (do **not** commit this cell with a real key):
+
+```{python}
+import os
+# os.environ["GOOGLE_API_KEY"] = "your-key-here"   # ← uncomment and fill in
+
+# Verify it is set
+assert os.environ.get("GOOGLE_API_KEY"), (
+    "GOOGLE_API_KEY is not set. "
+    "Export it in your shell or uncomment the line above."
+)
+print("API key found.")
+```
+
+### Point to your assignment directory
+
+```{python}
+from pathlib import Path
+
+# ── EDIT THIS ────────────────────────────────────────────────────────────────
+ASSIGNMENT_DIR = Path("assignments/my_assignment")
+# ─────────────────────────────────────────────────────────────────────────────
+
+SOURCE_DIR   = ASSIGNMENT_DIR / "source_materials"
+INDEX_DIR    = ASSIGNMENT_DIR / "index"
+QUESTIONS_FILE = ASSIGNMENT_DIR / "questions.json"
+ANSWERS_DIR  = ASSIGNMENT_DIR / "answers"
+RUBRICS_DIR  = ASSIGNMENT_DIR / "rubrics"
+GRADES_DIR   = ASSIGNMENT_DIR / "grades"
+FEEDBACK_DIR = ASSIGNMENT_DIR / "feedback"
+
+for d in [RUBRICS_DIR, GRADES_DIR, FEEDBACK_DIR]:
+    d.mkdir(parents=True, exist_ok=True)
+
+print("Directories ready:")
+for d in [SOURCE_DIR, ANSWERS_DIR, RUBRICS_DIR, GRADES_DIR, FEEDBACK_DIR]:
+    status = "✓" if d.exists() else "✗ (does not exist)"
+    print(f"  {d}  {status}")
+```
+
+---
+
+## 1 — Inspect Input Files
+
+### Questions
+
+```{python}
+import json
+
+questions_raw = json.loads(QUESTIONS_FILE.read_text())
+questions     = {q["question_id"]: q for q in questions_raw}
+
+print(f"{len(questions)} question(s) loaded:\n")
+for q in questions_raw:
+    print(f"  [{q['question_id']}] ({q['question_type']})  {q['question_text'][:80]}")
+```
+
+Expected `questions.json` format:
+
+```json
+[
+  {
+    "question_id": "q01",
+    "question_text": "Why can't you compute ratios on a Celsius temperature scale?",
+    "question_type": "mechanism",
+    "max_points": 10
+  }
+]
+```
+
+Valid `question_type` values: `definition`, `distinction`, `mechanism`,
+`classification`, `enumeration`, `example_generation`, `error_identification`,
+`comparison`, `application`, `proof_or_argument`.
+
+### Student answer files
+
+```{python}
+answer_files = sorted(ANSWERS_DIR.glob("*.json"))
+print(f"{len(answer_files)} student answer file(s) found:")
+for f in answer_files:
+    data = json.loads(f.read_text())
+    sid  = data.get("student_id", f.stem)
+    nq   = len(data.get("answers", {}))
+    print(f"  {f.name}  →  student_id={sid!r}, {nq} answer(s)")
+```
+
+Expected `answers/student_NNN.json` format:
+
+```json
+{
+  "student_id": "student_001",
+  "answers": {
+    "q01": "Celsius has an arbitrary zero point...",
+    "q02": "An interval scale..."
+  }
+}
+```
+
+### Source materials
+
+```{python}
+source_files = list(SOURCE_DIR.rglob("*"))
+source_files = [f for f in source_files if f.is_file()]
+print(f"{len(source_files)} source file(s) in {SOURCE_DIR}:")
+for f in source_files:
+    print(f"  {f.name}  ({f.suffix})")
+```
+
+---
+
+## 2 — Index Source Materials
+
+This step builds a searchable vector index from your PDF, MD, and TXT files.
+The index is used to retrieve relevant passages when generating rubrics and
+grading answers.
+
+> **What is this?** Your documents are split into small chunks, each chunk is
+> converted to a numeric vector (an embedding) by a language model, and stored
+> in a vector database. When the grader needs context, it searches the database
+> for chunks closest in meaning to the question or answer. This is called
+> Retrieval-Augmented Generation (RAG).
+
+```{python}
+from retrieval_core.index_builder import build_index
+
+if INDEX_DIR.exists() and any(INDEX_DIR.iterdir()):
+    print(f"Index already exists at {INDEX_DIR} — skipping rebuild.")
+    print("Delete the index/ folder and re-run this cell to force a rebuild.")
+else:
+    print(f"Building index from {SOURCE_DIR} …")
+    build_index(
+        source_dir=str(SOURCE_DIR),
+        index_dir=str(INDEX_DIR),
+        chunk_size=512,
+        chunk_overlap=64,
+    )
+    print(f"Index built → {INDEX_DIR}")
+```
+
+---
+
+## 3 — Configure the Pipeline
+
+```{python}
+import yaml
+
+config_path = Path("config/rubric_generation.yaml")
+config      = yaml.safe_load(config_path.read_text())
+
+print("Current settings in config/rubric_generation.yaml:\n")
+for k, v in config.items():
+    if k != "tiers":
+        print(f"  {k}: {v}")
+```
+
+To change settings, edit `config/rubric_generation.yaml` directly, or
+override them here:
+
+```{python}
+# Uncomment and modify to override without editing the YAML file.
+
+# config["model_tier"]               = "foundational"  # oss | foundational | mixed
+# config["evaluation_mode"]          = "single"         # single | multi
+# config["max_iterations"]           = 5
+# config["answer_variants_per_level"] = 3               # reduce to 1 for speed
+# config["answer_temperature"]       = 0.7
+
+print(f"model_tier        : {config['model_tier']}")
+print(f"evaluation_mode   : {config['evaluation_mode']}")
+print(f"max_iterations    : {config['max_iterations']}")
+print(f"variants_per_level: {config['answer_variants_per_level']}")
+```
+
+---
+
+## 4 — Generate Rubrics
+
+A rubric is generated **once per question** and reused for all students.
+
+For each question the pipeline:
+
+1. Retrieves relevant passages from your source materials
+2. Generates 9 synthetic student answers (3 good / 3 less_good / 3 wrong)
+3. Generates an initial concept-check rubric informed by both
+4. Runs the **Karpathy refinement loop** — iteratively fixes the rubric until
+   it correctly ranks good > less_good > wrong answers
+
+```{python}
+from config.llm_config import configure_llm_for_tier
+from retrieval_core.retriever import retrieve_context
+from v2.answer_generator import AnswerGenerator, AnswerGeneratorConfig
+from v2.rubric_generator import RubricGeneratorV2, RubricGeneratorConfig
+from v2.rubric_critic import RubricCritic
+from v2.judge import ConceptJudge, EvaluationMode
+from v2.scoring import compute_grade
+from v2.karpathy_loop import KarpathyLoop, KarpathyConfig
+
+llm = configure_llm_for_tier(config["model_tier"])
+
+answer_gen = AnswerGenerator(
+    llm=llm,
+    config=AnswerGeneratorConfig(
+        variants_per_level=config["answer_variants_per_level"],
+        temperature=config["answer_temperature"],
+    ),
+)
+
+rubric_gen = RubricGeneratorV2(
+    llm=llm,
+    config=RubricGeneratorConfig(
+        max_checks_per_criterion=config["max_checks_per_criterion"],
+    ),
+)
+
+critic = RubricCritic(llm=llm)
+
+judge = ConceptJudge(
+    llm=llm,
+    mode=EvaluationMode(config["evaluation_mode"]),
+)
+
+def scorer(**kw):
+    evals = judge.evaluate(
+        answer_text=kw["answer_text"],
+        rubric=kw["rubric"],
+        evidence_context="",
+    )
+    return compute_grade(
+        grade_id=f"{kw['student_id']}_{kw['question_id']}",
+        question_id=kw["question_id"],
+        student_id=kw["student_id"],
+        rubric=kw["rubric"],
+        check_evaluations=evals,
+    )
+
+loop = KarpathyLoop(
+    judge=judge,
+    scorer=scorer,
+    critic=critic,
+    rubric_generator=rubric_gen,
+    config=KarpathyConfig(
+        max_iterations=config["max_iterations"],
+        train_per_level=config["train_per_level"],
+        val_per_level=config["val_per_level"],
+    ),
+)
+
+print("Pipeline components initialised.")
+```
+
+```{python}
+rubric_results = {}   # question_id → KarpathyResult (for inspection below)
+
+for q in questions_raw:
+    qid      = q["question_id"]
+    out_path = RUBRICS_DIR / f"{qid}.json"
+
+    if out_path.exists():
+        print(f"{qid}: rubric exists — skipping. (Delete {out_path.name} to regenerate.)")
+        continue
+
+    print(f"\n{'='*60}")
+    print(f"Generating rubric for {qid}: {q['question_text'][:60]}…")
+
+    # Retrieve relevant source passages
+    source_material = retrieve_context(
+        query=q["question_text"],
+        index_dir=str(INDEX_DIR),
+        top_k=5,
+    )
+
+    # Generate 9 synthetic answers
+    print(f"  Generating synthetic answers …")
+    answers = answer_gen.generate(
+        question_id=qid,
+        question_text=q["question_text"],
+        question_type=q["question_type"],
+        source_material=source_material,
+    )
+    print(f"  Generated {len(answers)} synthetic answers.")
+
+    # Generate initial rubric
+    print(f"  Generating initial rubric …")
+    initial_rubric = rubric_gen.generate(
+        question_id=qid,
+        question_text=q["question_text"],
+        question_type=q["question_type"],
+        source_material=source_material,
+        synthetic_answers=answers,
+        version=1,
+    )
+    n_checks = sum(len(c.checks) for c in initial_rubric.criteria)
+    print(f"  Initial rubric: {len(initial_rubric.criteria)} criteria, {n_checks} checks.")
+
+    # Karpathy refinement
+    print(f"  Running Karpathy loop (max {config['max_iterations']} iterations) …")
+    result = loop.run(
+        initial_rubric=initial_rubric,
+        answers=answers,
+        question_id=qid,
+        question_text=q["question_text"],
+        question_type=q["question_type"],
+        source_material=source_material,
+    )
+    rubric_results[qid] = result
+
+    status = "converged ✓" if result.converged else f"stopped at {result.iterations_used} iterations"
+    print(f"  Karpathy: {status}")
+
+    # Persist
+    out_path.write_text(
+        json.dumps(result.final_rubric.model_dump(mode="json"), indent=2)
+    )
+    print(f"  Saved → {out_path}")
+
+print("\nRubric generation complete.")
+```
+
+### Inspect a rubric
+
+```{python}
+# Change qid to inspect a different question
+inspect_qid = questions_raw[0]["question_id"]
+
+rubric_path = RUBRICS_DIR / f"{inspect_qid}.json"
+rubric_data = json.loads(rubric_path.read_text())
+
+print(f"Rubric: {rubric_data['rubric_id']}  (version {rubric_data['version']})\n")
+for crit in rubric_data["criteria"]:
+    print(f"Criterion: {crit['criterion_id']}  ({crit['points']} pts)")
+    for chk in crit["checks"]:
+        print(f"  [{chk['check_id']}] {chk['check_type'].upper()}  {chk['concept']}")
+        print(f"       full:    {chk['precision_levels']['full']}")
+        print(f"       partial: {chk['precision_levels']['partial']}")
+        print(f"       none:    {chk['precision_levels']['none']}")
+    print()
+```
+
+> **What to look for:** Each check should describe a *concept* (e.g. "zero
+> point has no physical significance"), not a keyword (e.g. "mentions the word
+> 'arbitrary'"). If you see keyword matching, delete the rubric file and
+> regenerate.
+
+---
+
+## 5 — Grade Student Answers
+
+Load all rubrics, then run the judge on every student answer.
+
+```{python}
+from v2.models import RubricV2
+
+# Load all rubrics
+rubrics = {}
+for rf in RUBRICS_DIR.glob("*.json"):
+    r = RubricV2.model_validate_json(rf.read_text())
+    rubrics[r.question_id] = r
+
+print(f"Loaded {len(rubrics)} rubric(s): {sorted(rubrics.keys())}")
+```
+
+```{python}
+grade_summary = []   # for the summary table below
+
+for answer_file in sorted(ANSWERS_DIR.glob("*.json")):
+    student_data = json.loads(answer_file.read_text())
+    student_id   = student_data["student_id"]
+
+    for qid, answer_text in student_data["answers"].items():
+        out_path = GRADES_DIR / f"{student_id}_{qid}.json"
+
+        if out_path.exists():
+            # Load existing for summary
+            from v2.models import GradeV2
+            g = GradeV2.model_validate_json(out_path.read_text())
+            grade_summary.append((student_id, qid, g.final_score))
+            continue
+
+        if qid not in rubrics:
+            print(f"  WARNING: no rubric for {qid}, skipping {student_id}.")
+            continue
+
+        rubric = rubrics[qid]
+
+        # Retrieve evidence context
+        evidence_context = retrieve_context(
+            query=answer_text,
+            index_dir=str(INDEX_DIR),
+            top_k=3,
+        )
+
+        # Judge
+        check_evals = judge.evaluate(
+            answer_text=answer_text,
+            rubric=rubric,
+            evidence_context=evidence_context,
+        )
+
+        # Score
+        grade = compute_grade(
+            grade_id=f"{student_id}_{qid}",
+            question_id=qid,
+            student_id=student_id,
+            rubric=rubric,
+            check_evaluations=check_evals,
+        )
+
+        out_path.write_text(json.dumps(grade.model_dump(mode="json"), indent=2))
+        grade_summary.append((student_id, qid, grade.final_score))
+        print(f"  {student_id} / {qid}: {grade.final_score:.2f}/10")
+
+print("\nGrading complete.")
+```
+
+### Score summary
+
+```{python}
+import statistics
+
+if grade_summary:
+    print(f"{'Student':<20} {'Question':<10} {'Score':>6}")
+    print("-" * 40)
+    for sid, qid, score in sorted(grade_summary):
+        print(f"{sid:<20} {qid:<10} {score:>6.2f}")
+
+    scores = [s for _, _, s in grade_summary]
+    print("-" * 40)
+    print(f"{'Mean':<31} {statistics.mean(scores):>6.2f}")
+    print(f"{'Median':<31} {statistics.median(scores):>6.2f}")
+    if len(scores) > 1:
+        print(f"{'Std dev':<31} {statistics.stdev(scores):>6.2f}")
+```
+
+---
+
+## 6 — Generate Feedback
+
+Each feedback file contains:
+
+- Final score and raw score
+- Per-check detail: concept, precision level, score, rationale, and what a full answer looks like
+- An LLM-generated improvement suggestion targeting only the checks the student missed or partially addressed
+
+```{python}
+from v2.models import GradeV2, PrecisionLevel
+
+def build_feedback(
+    grade: GradeV2,
+    rubric: RubricV2,
+    question: dict,
+    llm,
+) -> dict:
+    """Assemble structured feedback from a grade record."""
+
+    check_map = {c.check_id: c for crit in rubric.criteria for c in crit.checks}
+
+    checks_detail = []
+    for ev in grade.check_evaluations:
+        check = check_map.get(ev.check_id)
+        if check is None:
+            continue
+        checks_detail.append({
+            "check_id":             ev.check_id,
+            "concept":              check.concept,
+            "check_type":           check.check_type,
+            "precision":            ev.precision,
+            "score":                ev.score,
+            "points_available":     check.points,
+            "points_earned":        round(ev.score * check.points, 4),
+            "rationale":            ev.rationale,
+            "what_full_looks_like": check.precision_levels[PrecisionLevel.FULL],
+        })
+
+    # Build improvement suggestion for missed/partial checks only
+    missed = [c for c in checks_detail if c["precision"] != "full"]
+    suggestion = ""
+    if missed:
+        missed_text = "\n".join(
+            f"  - {c['concept']}  (received: {c['precision']})"
+            for c in missed
+        )
+        prompt = (
+            f"A student answered the following question:\n"
+            f"Question: {question['question_text']}\n\n"
+            f"They did not fully address these concepts:\n{missed_text}\n\n"
+            "Write 2–3 sentences of concrete, encouraging feedback telling the "
+            "student exactly what to add or clarify to improve their answer. "
+            "Do not restate the question. Be specific about the missing ideas."
+        )
+        suggestion = llm.complete(prompt).text.strip()
+
+    return {
+        "grade_id":               grade.grade_id,
+        "student_id":             grade.student_id,
+        "question_id":            grade.question_id,
+        "question_text":          question["question_text"],
+        "final_score":            grade.final_score,
+        "max_score":              10.0,
+        "raw_score":              grade.raw_score,
+        "evaluation_mode":        grade.evaluation_mode,
+        "model_tier":             grade.model_tier,
+        "rubric_id":              grade.rubric_id,
+        "rubric_version":         grade.rubric_version,
+        "checks":                 checks_detail,
+        "improvement_suggestion": suggestion,
+        "graded_at":              grade.graded_at.isoformat(),
+    }
+```
+
+```{python}
+for grade_file in sorted(GRADES_DIR.glob("*.json")):
+    grade = GradeV2.model_validate_json(grade_file.read_text())
+    qid   = grade.question_id
+    sid   = grade.student_id
+
+    out_path = FEEDBACK_DIR / f"{sid}_{qid}.json"
+    if out_path.exists():
+        print(f"{sid}/{qid}: feedback exists — skipping.")
+        continue
+
+    if qid not in rubrics or qid not in questions:
+        print(f"{sid}/{qid}: missing rubric or question definition — skipping.")
+        continue
+
+    feedback = build_feedback(grade, rubrics[qid], questions[qid], llm)
+    out_path.write_text(json.dumps(feedback, indent=2))
+    print(f"{sid}/{qid}: {grade.final_score:.2f}/10  →  {out_path.name}")
+
+print("\nFeedback generation complete.")
+```
+
+### Preview one feedback record
+
+```{python}
+# Change to inspect a different file
+preview_file = sorted(FEEDBACK_DIR.glob("*.json"))[0]
+fb = json.loads(preview_file.read_text())
+
+print(f"File : {preview_file.name}")
+print(f"Score: {fb['final_score']:.2f} / {fb['max_score']}")
+print(f"Q    : {fb['question_text']}\n")
+
+print("Per-check breakdown:")
+for c in fb["checks"]:
+    bar = "●" * int(c["score"] * 4) + "○" * (4 - int(c["score"] * 4))
+    print(f"  [{bar}] {c['precision']:7s}  {c['concept']}")
+    print(f"           {c['rationale']}")
+
+print(f"\nImprovement suggestion:\n{fb['improvement_suggestion']}")
+```
+
+---
+
+## 7 — Output Summary
+
+```{python}
+feedback_files = sorted(FEEDBACK_DIR.glob("*.json"))
+print(f"Feedback files generated: {len(feedback_files)}\n")
+print(f"{'File':<35} {'Score':>6}")
+print("-" * 44)
+for f in feedback_files:
+    fb = json.loads(f.read_text())
+    print(f"{f.name:<35} {fb['final_score']:>6.2f}")
+
+print(f"\nAll output is in: {FEEDBACK_DIR.resolve()}")
+```
+
+---
+
+## Troubleshooting
+
+| Symptom | Likely cause | Fix |
+|---------|-------------|-----|
+| `GOOGLE_API_KEY` not found | Key not exported before starting Jupyter | Set it and restart the kernel |
+| All students score 0.0 | `check_evaluations` is empty | Check that `judge.evaluate()` returns non-empty list; print the raw LLM response |
+| Rubric check tests vocabulary | LLM drifted | Delete the rubric JSON and re-run Section 4 |
+| Karpathy loop never converges | Model too weak or `max_iterations` too low | Switch to `foundational` tier or increase `max_iterations` |
+| `ValidationError: criterion.points` | LLM returned inconsistent rubric JSON | Usually self-corrects on retry; add retry logic in `rubric_generator.py` if persistent |
+| Index build fails on PDF | `pypdf` or `pdfminer` not installed | `pip install pypdf` |
