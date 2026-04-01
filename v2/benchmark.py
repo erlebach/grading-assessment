@@ -38,7 +38,7 @@ def find_violations(
     for higher, lower in pairs:
         score_higher = grades_by_quality[higher].final_score
         score_lower = grades_by_quality[lower].final_score
-        if score_higher <= score_lower:
+        if score_higher < score_lower:
             violations.append(
                 OrderingViolation(
                     question_id=question_id,
@@ -46,7 +46,7 @@ def find_violations(
                     bad_pair=(higher.value, lower.value),
                     bad_scores=(score_higher, score_lower),
                     description=(
-                        f"{higher.value} score ({score_higher:.2f}) <= "
+                        f"{higher.value} score ({score_higher:.2f}) < "
                         f"{lower.value} score ({score_lower:.2f})"
                     ),
                 )
