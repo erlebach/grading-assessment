@@ -57,23 +57,15 @@ Rules:
 
 ## Git Commands
 
-The `.git` directory lives one level above the working directory, at
-`/Users/erlebach/src/2026/grading_assessment/`. Running `git` from inside
-`autograder/` will fail with path-spec or index-lock errors.
-
-**Always run git commands with an explicit `-C` flag:**
-
-```bash
-git -C /Users/erlebach/src/2026/grading_assessment <subcommand> [args]
-```
+The `.git` directory is at `autograder/.git` — run git commands directly from
+the working directory without any `-C` flag.
 
 Examples:
-- `git -C /Users/erlebach/src/2026/grading_assessment status --short`
-- `git -C /Users/erlebach/src/2026/grading_assessment add autograder/grading_pipeline/models.py`
-- `git -C /Users/erlebach/src/2026/grading_assessment commit -m "..."`
+- `git status --short`
+- `git add grading_pipeline/models.py`
+- `git commit -m "..."`
 
-File paths passed to `git add` must be relative to the repo root, i.e.
-prefixed with `autograder/` (e.g. `autograder/grading_pipeline/models.py`).
+File paths passed to `git add` are relative to `autograder/` (no prefix needed).
 
 ---
 
