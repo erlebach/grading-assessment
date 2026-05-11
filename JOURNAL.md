@@ -1,5 +1,54 @@
 ---
 
+## 2026-05-11 16:45 — v2 benchmark driver added; Gemini free-tier rate limit blocks live run
+
+Added `scripts/run_v2_benchmark.py` (the driver the previous JOURNAL entry
+flagged as missing): wires `AnswerGenerator`, `RubricGeneratorV2`,
+`RubricCritic`, `ConceptJudge`, and `KarpathyLoop` together over the full
+text of `slides_data_type_quality.pdf` (extracted via `pypdf`), iterates
+q01–q05 with question types `distinction`/`application`/`enumeration`/
+`mechanism`/`definition`, and writes a markdown + JSON report. v2 unit
+tests (45) pass; smoke run on q01 alone hit `ResourceExhausted: 429` —
+gemini-2.5-flash free tier caps at **5 generate_content requests/minute**
+and the pipeline needs ~25–45 calls per question. Driver script committed;
+no benchmark numbers yet.
+
+### Details
+
+Pre-flight discoveries before the run:
+- `~/.env` recreated with `GEMINI_API_KEY` after user prompt; verified via
+  `config.llm_config.load_env_config()` (prefix `AIzaSy`, length 39).
+- `WALKTHROUGH_v2.md` Step 3 mentions `GOOGLE_API_KEY` but the code reads
+  `GEMINI_API_KEY` (from `$HOME/.env`). Doc gap — to fix later.
+- `WALKTHROUGH_v2.md` Steps 4 and 5 import `retrieve_context` from
+  `retrieval_core.retriever`. No such function exists — the real API is
+  `class DualIndexRetriever`. The driver sidesteps this by passing the
+  full PDF text as `source_material` and leaving `evidence_context=""`
+  (per `USAGE_v2.md` Design Notes, retrieval wiring is a follow-on task).
+- Existing pickle indexes in `grading_pipeline/persist/`
+  (`word_index.pkl`, `sentence_index.pkl`, `paragraph_index.pkl`) are
+  unused by the v2 driver in its current form.
+
+Failure mode on smoke run:
+- LLM provider: Gemini 2.5 Flash via `configure_llm_for_tier("foundational")`.
+- Per-question call estimate: 9 (answer generation) + 1 (rubric generation)
+  + up to 5 × (3 train + 3 val + 1 critic) = up to ~45 calls.
+- Free-tier quota: 5 RPM. Pipeline saturates the limit during answer
+  generation; subsequent calls return `429` with `retry_delay { seconds: 56 }`.
+- Driver caught the exception and wrote an error row to the report;
+  artifacts in `results/v2_benchmark_q01_smoke.{md,json}` (untracked).
+
+Path forward (awaiting user decision):
+1. Add retry/throttle (e.g. `tenacity` with exponential backoff or a
+   simple `time.sleep(13)` between calls — 60s / 5 calls ≈ 12s minimum).
+   Runtime ≈ 9 min/question × 5 = ~45 min for the full benchmark.
+2. Upgrade Gemini billing tier (user action).
+3. Switch to `oss` tier (Ollama `gpt-oss:20b`) — no rate limit but slower
+   per call; quality may differ.
+4. Defer live benchmark; commit the driver and revisit.
+
+---
+
 ## 2026-05-11 15:39 — Reconcile state with v2 pivot; STATE/SNAPSHOT refreshed
 
 `STATE.md` was stale (claimed last commit T3.4 on `dynamic_rubrics`, updated
