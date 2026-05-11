@@ -1,92 +1,106 @@
-# Project State — autograder / dynamic_rubrics branch
+# Project State — autograder / v2-concept-rubrics branch
 
-**Last updated:** 2026-03-30
-**Branch:** `dynamic_rubrics`
-**Last commit:** T3.4 (grade storage and appeal tracking)
+**Last updated:** 2026-05-11
+**Branch:** `v2-concept-rubrics`
+**Last commit:** `a70db9f` — Move .git into autograder/ (make autograder the repo root)
 
 ---
 
 ## Narrative Recap
 
-The project is an LLM-based autograder for short-answer questions. Work is proceeding on
-a new **weighted checklist grading architecture** where rubrics are decomposed into discrete,
-categorized, binary checks, each carrying a weight. The pipeline is:
+This project is an LLM-based autograder for short-answer questions. It has gone
+through two architectural generations:
 
-> Generate rubric → Extract checks → Assign categories → Deduplicate → Evaluate per student → Score
+- **v1 (legacy, still in tree):** Dynamically-generated rubrics with keyword + semantic
+  scoring. Lives in `grading_pipeline/` and `grading_dynamic_rubrics/`. Reached T4.3
+  (sample grading) and revealed structural failures — keyword scoring cannot judge
+  vocabulary-paraphrased concepts, and `evidence_count / top_k` provides no
+  discrimination across answer quality levels.
+- **v2 (current focus):** Concept-presence LLM-judge pipeline. Lives in `v2/`. Rubrics
+  are typed concept checks with precision levels; a Karpathy-style critic loop iterates
+  the rubric until `good > less_good > wrong` ordering holds on a held-out validation
+  split.
 
-### LLM Provider Decision (concluded 2026-01-29)
+The v2 redesign is documented in `REDESIGN.md`, `USAGE_v2.md`, and `WALKTHROUGH_v2.md`.
 
-Ollama (`gpt-oss:20b`) is the chosen provider. llama.cpp was abandoned due to GBNF grammar
-hangs and unfiltered thinking-chain output. Ollama filters `<|channel|>` blocks internally
-and returns clean JSON. Smoke-tested 2026-03-30 — confirmed working.
+### LLM Providers
 
-**Known constraint:** Only one Ollama instance on macOS at a time. Grading is sequential.
-
----
-
-## Completed Tasks
-
-| Task | File(s) | Commit | Notes |
-|------|---------|--------|-------|
-| T1.1 | `config/grading_categories.yaml`, `config/grading_config.yaml` | earlier | YAML configs |
-| T1.2 | `grading_pipeline/models.py`, `schemas.py` | `5fe539f` | Pydantic V2 models: Check, Rubric, CheckEvaluation, GradeResult, Appeal |
-| T1.3 | `data/` directory tree | `395d1ff` | Storage dirs created; naming conventions in `data/README.md` |
-| T2.1 | `grading_pipeline/rubric_generator_template.txt` | `8b2d3d9` | Updated for check-based output with `category` + `checks[]` per dimension |
-| T2.2 | `grading_pipeline/check_extraction.py`, `rubric_schema.py` | `45b1b35` | Extracts Check objects from LLM JSON; rubric_schema updated for new template |
-| T2.3 | `grading_pipeline/categorization.py`, `tests/test_categorization.py` | T2.3 | Validate/override check categories; load from grading_categories.yaml; 3 strategies (error/default/fuzzy) |
-| T2.4 | `grading_pipeline/deduplication.py`, `tests/test_deduplication.py` | T2.4 | Remove duplicate checks; injectable similarity_fn; threshold=0.85; DeduplicationResult with metadata |
-| T2.5 | `grading_pipeline/rubric_generator.py`, `tests/test_rubric_generator.py` | T2.5 | Orchestrates generate→extract→categorize→deduplicate; stores artifacts; GenerationResult dataclass |
-| T6.1 | `config/llm_config.py` | earlier | llama.cpp provider (inactive); Ollama path verified |
-| T11.1 | `llamacpp_ollama/TASK_LIST.md` | earlier | Already closed; Ollama decision documented |
+- **Default (`foundational` tier):** Gemini Flash (`models/gemini-2.5-flash`) via
+  `config/llm_config.py::configure_llm_for_tier()`. Requires `GOOGLE_API_KEY`.
+- **Local (`oss` tier):** Ollama `gpt-oss:20b`. SOCKS proxy crash fixed
+  (`64e7a72`, `2e20ff9`).
+- **Mixed:** foundational for rubric generation, oss for scoring.
 
 ---
 
-## Open Tasks
+## What's done (v2)
 
-### Phase 2 — Rubric Generation (T2.2 done, T2.3 next)
+| Component | File(s) | Commit |
+|-----------|---------|--------|
+| Core data models (ConceptCheck, CriterionV2, RubricV2, GradeV2, SyntheticAnswer) | `v2/models.py` | `410916d` → `8f6b5dc` |
+| Rubric schema validation (`parse_rubric_response`) | `v2/rubric_schema.py` | `7f0c9ab` → `af27d14` |
+| 10 question types + prompt templates | `v2/question_types.py` | `ac98956` |
+| `configure_llm_for_tier` + `config/rubric_generation.yaml` | `config/llm_config.py`, `config/rubric_generation.yaml` | `b30e8c9` |
+| Synthetic answer generator (3 × 3 quality levels, T=0.7) | `v2/answer_generator.py` | `07dfb55` |
+| Ordering benchmark (`find_violations`, `check_ordering`) | `v2/benchmark.py` | `423ba60`, `5fa28cc` |
+| Concept-check, answer-informed rubric generator | `v2/rubric_generator.py` | `ac98ab7` |
+| Weighted-mean float scoring (no `int()` truncation) | `v2/scoring.py` | `12fa934` |
+| LLM concept judge (single/multi mode) | `v2/judge.py` | `b7ef0e5` |
+| Rubric critic + Karpathy iterative refinement loop | `v2/rubric_critic.py`, `v2/karpathy_loop.py` | `5fa28cc` |
+| End-to-end pipeline orchestrator | `v2/pipeline.py` | `89e2225` |
+| v2 test suite (~45 tests in `tests/v2/`) | `tests/v2/test_*.py` | various |
 
-- [x] **T2.1** — Rubric generation prompt template updated
-- [x] **T2.2** — Check extraction implemented (`check_extraction.py`, `rubric_schema.py`)
-- [x] **T2.3** — Category validation (`categorization.py`); validates against YAML config, supports error/default/fuzzy strategies
-- [x] **T2.4** — Deduplication (`deduplication.py`); injectable similarity_fn, threshold param, DeduplicationResult with removed_pairs metadata
-- [x] **T2.5** — Integrate full rubric generation pipeline
-  → file: `grading_pipeline/rubric_generator.py` (created)
+## What's done (v1, retained)
 
-### Phase 3 — Evaluation & Scoring (depends on Phase 2)
-
-- [x] **T3.1** — Check evaluation via LLM
-  → file: `grading_dynamic_rubrics/check_evaluation.py` (created)
-- [x] **T3.2** — Hybrid evaluation with human override
-  → file: `grading_dynamic_rubrics/check_evaluation.py` (updated); `HybridCheckEvaluation` dataclass, `evaluate_check_hybrid()`, `apply_human_override()`
-- [x] **T3.3** — Scoring algorithm
-  → file: `grading_dynamic_rubrics/scoring.py` (created); `tests/test_scoring.py` (13 tests)
-- [x] **T3.4** — Grade storage and appeal tracking
-  → file: `grading_dynamic_rubrics/grade_storage.py` (created); `tests/test_grade_storage.py` (18 tests)
-
-### Phase 4 — Testing & Validation
-
-- [x] **T4.1** — Unit tests for individual functions
-  → all required test files exist from prior tasks; 183 tests pass
-- [x] **T4.2** — Integration tests for full pipeline
-  → `tests/test_rubric_pipeline.py` (13 tests), `tests/test_grading_pipeline.py` (12 tests), `tests/test_appeal_workflow.py` (15 tests); 223 total pass
-- [x] **T4.3** — Sample grading test (q01-q05, 3 answer types each)
-  → `t4_3_grading_sample.py`, `t4_3_report.md`, `rubrics_dynamic/yaml/q02-q04.yaml`
-  → good > wrong holds for all 5 questions; good > less_good > wrong holds for q01, q04; fails q02 (Δ=0.29), q03 (Δ=0.02 noise), q05 (Δ=0.24)
-  → Root causes documented: int() truncation, stopword keyword extraction, evidence-count semantic scoring
+- Phase 1–3 (T1.1 → T3.4): models, rubric generation pipeline, evaluation, scoring,
+  grade storage — all complete in `grading_pipeline/` and `grading_dynamic_rubrics/`.
+- Phase 4 partial: T4.1 (183 unit tests), T4.2 (223 integration tests), T4.3
+  (sample grading q01–q05).
+- **T4.3 follow-up fixes landed** (despite STATE not reflecting them earlier):
+  - P1 `int → round/float` scoring comparison — `839af81`
+  - P2 stopword filter in `extract_keywords`, semantic mode reverted to count — `1ce1655`
+  - P3 reranker-weighted semantic scoring with mode switch + NaN fix — `1524940`, `7f6f71a`
+- Major cleanup commit `be97575` removed `version1/`, `mwe/`, obsolete `IMPLEMENTATION_*.md`
+  plans, and `grader/grade_question.py` (~11.8k lines deleted).
 
 ---
 
-## Blockers & Open Questions
+## Open items
 
-1. **Reranking indices** — Per commit `3df9dbf`, reranking was run for at least one question.
-   Confirm which questions have reranked indices before building T3.1 (evaluation pipeline).
+1. **Run the v2 ordering benchmark end-to-end on q01–q05.** `v2/benchmark.py` is a
+   library (`find_violations`, `check_ordering`), not a runnable script. Driving it
+   requires `v2/pipeline.py` with an indexed source corpus and either a Gemini API
+   key or local Ollama. No assignment runner script is checked in — `WALKTHROUGH_v2.md`
+   provides the template scripts (`generate_rubrics.py`, `grade_students.py`,
+   `generate_feedback.py`) but they live in the doc, not in `scripts/`.
 
-3. **grade-spec.md** — Per `CLAUDE.md`, any grading logic changes require updating
-   `grade-spec.md` first. Locate and review before starting T3.x.
+2. **v1 vs v2 deprecation policy.** Both pipelines coexist. `REDESIGN.md` section 8
+   lists files to carry over vs. files that should not be carried over. The cleanup
+   in `be97575` removed the worst offenders but `grading_pipeline/` and
+   `grading_dynamic_rubrics/` are still active.
+
+3. **Retrieval wiring.** `ConceptJudge.evaluate(evidence_context: str)` accepts
+   retrieval context but the wiring of `retrieval_core` into the v2 pipeline is a
+   follow-on task (noted in `USAGE_v2.md` Design Notes).
+
+4. **TASK_LIST.md is v1-only.** It still tracks T4.4 (CI). The v2 work has no
+   visible task tracking. Decide whether to extend TASK_LIST.md with a v2 phase or
+   open a new task spec.
+
+5. **Per CLAUDE.md authority rule**, any grading-logic change must update
+   `grade-spec.md` first. That file was added in `c4c1190` and has not been touched
+   during the v2 work — verify it does not conflict with the concept-check schema
+   before treating v2 as canonical.
 
 ---
 
 ## Next time, start by…
 
-1. Proceed with **T4.4** (regression testing / CI) — T4.3 complete.
-   Or address T4.3 findings: fix `int()→round()` in `apply_rubric_scoring_dynamic`, fix `extract_keywords` stopwords, then re-run T4.3 to confirm all 5 questions pass.
+1. Decide a benchmark provider — Gemini Flash (`GOOGLE_API_KEY` available?) or
+   local Ollama (`gpt-oss:20b` pulled? proxy fix in place?).
+2. Build an index for source materials (slides PDF in `grading_pipeline/sources/`).
+3. Write `scripts/run_v2_benchmark.py` based on `WALKTHROUGH_v2.md` steps 4–5 +
+   `v2/benchmark.check_ordering`, run on q01–q05, save results.
+4. Compare v2 ordering-violation count to the v1 T4.3 baseline (q02, q03, q05 failed
+   on v1). If v2 passes all 5 questions, mark v2 as the canonical pipeline and start
+   the v1 deprecation.
