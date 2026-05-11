@@ -1,5 +1,21 @@
 ---
 
+## 2026-05-11 17:13 — Switch v2 benchmark oss tier to gemma4:26b; parameterize driver --tier
+
+Switched `config/rubric_generation.yaml::tiers.oss.model` from `gpt-oss:20b`
+to `gemma4:26b` (Ollama, 17 GB, locally present) to sidestep the Gemini
+Flash free-tier rate limit (5 RPM) that blocked the previous benchmark
+attempt. Added `--tier {foundational|oss|mixed}` CLI flag to
+`scripts/run_v2_benchmark.py` (default now `oss`); parameterized
+`build_components()` accordingly. STATE.md "Next time, start by…" rewritten
+to reflect: driver exists, oss tier ready, just needs to be run. SNAPSHOT
+oss-tier line updated to name gemma4:26b. Committing this as a checkpoint
+before kicking off the (estimated ~30–45 min) Ollama benchmark run, per
+user request: "Before proceeding, updating JOURNAL, STATE, SNAPshot and
+committing would be a good idea to have a base to return to if needed."
+
+---
+
 ## 2026-05-11 16:45 — v2 benchmark driver added; Gemini free-tier rate limit blocks live run
 
 Added `scripts/run_v2_benchmark.py` (the driver the previous JOURNAL entry

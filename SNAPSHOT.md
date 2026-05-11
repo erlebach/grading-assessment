@@ -1,6 +1,6 @@
 # SNAPSHOT — autograder
 
-*Last updated: 2026-05-11 15:39*
+*Last updated: 2026-05-11 17:13*
 
 ## Purpose
 
@@ -65,8 +65,10 @@ LLM-based autograder for short-answer assignments. Two pipelines coexist:
 - **Float scoring throughout v2** — no `int()` truncation anywhere.
 - **Karpathy refinement loop with train/val split** — rubric stops iterating only
   when no ordering violations exist on a held-out set (overfitting guard).
-- **Configurable model tier:** `foundational` (Gemini Flash, default), `oss`
-  (Ollama `gpt-oss:20b`), or `mixed`.
+- **Configurable model tier:** `foundational` (Gemini Flash, default — note
+  free tier is capped at 5 RPM, prohibitive for the v2 pipeline's ~25–45
+  calls/question), `oss` (Ollama `gemma4:26b` since 2026-05-11; previously
+  `gpt-oss:20b`), or `mixed`.
 - **Evaluation mode switch:** `single` (one LLM call per answer) vs. `multi` (one
   per check). Empirical comparison is part of the v2 benchmark plan.
 - **Question-type registry (10 types)** anchors prompt templates and example banks,
