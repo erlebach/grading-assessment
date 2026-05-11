@@ -108,8 +108,8 @@ def extract_pdf_text(path: Path) -> str:
     return "\n".join((page.extract_text() or "") for page in reader.pages)
 
 
-def build_components() -> dict[str, Any]:
-    llm = configure_llm_for_tier("foundational")
+def build_components(tier: str = "foundational") -> dict[str, Any]:
+    llm = configure_llm_for_tier(tier)
     answer_gen = AnswerGenerator(llm=llm, config=AnswerGeneratorConfig(variants_per_level=3))
     rubric_gen = RubricGeneratorV2(llm=llm, config=RubricGeneratorConfig())
     critic = RubricCritic(llm=llm)
@@ -271,6 +271,12 @@ def main():
     )
     parser.add_argument("--all", action="store_true", help="Run all 5 questions.")
     parser.add_argument(
+        "--tier",
+        choices=["foundational", "oss", "mixed"],
+        default="oss",
+        help="LLM tier from config/rubric_generation.yaml (default: oss).",
+    )
+    parser.add_argument(
         "--report",
         type=Path,
         default=RESULTS_DIR / "v2_benchmark_report.md",
@@ -293,8 +299,9 @@ def main():
 
     source = extract_pdf_text(PDF_PATH)
     logging.info("PDF source loaded: %d chars from %s", len(source), PDF_PATH.name)
+    logging.info("LLM tier: %s", args.tier)
 
-    components = build_components()
+    components = build_components(tier=args.tier)
     results = [run_one(qid, components, source) for qid in qs]
 
     write_report(results, args.report)

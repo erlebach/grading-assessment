@@ -15,7 +15,7 @@ tiers:
     model: models/gemini-2.5-flash
   oss:
     provider: ollama
-    model: gpt-oss:20b
+    model: gemma4:26b
   mixed:
     rubric_generation: foundational
     scoring: oss
