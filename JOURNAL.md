@@ -1,5 +1,53 @@
 ---
 
+## 2026-05-11 15:39 — Reconcile state with v2 pivot; STATE/SNAPSHOT refreshed
+
+`STATE.md` was stale (claimed last commit T3.4 on `dynamic_rubrics`, updated
+2026-03-30) and missed ~30 commits including the entire **v2 concept-check
+pipeline** in `v2/` and the T4.3 follow-up fixes that STATE had listed as
+pending. Rewrote `STATE.md` for the current `v2-concept-rubrics` branch,
+refreshed `SNAPSHOT.md` to include `v2/` components and design decisions, and
+recorded open items: v1/v2 coexistence + deprecation policy, missing
+benchmark-driver script, untracked v2 tasks, and `grade-spec.md` review
+against the concept-check schema. No code changed.
+
+### Details
+
+T4.3 follow-up fixes that already landed but STATE didn't show:
+- `839af81` int/round/float scoring comparison
+- `1ce1655` stopword filter in `extract_keywords`, semantic-mode reverted to count
+- `1524940` reranker-weighted semantic scoring with mode switch
+- `7f6f71a` NaN fix in reranker scores
+- `64e7a72`, `2e20ff9` Ollama SOCKS proxy fix
+
+v2 pipeline delivered between `410916d` and `89e2225` (~15 feature commits):
+typed `ConceptCheck` with precision levels, 10 `QuestionType` values and prompt
+templates, synthetic answer generator (3×3 at T=0.7), answer-informed
+`RubricGeneratorV2`, weighted-mean float scoring (no `int()` truncation),
+single/multi-mode `ConceptJudge`, `RubricCritic` + `KarpathyLoop` iterative
+refinement with train/val split, `PipelineV2` orchestrator, ordering benchmark
+library (`find_violations`, `check_ordering`), ~45 tests in `tests/v2/`.
+
+Cleanup commit `be97575` deleted ~11.8k lines: `version1/`, `mwe/`,
+`grader/grade_question.py`, obsolete `IMPLEMENTATION_*.md` plans.
+
+New design/usage docs (commits `2e20ff9`, `3a42f77`, `c5a562d`, `bf98c67`):
+`REDESIGN.md`, `USAGE_v2.md`, `WALKTHROUGH_v2.md`, Quarto notebook
+`notebooks/grade_assignment_v2.qmd`.
+
+Open items recorded in STATE.md:
+1. `v2/benchmark.py` is library-only; needs driver script per
+   `WALKTHROUGH_v2.md` §4–5 plus Gemini API key or local Ollama.
+2. v1 (`grading_pipeline/`, `grading_dynamic_rubrics/`) and v2 (`v2/`) coexist
+   without an explicit deprecation policy.
+3. `TASK_LIST.md` still v1-era (last entry T4.4 CI). No v2 task tracking.
+4. `grade-spec.md` not yet reviewed against the concept-check schema.
+
+Next: pick LLM provider, build source index, write `scripts/run_v2_benchmark.py`
+per WALKTHROUGH, run on q01–q05, compare violation counts to the v1 T4.3 baseline.
+
+---
+
 ## 2026-05-11 12:47 — Move .git into autograder/ (make autograder the repo root)
 
 Used `git filter-repo --subdirectory-filter autograder` to rewrite history so `autograder/`
