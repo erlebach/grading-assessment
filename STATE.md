@@ -96,11 +96,13 @@ The v2 redesign is documented in `REDESIGN.md`, `USAGE_v2.md`, and `WALKTHROUGH_
 
 ## Next time, start by…
 
-1. Decide a benchmark provider — Gemini Flash (`GOOGLE_API_KEY` available?) or
-   local Ollama (`gpt-oss:20b` pulled? proxy fix in place?).
-2. Build an index for source materials (slides PDF in `grading_pipeline/sources/`).
-3. Write `scripts/run_v2_benchmark.py` based on `WALKTHROUGH_v2.md` steps 4–5 +
-   `v2/benchmark.check_ordering`, run on q01–q05, save results.
-4. Compare v2 ordering-violation count to the v1 T4.3 baseline (q02, q03, q05 failed
-   on v1). If v2 passes all 5 questions, mark v2 as the canonical pipeline and start
-   the v1 deprecation.
+1. Run `scripts/run_v2_benchmark.py --tier oss --all` — driver exists; `oss`
+   tier in `config/rubric_generation.yaml` now points to `gemma4:26b` (Ollama,
+   local, no rate limit). Earlier attempt against Gemini Flash hit the free-tier
+   5-RPM cap (q01 smoke failed mid-run with `ResourceExhausted: 429`).
+2. Compare v2 ordering-violation count to the v1 T4.3 baseline (q02, q03, q05
+   failed on v1). If v2 passes all 5 questions, mark v2 as the canonical
+   pipeline and start the v1 deprecation.
+3. After-benchmark cleanup: fix `WALKTHROUGH_v2.md` doc gaps — `GOOGLE_API_KEY`
+   should be `GEMINI_API_KEY`; `retrieve_context` import does not exist (real
+   API is `class DualIndexRetriever`).
