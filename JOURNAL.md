@@ -1,5 +1,26 @@
 ---
 
+## 2026-05-12 09:54 — launchd mitigations deployed; SIGKILL required; placeholder bundle removed
+
+Both launchd agents loaded and confirmed running (exit code 0 in `launchctl list`):
+`com.user.kill-gamepolicy` (10 s interval) and `com.user.cleanup-bundles` (1800 s interval).
+
+**kill-gamepolicy:** `pkill -x GamePolicyAgent` and direct `kill` silently fail — macOS
+blocks SIGTERM on system processes owned by the same user. `kill -9` (SIGKILL) is required.
+Rewritten to use `pgrep -x GamePolicyAgent` + `kill -9 "$pid"`; verified GamePolicyAgent not
+running after deployment.
+
+**cleanup-bundles:** 8 placeholder bundles detected in `/Applications/` (no valid executable
+in `Contents/MacOS/`). Only `OpenVPN Connect.app` lacked SIP protection and was successfully
+`rm -rf`'d. The remaining 7 (Photos Duplicate Cleaner, foobar2000, ally, Json New Haitam,
+Timer+, Speechify, Unhook) are SIP-protected; logged as "skipped (permission denied)".
+`lsregister -kill` flag is deprecated and removed; script uses `-r -domain local -domain
+system -domain user` only. A `sed -i ''` pattern-mismatch emptied the script file mid-session;
+restored from session context. `kill-gamepolicy` is the primary effective mitigation since 7
+placeholder bundles feeding the GamePolicy loop cannot be removed without admin.
+
+---
+
 ## 2026-05-12 09:19 — GamePolicyAgent Ollama-kill: Apple Discussions confirms root cause; mitigations planned
 
 Apple Discussions thread #256283688 confirms the SIGKILL root cause documented 2026-05-11:
