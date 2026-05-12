@@ -1,5 +1,45 @@
 ---
 
+## 2026-05-12 16:45 — rubric-layer analysis, v2 rationale captured, Ollama timeout 120→300
+
+Bumped Ollama `request_timeout` 120→300 s in `config/llm_config.py` — follow-on
+from 2026-05-11 22:29 gpt-oss:20b debugging where first calls of a benchmark
+run occasionally exceeded the 120 s ceiling. Added three analysis docs:
+`RUBRICS_ANALYSIS_2026-05-12.md` (rubric-layer trace, corrects the prior claim
+that root `rubrics/q0N.yaml` is unused), `V2_RATIONALE_2026-05-12.md`
+(consolidated v1→v2 rationale against `REDESIGN.md` §1–2), and `V1_STATE_2026-05-12.md`
+(v1 pipeline baseline). Superpowers brainstorming settled the next move:
+self-contained `version2/` benchmark of q01–q05 on oss tier — design doc to be
+written on a new branch.
+
+### Details
+
+**`config/llm_config.py`** — single-line change at `request_timeout=300.0`
+(was 120). Ollama runner is held for 24 h via `keep_alive`, so the timeout
+matters most on cold first-call latency under large prompts.
+
+**`RUBRICS_ANALYSIS_2026-05-12.md`** — documents the two generator scripts:
+LLM-based `create_dynamic_rubrics_for_each_question.py` (writes `rubrics/yaml/`
+and `rubrics/json/`) vs non-LLM `create_rubrics_for_all_questions.py` (writes
+root flat `rubrics/q0N.yaml` stubs). Corrects prior claim that root files are
+unused — `grading_pipeline/config/rubrics.yaml` references them for q01–q03
+and `cli.py` reads that config. Explains the config-update guard at
+`create_dynamic_rubrics_for_each_question.py:765` (`if question_id not in
+config["rubrics"]`) which prevents stale entries from being overwritten.
+
+**`V2_RATIONALE_2026-05-12.md`** — confirms the four user-recalled motivations
+against `REDESIGN.md` (keyword brittleness, foundational-model rubric gen,
+overlapping criteria, concept-grading). Adds operationalised prompt rules
+(`v2/rubric_generator.py` prompt enforces "vocabulary-agnostic; judge meaning,
+not words"; per-question-type templates carry the same). Specstory addendum
+notes the `.specstory/history/` transcripts add no rationale beyond
+`REDESIGN.md`.
+
+**`V1_STATE_2026-05-12.md`** — was already staged before this turn; bundled
+into this commit because it's part of the same documentation push.
+
+---
+
 ## 2026-05-12 14:19 — v2 benchmark: llama_cpp noise fix, oss tier switch, unbuffered logging
 
 ### Changes
