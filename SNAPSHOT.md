@@ -1,6 +1,6 @@
 # SNAPSHOT — autograder
 
-*Last updated: 2026-05-11 22:22*
+*Last updated: 2026-05-12 09:19*
 
 ## Purpose
 
@@ -35,6 +35,7 @@ LLM-based autograder for short-answer assignments. Two pipelines coexist:
 - `tests/v2/` — ~45 tests covering all v2 modules
 - `scripts/run_v2_benchmark.py` — end-to-end ordering-benchmark driver (`--tier`)
 - `scripts/probe_ollama.py` — Ollama stability MWE: N tiny calls + parallel `app.log` SIGKILL tail; verdict + exit code
+- `OLLAMA-ELECTRON-GamePolicy.md` — full root-cause write-up: GamePolicyAgent SIGKILL chain, Electron vs bare-CLI behaviour, and the two launchd mitigations (`kill-gamepolicy` every 10 s, `cleanup-bundles` every 30 min)
 
 ### v1 (legacy, still active)
 

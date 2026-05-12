@@ -1,5 +1,28 @@
 ---
 
+## 2026-05-12 09:19 — GamePolicyAgent Ollama-kill: Apple Discussions confirms root cause; mitigations planned
+
+Apple Discussions thread #256283688 confirms the SIGKILL root cause documented 2026-05-11:
+GamePolicyAgent enters an infinite loop when placeholder/incomplete app bundles exist in
+`/Applications/` (bundles with no valid executable in `Contents/MacOS/`). Retries on a
+~203 s cadence, creating corrupt Launch Services database entries. The
+`backgroundtaskmanagementd` + AppIntents chain then SIGKILLs the Ollama subprocess via
+the Electron wrapper.
+
+Running bare `ollama serve` (no Electron) removes the supervisor-kill chain but does NOT
+eliminate GamePolicyAgent's scan loop — system interference continues.
+
+**Mitigations to deploy (this session):**
+1. `~/.local/bin/kill-gamepolicy.sh` every 10 s via launchd — resets the scan cycle
+   before database corruption accumulates.
+2. `~/.local/bin/cleanup-bundles.sh` every 30 min via launchd — removes no-executable
+   bundles older than 1 h; runs `lsregister -kill -r` only if something is removed.
+3. `OLLAMA-ELECTRON-GamePolicy.md` committed to repo with full root-cause + mitigation docs.
+
+See `OLLAMA-ELECTRON-GamePolicy.md` for complete technical write-up.
+
+---
+
 ## 2026-05-11 22:54 — Ollama SIGKILL root-caused to macOS GamePolicyAgent
 
 The probe (50 calls × 5 s) caught 2 kills on a strikingly regular ~203 s
