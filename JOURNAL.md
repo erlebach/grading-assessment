@@ -1,5 +1,28 @@
 ---
 
+## 2026-05-12 13:05 — Ollama stable 50/50; root cause was old GGML blobs, not GamePolicyAgent
+
+Probe `scripts/probe_ollama.py --model gemma4:26b --n 50 --interval 5` completed 50/50 OK,
+0 kill events, longest streak 50, avg latency 2.75 s. VERDICT: stable.
+
+Todays crashes were caused by **old GGML-format model blobs** (magic `746a6767` = `ggjt`)
+in `~/.ollama/models/blobs/`. When `ollama serve` starts it scans every manifest to hydrate
+a model-show cache; hitting a pre-GGUF blob triggered fatal tensor-read errors that killed
+the server before any client connected. This had nothing to do with GamePolicyAgent.
+
+8 incompatible blobs (44.5 GB total) and 10 manifests deleted directly from disk, bypassing
+`ollama rm` (which itself calls `POST /api/show` and crashes the server for the same reason).
+Affected models: llama2:13b-chat, llama2:13b-text, llama2:text, codellama:13b,
+codellama:7b-code, codellama:7b-instruct, codellama:latest, ge:latest,
+ge_model:latest, codeup:latest.
+
+GamePolicyAgent mitigations (kill-gamepolicy every 10 s, cleanup-bundles every 30 min)
+remain deployed and working. Electron Ollama.app auto-start (com.ollama.ollama SMAppService
+login item) found running without user intent; killed for this session. Permanent removal:
+System Settings > General > Login Items > remove Ollama.
+
+---
+
 ## 2026-05-12 09:54 — launchd mitigations deployed; SIGKILL required; placeholder bundle removed
 
 Both launchd agents loaded and confirmed running (exit code 0 in `launchctl list`):

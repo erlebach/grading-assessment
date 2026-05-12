@@ -50,6 +50,19 @@ Placeholder bundles in `/Applications/` arise from:
 - Specific apps: Authy, Parallels Mounter (commonly cited)
 - iOS app stubs synced to the Mac via iPhone USB connection
 
+### Ollama.app Auto-Start (SMAppService Login Item)
+
+Ollama.app registers itself as a per-user login item via `com.apple.xpc.ServiceManagement`
+(macOS SMAppService API), label `com.ollama.ollama`. This means it **auto-starts at every
+login without user intervention**, even if the user never opens it from /Applications.
+
+Because the Electron wrapper is what the GamePolicyAgent kill chain targets, its presence
+re-enables the kill chain after every reboot — even if you previously quit it manually.
+
+**To permanently remove the auto-start:**
+- System Settings → General → Login Items → find Ollama → click `–`
+- Do NOT re-open `/Applications/Ollama.app` — use `ollama serve` from terminal only.
+
 ## Mitigations
 
 Two launchd agents are deployed to break the cycle.
@@ -111,6 +124,53 @@ tail -f /tmp/kill-gamepolicy.log
 tail -f /tmp/cleanup-bundles.log
 ```
 
+## Separate Crash Root Cause: GGML-format Model Blobs
+
+**Symptom:** `ollama serve` crashes immediately on startup with repeated
+`error reading tensor index=0 error="unexpected EOF"` and/or
+`failed to hydrate local model show cache ... error="invalid file magic"`.
+No kill events in `app.log`; no crash report in `~/Library/Logs/DiagnosticReports/`.
+
+**Cause:** Ollama's startup routine scans **every installed model manifest** to build a
+model-show cache used by `ollama list` / `ollama show` / `/api/tags`. If any blob on disk
+uses the old GGML format (magic bytes `746a6767` = `ggjt`, pre-GGUF), the tensor read
+fails fatally and kills the server — even though that model is never being actively used.
+
+Old GGML blobs originate from models downloaded before Ollama switched to GGUF format
+(roughly 2023 and earlier). They are **not corrupt** — they are simply an incompatible
+format that modern Ollama cannot read.
+
+**Why `ollama rm` does not work for these models:** `ollama rm` calls `POST /api/show`
+first to retrieve model metadata before deleting. This triggers the same tensor read,
+crashes the server, and aborts the delete mid-operation.
+
+**Fix: delete manifests and blobs directly from disk:**
+
+```bash
+# 1. Identify GGML blobs (magic != GGUF)
+python3 - << 'EOF'
+import os, glob
+blobs = os.path.expanduser("~/.ollama/models/blobs")
+for f in sorted(glob.glob(f"{blobs}/*")):
+    if os.path.getsize(f) < 100_000_000: continue
+    magic = open(f,'rb').read(4)
+    if magic != b'GGUF':
+        print(f"GGML: {os.path.basename(f)[:30]}  {os.path.getsize(f)/1e9:.1f}GB  {magic.hex()}")
+EOF
+
+# 2. Find which manifests reference them and delete, then delete the blobs
+#    (see scripts/clean_ggml_blobs.py in this repo for the full script)
+```
+
+On 2026-05-12, 8 blobs (44.5 GB) were removed this way: four 3.8 GB files and four
+7.3–7.4 GB files covering `llama2:13b-chat`, `llama2:13b-text`, `llama2:text`,
+`codellama:13b`, `codellama:7b-code`, `codellama:7b-instruct`, `codellama:latest`,
+`ge:latest`, `ge_model:latest`, `codeup:latest`.
+
+**This root cause is completely independent of GamePolicyAgent.** If `ollama serve`
+crashes with tensor errors at startup, investigate GGML blobs before suspecting
+GamePolicyAgent.
+
 ## Verification
 
 Run `scripts/probe_ollama.py` (in this repo) before and after deploying the agents:
@@ -122,6 +182,12 @@ Run `scripts/probe_ollama.py` (in this repo) before and after deploying the agen
 A `signal: killed` count of 0 with consecutive successes = 50 confirms the mitigations
 are holding.
 
+**Verified result (2026-05-12, `gemma4:26b`, after GGML blob removal):**
+```
+Calls: 50 (50 ok / 0 err)  Avg latency: 2.75s  Longest streak: 50  Kill events: 0
+VERDICT: stable — safe to run the benchmark.
+```
+
 ## Timeline
 
 | Date | Event |
@@ -129,4 +195,7 @@ are holding.
 | 2026-05-11 20:05 | Ollama SIGKILL first observed; 3 code fixes land (context_window, keep_alive, check_type) |
 | 2026-05-11 22:22 | `scripts/probe_ollama.py` added to diagnose cadence |
 | 2026-05-11 22:54 | Root cause traced to GamePolicyAgent via unified-log; bare CLI workaround documented |
-| 2026-05-12 | Apple Discussions #256283688 confirms macOS bug; placeholder-bundle loop confirmed; launchd mitigations deployed |
+| 2026-05-12 09:xx | Apple Discussions #256283688 confirms macOS bug; placeholder-bundle loop confirmed; launchd mitigations deployed |
+| 2026-05-12 10:xx | Crashes diagnosed as GGML-format model blobs (`ggjt` magic), not GamePolicyAgent; `ollama rm` also crashes server on GGML models |
+| 2026-05-12 10:xx | `com.ollama.ollama` SMAppService login item found auto-starting Electron Ollama.app without user intent; killed and disabled |
+| 2026-05-12 13:05 | 8 GGML blobs (44.5 GB) + 10 manifests deleted directly from disk; probe 50/50 OK, 0 kills — stable |
