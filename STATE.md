@@ -1,8 +1,8 @@
 # Project State — autograder / v2-concept-rubrics branch
 
-**Last updated:** 2026-05-11
+**Last updated:** 2026-05-11 22:22
 **Branch:** `v2-concept-rubrics`
-**Last commit:** `a70db9f` — Move .git into autograder/ (make autograder the repo root)
+**Last commit:** `0240219` — docs(state): journal v2 benchmark blocker (Ollama SIGKILLs); STATE next-steps updated
 
 ---
 
@@ -96,22 +96,28 @@ The v2 redesign is documented in `REDESIGN.md`, `USAGE_v2.md`, and `WALKTHROUGH_
 
 ## Next time, start by…
 
-1. **Identify the Ollama SIGKILL source before retrying the benchmark.** All
-   benchmark attempts on 2026-05-11 failed because `ollama serve` was being
-   SIGKILLed by an external macOS supervisor every ~70 s–4 min (34+ kills
-   logged in `~/.ollama/logs/app.log` as `signal: killed` from `server.go:224`).
-   Code is fine — three real bugs were fixed (`context_window=8192`,
-   `keep_alive=24h`, `check_type` enum in rubric-gen prompt) and `tests/v2/`
-   passes. The blocker is environmental. Possible fixes to try first:
-   restart Ollama.app cleanly; check for a `/loop` running in another Claude
-   Code session; investigate macOS RunningBoard / Apple Intelligence
-   resource enforcement; consider downgrading Ollama from 0.23.2.
-2. Once Ollama is stable, run `scripts/run_v2_benchmark.py --tier oss --questions q01`
-   and confirm convergence before fanning out to `--all`. The `oss` tier is
-   currently `gpt-oss:20b` (changed back from `gemma4:26b`).
-3. Compare v2 ordering-violation count to the v1 T4.3 baseline (q02, q03, q05
-   failed on v1). If v2 passes all 5 questions, mark v2 as the canonical
-   pipeline and start the v1 deprecation.
-4. After-benchmark cleanup: fix `WALKTHROUGH_v2.md` doc gaps — `GOOGLE_API_KEY`
-   should be `GEMINI_API_KEY`; `retrieve_context` import does not exist (real
-   API is `class DualIndexRetriever`).
+1. **Run the Ollama stability probe first.** `scripts/probe_ollama.py` was
+   added 2026-05-11 22:22 as an MWE for the SIGKILL diagnosis. It uses the
+   same `configure_llm("ollama", ...)` client as the v2 pipeline
+   (`context_window=8192`, `keep_alive="24h"`, `json_mode=True`), issues N
+   tiny `{"answer": "OK"}` prompts, and tails `~/.ollama/logs/app.log` in
+   parallel for `signal: killed` events. Run:
+   ```
+   .venv/bin/python scripts/probe_ollama.py --model gpt-oss:20b --n 50 --interval 5
+   ```
+   ~5 min. Exit 0 = stable; exit 1 = unstable (kill events or errors
+   logged). Do not start the full benchmark until this exits 0.
+2. If the probe reports kills, the blocker is still environmental, not
+   code. Possible fixes: restart Ollama.app cleanly; check for a `/loop`
+   running in another Claude Code session; investigate macOS RunningBoard
+   / Apple Intelligence resource enforcement; consider downgrading Ollama
+   from 0.23.2.
+3. Once the probe exits 0, run `scripts/run_v2_benchmark.py --tier oss --questions q01`
+   and confirm convergence before fanning out to `--all`. The `oss` tier
+   is currently `gpt-oss:20b` (changed back from `gemma4:26b`).
+4. Compare v2 ordering-violation count to the v1 T4.3 baseline (q02, q03,
+   q05 failed on v1). If v2 passes all 5 questions, mark v2 as the
+   canonical pipeline and start the v1 deprecation.
+5. After-benchmark cleanup: fix `WALKTHROUGH_v2.md` doc gaps —
+   `GOOGLE_API_KEY` should be `GEMINI_API_KEY`; `retrieve_context` import
+   does not exist (real API is `class DualIndexRetriever`).

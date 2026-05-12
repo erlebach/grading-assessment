@@ -1,5 +1,25 @@
 ---
 
+## 2026-05-11 22:22 — Ollama stability probe added (scripts/probe_ollama.py)
+
+Added `scripts/probe_ollama.py`, a standalone MWE for diagnosing the
+SIGKILL cadence flagged in the 2026-05-11 20:05 entry before kicking off
+the (~30–45 min) v2 benchmark. The probe instantiates the same Ollama
+client used by the v2 pipeline (`configure_llm("ollama", ...)` with
+`context_window=8192`, `keep_alive="24h"`, `json_mode=True`), issues N
+tiny `{"answer": "OK"}` prompts at a configurable interval, and in
+parallel tails `~/.ollama/logs/app.log` for `signal: killed` events on a
+daemon thread. Per-call output: timestamp, latency, success/error, response
+length. Summary prints longest consecutive-success streak, kill-event
+count with timestamps, and an exit-code verdict (0 = stable, 1 = unstable).
+
+Default: 50 calls × 5 s interval ≈ 5 min probe window. Imports verified
+via `--help`; no live Ollama run yet. STATE "Next time, start by…" updated
+to run this probe before any benchmark retry. No code outside `scripts/`
+touched.
+
+---
+
 ## 2026-05-11 20:05 — v2 benchmark blocked by Ollama runner SIGKILLs; 3 fixes landed
 
 Three real bugs fixed today, but the q01 benchmark on `gpt-oss:20b` could

@@ -1,6 +1,6 @@
 # SNAPSHOT — autograder
 
-*Last updated: 2026-05-11 17:13*
+*Last updated: 2026-05-11 22:22*
 
 ## Purpose
 
@@ -33,6 +33,8 @@ LLM-based autograder for short-answer assignments. Two pipelines coexist:
 - `config/rubric_generation.yaml` — model tier, evaluation mode, loop params, scoring mode
 - `config/llm_config.py::configure_llm_for_tier()` — tier dispatch (foundational/oss/mixed)
 - `tests/v2/` — ~45 tests covering all v2 modules
+- `scripts/run_v2_benchmark.py` — end-to-end ordering-benchmark driver (`--tier`)
+- `scripts/probe_ollama.py` — Ollama stability MWE: N tiny calls + parallel `app.log` SIGKILL tail; verdict + exit code
 
 ### v1 (legacy, still active)
 
