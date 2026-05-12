@@ -43,7 +43,9 @@ class RubricGeneratorV2:
             source_material=source_material,
             synthetic_answers=synthetic_answers,
         )
+        logger.info("  rubric_gen: calling LLM (%d synthetic answers) ...", len(synthetic_answers))
         response = self.llm.complete(prompt)
+        logger.info("  rubric_gen: done")
         raw = self._parse_json(response.text)
         return parse_rubric_response(
             raw=raw,

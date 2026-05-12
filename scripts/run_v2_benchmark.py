@@ -28,6 +28,14 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+
+class _FlushFileHandler(logging.FileHandler):
+    """FileHandler that flushes after every record (unbuffered log)."""
+
+    def emit(self, record: logging.LogRecord) -> None:
+        super().emit(record)
+        self.flush()
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 
@@ -288,14 +296,33 @@ def main():
         default=None,
         help="Optional path for machine-readable JSON dump.",
     )
+    parser.add_argument(
+        "--log",
+        type=Path,
+        default=None,
+        help="Log file path (default: <report>.log, unbuffered).",
+    )
     args = parser.parse_args()
 
     qs = list(QUESTIONS) if args.all else (args.questions or [])
     if not qs:
         parser.error("specify --questions Q [Q ...] or --all")
 
-    logging.basicConfig(level=logging.INFO, format="%(message)s")
     RESULTS_DIR.mkdir(exist_ok=True)
+
+    log_path: Path = args.log or args.report.with_suffix(".log")
+    fmt = logging.Formatter("%(asctime)s %(message)s", datefmt="%H:%M:%S")
+    root = logging.getLogger()
+    root.setLevel(logging.INFO)
+    # console handler
+    ch = logging.StreamHandler(sys.stderr)
+    ch.setFormatter(fmt)
+    root.addHandler(ch)
+    # unbuffered file handler
+    fh = _FlushFileHandler(log_path, mode="w", encoding="utf-8")
+    fh.setFormatter(fmt)
+    root.addHandler(fh)
+    logging.info("Log: %s", log_path)
 
     source = extract_pdf_text(PDF_PATH)
     logging.info("PDF source loaded: %d chars from %s", len(source), PDF_PATH.name)

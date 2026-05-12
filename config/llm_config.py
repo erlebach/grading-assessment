@@ -48,9 +48,7 @@ try:
     # The model handles reasoning internally via proper chat template (harmony/Jinja)
     JSON_GRAMMAR_STR = 'ws ::= [ \\t\\n]*\nvalue ::= [-a-zA-Z0-9 \\t\\n.,!?;:()\\[\\]{}\'"/@#$%&*+=<>_~`\\\\]*\nroot ::= "{" ws "\\"answer\\"" ws ":" ws "\\"" value "\\"" ws "}"\n'
     JSON_GRAMMAR = LlamaGrammar.from_string(JSON_GRAMMAR_STR)
-    print(f"✓ JSON_GRAMMAR compiled successfully at module load", flush=True)
-except Exception as e:
-    print(f"✗ Failed to compile JSON_GRAMMAR: {e}", flush=True)
+except Exception:
     JSON_GRAMMAR = None
 
 

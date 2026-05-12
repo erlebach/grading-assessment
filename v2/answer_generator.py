@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from typing import Any
 
 from v2.models import AnswerQuality, SyntheticAnswer
+
+logger = logging.getLogger(__name__)
 
 _QUALITY_INSTRUCTIONS: dict[AnswerQuality, str] = {
     AnswerQuality.GOOD: (
@@ -54,7 +57,9 @@ class AnswerGenerator:
                     quality=quality,
                     variant=variant,
                 )
+                logger.info("  answer_gen: %s variant %d/%d ...", quality.value, variant, self.config.variants_per_level)
                 response = self.llm.complete(prompt)
+                logger.info("  answer_gen: %s variant %d done", quality.value, variant)
                 results.append(
                     SyntheticAnswer(
                         question_id=question_id,

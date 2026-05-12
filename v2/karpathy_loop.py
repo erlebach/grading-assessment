@@ -52,17 +52,26 @@ class KarpathyLoop:
         source_material: str,
     ) -> KarpathyResult:
         train, val = self._split(answers)
+        logger.info(
+            "  karpathy: max_iter=%d  train=%d/level  val=%d/level",
+            self.config.max_iterations, self.config.train_per_level, self.config.val_per_level,
+        )
         rubric = initial_rubric
         all_violations: list[OrderingViolation] = []
 
         for iteration in range(self.config.max_iterations + 1):
+            logger.info("  karpathy iter %d/%d: scoring train ...", iteration, self.config.max_iterations)
             train_grades = self._score_set(train, rubric)
             train_viols = find_violations(question_id=question_id, grades_by_quality=train_grades)
+            logger.info("    train violations: %d", len(train_viols))
 
             if not train_viols:
+                logger.info("    train clean → scoring val ...")
                 val_grades = self._score_set(val, rubric)
                 val_viols = find_violations(question_id=question_id, grades_by_quality=val_grades)
+                logger.info("    val violations: %d", len(val_viols))
                 if not val_viols:
+                    logger.info("    CONVERGED at iter %d", iteration)
                     return KarpathyResult(
                         final_rubric=rubric, converged=True,
                         iterations_used=iteration, all_violations=all_violations,
@@ -74,12 +83,15 @@ class KarpathyLoop:
             all_violations.extend(violations)
 
             if iteration == self.config.max_iterations:
+                logger.info("    max iterations reached — did not converge")
                 break
 
+            logger.info("    calling critic ...")
             examples = {q.value: next(a.text for a in answers if a.quality == q) for q in AnswerQuality}
             rubric = self.critic.propose_fix(
                 current_rubric=rubric, violations=violations, answer_examples=examples,
             )
+            logger.info("    critic done")
 
         return KarpathyResult(
             final_rubric=rubric, converged=False,
@@ -99,6 +111,7 @@ class KarpathyLoop:
         for quality, answers in split.items():
             if not answers:
                 continue
+            logger.info("      scoring %s ...", quality.value)
             answer = answers[0]
             # Map quality to a student_id tag. Note: "less_good" must come before
             # "good" in the tag so substring checks like '"good" in sid' work

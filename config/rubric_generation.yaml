@@ -1,5 +1,5 @@
 # config/rubric_generation.yaml
-model_tier: foundational
+model_tier: oss
 evaluation_mode: single
 max_iterations: 5
 max_checks_per_criterion: 4
@@ -15,7 +15,7 @@ tiers:
     model: models/gemini-2.5-flash
   oss:
     provider: ollama
-    model: gpt-oss:20b
+    model: gemma4:26b
   mixed:
     rubric_generation: foundational
     scoring: oss

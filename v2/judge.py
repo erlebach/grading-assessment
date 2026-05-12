@@ -60,13 +60,16 @@ class ConceptJudge:
             '{"evaluations": [{"check_id": str, "precision": str, "rationale": str}, ...]}\n'
             "JSON:"
         )
+        logger.info("  judge [single]: %s — %d checks ...", question_id, len(all_checks))
         response = self.llm.complete(prompt)
+        logger.info("  judge [single]: done")
         raw = self._parse_json(response.text)
         return [self._build_eval(e) for e in raw["evaluations"]]
 
     def _evaluate_multi(self, answer_text, all_checks, evidence_context, question_id) -> list[CheckEvalV2]:
         evals = []
-        for check in all_checks:
+        for i, check in enumerate(all_checks):
+            logger.info("  judge [multi]: %s check %d/%d (%s) ...", question_id, i + 1, len(all_checks), check.check_id)
             prompt = (
                 f"You are a grading judge for question {question_id}.\n\n"
                 f"Student answer:\n{answer_text}\n\n"
@@ -83,6 +86,7 @@ class ConceptJudge:
                 "JSON:"
             )
             response = self.llm.complete(prompt)
+            logger.info("  judge [multi]: check %d done", i + 1)
             raw = self._parse_json(response.text)
             evals.append(self._build_eval(raw))
         return evals
