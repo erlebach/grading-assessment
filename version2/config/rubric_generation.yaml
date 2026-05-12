@@ -1,0 +1,21 @@
+# config/rubric_generation.yaml
+model_tier: oss
+evaluation_mode: single
+max_iterations: 5
+max_checks_per_criterion: 4
+score_mode: float
+answer_variants_per_level: 3
+answer_temperature: 0.7
+train_per_level: 2
+val_per_level: 1
+
+tiers:
+  foundational:
+    provider: gemini
+    model: models/gemini-2.5-flash
+  oss:
+    provider: ollama
+    model: gemma4:26b
+  mixed:
+    rubric_generation: foundational
+    scoring: oss
