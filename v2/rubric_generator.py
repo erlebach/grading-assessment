@@ -77,6 +77,9 @@ class RubricGeneratorV2:
             '{"criteria": [{"criterion_id": str, "points": float, "checks": ['
             '{"check_id": str, "check_type": str, "concept": str, "points": float, '
             '"precision_levels": {"full": str, "partial": str, "none": str}}]}]}\n'
+            "Allowed values for check_type (use exactly one of these strings): "
+            '"definition", "distinction", "mechanism", "positive_example", '
+            '"negative_example", "generalization".\n'
             "JSON:"
         )
 

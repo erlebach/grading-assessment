@@ -202,6 +202,8 @@ def configure_llm(provider: str = "ollama", model: str | None = None) -> Any:
             model=model_name,
             base_url=base_url,
             request_timeout=120.0,
+            context_window=8192,  # Pin num_ctx to avoid dynamic KV resize / model reloads
+            keep_alive="24h",  # Hold the runner so it isn't SIGKILLed between sequential requests
             json_mode=True  # Enable JSON constrained generation
         )
     elif provider == "llamacpp":
