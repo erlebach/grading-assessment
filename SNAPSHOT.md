@@ -1,6 +1,6 @@
 # SNAPSHOT — autograder
 
-*Last updated: 2026-05-12 13:05*
+*Last updated: 2026-05-12 14:19*
 
 ## Purpose
 
@@ -33,7 +33,7 @@ LLM-based autograder for short-answer assignments. Two pipelines coexist:
 - `config/rubric_generation.yaml` — model tier, evaluation mode, loop params, scoring mode
 - `config/llm_config.py::configure_llm_for_tier()` — tier dispatch (foundational/oss/mixed)
 - `tests/v2/` — ~45 tests covering all v2 modules
-- `scripts/run_v2_benchmark.py` — end-to-end ordering-benchmark driver (`--tier`)
+- `scripts/run_v2_benchmark.py` — end-to-end ordering-benchmark driver (`--tier`, `--report`, `--log`); unbuffered file log auto-derived from `--report` path
 - `scripts/probe_ollama.py` — Ollama stability MWE: N tiny calls + parallel `app.log` SIGKILL tail; verdict + exit code
 - `OLLAMA-ELECTRON-GamePolicy.md` — full root-cause write-up: GamePolicyAgent SIGKILL chain, Electron vs bare-CLI behaviour, and the two launchd mitigations (`kill-gamepolicy` every 10 s, `cleanup-bundles` every 30 min)
 
@@ -68,10 +68,9 @@ LLM-based autograder for short-answer assignments. Two pipelines coexist:
 - **Float scoring throughout v2** — no `int()` truncation anywhere.
 - **Karpathy refinement loop with train/val split** — rubric stops iterating only
   when no ordering violations exist on a held-out set (overfitting guard).
-- **Configurable model tier:** `foundational` (Gemini Flash, default — note
-  free tier is capped at 5 RPM, prohibitive for the v2 pipeline's ~25–45
-  calls/question), `oss` (Ollama `gemma4:26b` since 2026-05-11; previously
-  `gpt-oss:20b`), or `mixed`.
+- **Configurable model tier:** `oss` (Ollama `gemma4:26b`, current default — Gemini
+  Flash free tier is capped at 5 RPM, prohibitive for ~54 calls/question), or
+  `foundational`/`mixed`. Switch via `model_tier` in `config/rubric_generation.yaml`.
 - **Evaluation mode switch:** `single` (one LLM call per answer) vs. `multi` (one
   per check). Empirical comparison is part of the v2 benchmark plan.
 - **Question-type registry (10 types)** anchors prompt templates and example banks,
@@ -82,9 +81,8 @@ LLM-based autograder for short-answer assignments. Two pipelines coexist:
 
 ## TODO
 
-- Write a benchmark driver script (`scripts/run_v2_benchmark.py`) per
-  `WALKTHROUGH_v2.md` §4–5, run on q01–q05, compare ordering-violation count to
-  the v1 T4.3 baseline.
+- Run `scripts/run_v2_benchmark.py` on q01–q05 with `gemma4:26b`; compare
+  ordering-violation count to v1 T4.3 baseline (held for q01, q04 only).
 - Decide v1 deprecation policy. `REDESIGN.md` §8 lists files to carry over vs.
   retire. `grading_pipeline/` and `grading_dynamic_rubrics/` are still in tree.
 - Wire `retrieval_core` into `ConceptJudge.evaluate(evidence_context=...)`

@@ -1,5 +1,42 @@
 ---
 
+## 2026-05-12 14:19 — v2 benchmark: llama_cpp noise fix, oss tier switch, unbuffered logging
+
+### Changes
+
+**`config/llm_config.py`** — removed two `print()` calls from the module-level
+`LlamaGrammar` try/except block. The block printed `✗ Failed to compile JSON_GRAMMAR`
+on every import when `llama_cpp` is not installed, flooding benchmark output. The
+`JSON_GRAMMAR = None` fallback is unchanged; the grammar is not used anywhere outside
+that file.
+
+**`config/rubric_generation.yaml`** — switched `model_tier` from `foundational`
+(Gemini Flash) to `oss` (Ollama `gemma4:26b`). Gemini free tier is capped at
+5 RPM, which is prohibitive for the ~54 LLM calls per question the v2 benchmark makes.
+
+**`v2/answer_generator.py`, `v2/rubric_generator.py`, `v2/judge.py`,
+`v2/karpathy_loop.py`** — added `logger.info` calls at every LLM call site and
+at every Karpathy-loop decision point (train scoring, violations found, val scoring,
+critic call, convergence/failure). Previously all four modules defined a `logger`
+but never called it, so the benchmark ran silently with no progress indication.
+
+**`scripts/run_v2_benchmark.py`** — added `_FlushFileHandler` (flushes after every
+`emit`) and `--log PATH` CLI argument. Log path defaults to `<report>.log` (e.g.
+`results/v2_benchmark_q01.log`). Log format includes `HH:MM:SS` timestamps on every
+line so per-step latency is visible. Both stderr and the log file receive all output.
+
+### Run command
+
+```bash
+ollama serve &   # bare server, not Electron app
+.venv/bin/python scripts/run_v2_benchmark.py \
+    --questions q01 \
+    --report results/v2_benchmark_q01.md
+# tail -f results/v2_benchmark_q01.log  (second terminal)
+```
+
+---
+
 ## 2026-05-12 13:05 — Ollama stable 50/50; root cause was old GGML blobs, not GamePolicyAgent
 
 Probe `scripts/probe_ollama.py --model gemma4:26b --n 50 --interval 5` completed 50/50 OK,
