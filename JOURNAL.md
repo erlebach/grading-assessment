@@ -1,5 +1,67 @@
 ---
 
+## 2026-05-11 20:05 — v2 benchmark blocked by Ollama runner SIGKILLs; 3 fixes landed
+
+Three real bugs fixed today, but the q01 benchmark on `gpt-oss:20b` could
+not be completed — `ollama serve` is being SIGKILLed by an external
+macOS supervisor on a ~70 s–4 min cadence, killing every in-flight HTTP
+request the Python client has open. 34+ kills logged in
+`~/.ollama/logs/app.log` as `signal: killed` from `server.go:224`. Code
+fixes: (1) `Ollama(context_window=8192)` to stop a 131 072-token KV
+auto-resize that crashed the runner; (2) `Ollama(keep_alive="24h")` to
+hold the runner across sequential calls; (3) enumerate allowed
+`check_type` values in the rubric-gen prompt (gpt-oss:20b had been
+inventing values like `concept_presence`, raising `ValidationError`).
+Also includes a local revert of `config/rubric_generation.yaml::tiers.oss.model`
+from `gemma4:26b` back to `gpt-oss:20b`. v2 tests (45) pass.
+
+### Details
+
+**SIGKILL evidence.** `~/.ollama/logs/app.log` accumulated 34
+`level=ERROR source=server.go:224 msg="ollama exited" err="signal: killed"`
+entries during the session. The killer is external (SIGKILL is uncatchable);
+`ollama serve` is being terminated even when no client requests are pending
+and no model is loaded. The `anon<Ollama>(501):1039` process shows up in
+macOS RunningBoard logs with an `AfterLife-Interrupted` assertion, and
+`generativeexperiencesd` + `ModelCatalogAgent` (Apple Intelligence services)
+are active in parallel.
+
+**KV-resize root cause.** The Ollama server env had
+`OLLAMA_CONTEXT_LENGTH=65536` and the M2 Max's 77 GiB VRAM triggered
+`default_num_ctx=262144`. When llama_index's first call did not specify
+`num_ctx`, Ollama allocated a 131 072-token KV cache and re-loaded the
+model, hitting `error reading tensor: unexpected EOF` mid-load. Pinning
+`context_window=8192` makes Ollama allocate only the needed cache.
+Verified: largest prompt in v2 (rubric-gen with full PDF + 9 synthetic
+answers + JSON schema) is 19 575 chars ≈ 4 893 tokens; output ≤ 2 k
+tokens; 8 k headroom is sufficient.
+
+**check_type enum bug.** The rubric-gen prompt declared the JSON schema
+as `"check_type": str` with no allowed-value list. gpt-oss:20b returned
+`concept_presence`, `distinguishing_property`, `attribute_definition`,
+`example_usage` — all rejected by `RubricV2Response.model_validate` (the
+enum requires `definition | distinction | mechanism | positive_example |
+negative_example | generalization`). Fix: append "Allowed values for
+check_type (use exactly one of these strings): ..." to the prompt.
+
+**Ruled out as SIGKILL source.** Memory pressure (96 GB RAM, 13 GB
+model); a Claude `/loop` in this session (`CronList` empty); the user's
+`claude-job-watcher.sh` poll script (killed mid-investigation, SIGKILLs
+continued); 9 orphaned `ollama runner` PIDs from earlier failed attempts
+(cleaned up, SIGKILLs continued); prompt size; model file integrity
+(blob sizes match manifest); user crontab (empty).
+
+**Still unverified.** A `/loop` in *another* Claude Code session;
+macOS RunningBoard / Apple Intelligence enforcement; an Ollama 0.23.2
+regression on this macOS version.
+
+**Next session.** Pick up after the SIGKILL source is identified or
+worked around (restart Ollama.app cleanly; downgrade Ollama; switch
+`oss` tier to a different local model). The v2 pipeline itself has no
+known remaining bugs blocking q01.
+
+---
+
 ## 2026-05-11 17:13 — Switch v2 benchmark oss tier to gemma4:26b; parameterize driver --tier
 
 Switched `config/rubric_generation.yaml::tiers.oss.model` from `gpt-oss:20b`
