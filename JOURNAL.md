@@ -1,5 +1,56 @@
 ---
 
+## 2026-05-11 22:54 — Ollama SIGKILL root-caused to macOS GamePolicyAgent
+
+The probe (50 calls × 5 s) caught 2 kills on a strikingly regular ~203 s
+cadence (22:25:50.532 and 22:29:13.605). Unified-log queries
+(`log show --start … --end …`) around each kill timestamp show the
+identical chain: `/usr/libexec/GamePolicyAgent` wakes up, scans every
+`.app` bundle in `/Applications/` to decide whether it's a game (Sandbox
+denies `file-read-xattr` on `Ollama.app`, `OBS.app`, `AnythingLLM.app`,
+etc.), `backgroundtaskmanagementd` enumerates the Ollama login-item +
+LaunchAgent, the Electron wrapper `Ollama[1039]` re-registers with
+AppIntents, and ~1 s later the wrapper SIGKILLs its `ollama serve`
+subprocess (PID 64304 in run 1). The ~203 s cadence is GamePolicyAgent's
+scan interval. **Code is not at fault** — three prior fixes
+(`context_window=8192`, `keep_alive="24h"`, `check_type` enum) stand.
+
+**Fix:** quit the Electron `Ollama.app` and run the bare CLI
+(`ollama serve`) from terminal. The bare process is not managed by
+`backgroundtaskmanagementd` / AppIntents, so GamePolicyAgent's scans
+can't trigger the supervisor-kill chain.
+
+### Details
+
+Kill-correlation evidence (representative excerpt, kill #1):
+
+```
+22:25:49.487  GamePolicyAgent(64962) deny(1) file-read-xattr .../Electron.app
+22:25:49.569  GamePolicyAgent(64962) deny(1) file-read-xattr /Applications/Ollama.app
+22:25:49.606  Ollama[1039]   [appintents:Connection] Registered process 1039-2678
+22:25:50.532  kernel         tcp_close ollama:64304 listener on :11434
+22:25:50.533  mDNSResponder  DNSServiceCreateConnection STOP PID[64304](ollama)
+```
+
+Kill #2 (22:29:12 → 22:29:13.605) shows GamePolicyAgent itself being
+freshly launched as PID 65575, then the same scan-→-reregister-→-kill
+sequence — confirming GamePolicyAgent's own start cadence drives the
+event, not just an internal scan loop.
+
+**The `anon<Ollama>(501):1039` process the 20:05 entry noticed in
+RunningBoard logs is now identified**: PID 1039 is the long-lived
+Electron Ollama.app, the supervisor that SIGKILLs and respawns its
+`ollama serve` child each time the system pokes its bundle.
+
+**Probe summary:** 48/50 ok, 2 kill events, longest streak 27,
+verdict `unstable` (exit 1) — exactly as designed.
+
+**Next:** quit Ollama.app, start `ollama serve` from terminal, re-run
+`scripts/probe_ollama.py --n 50 --interval 5`, expect 0 kills, then
+proceed to `scripts/run_v2_benchmark.py --tier oss --questions q01`.
+
+---
+
 ## 2026-05-11 22:22 — Ollama stability probe added (scripts/probe_ollama.py)
 
 Added `scripts/probe_ollama.py`, a standalone MWE for diagnosing the
