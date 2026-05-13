@@ -1,5 +1,91 @@
 ---
 
+## 2026-05-13 16:00 — Rewrote V2 spec under Option D (Claude Code grading plugin)
+
+Rewrote `docs/superpowers/specs/2026-05-13-grading-plugin-design.md` from
+the byte-identical V1 copy into the full V2 / Option D design. §1
+invocation switched to `/grade:*` slash commands; §4 stage algorithms
+rewritten as subagent dispatches (with explicit `role:` tags) plus
+Python helper calls, with LLM operations batched aggressively (one
+subagent per seed in Stage 2's `materialize_seed`; one per question in
+Stage 4's `judge`). §5 tracing replaced with per-subagent JSON summaries
+pointing into `.specstory/` for full transcripts. §6 testing dropped
+cassettes in favor of pure-Python tests plus a fixture-driven structural
+smoke. §7.2 implementation-time questions updated; new §8 added with the
+full `plugins/grading/` plugin layout (manifest, skills, commands,
+hooks, Python helpers, role/tier-dispatch config). §§0, 2, 3 (schemas +
+aggregation), 7.1/7.3/7.4 unchanged — architecture-independent. V1 spec
+preserved as historical record.
+
+### Details
+
+**Section-by-section rewrites in `2026-05-13-grading-plugin-design.md`:**
+
+- **Header**: title now "Design (Option D: Claude Code Grading Plugin)";
+  added "Diverges from" pointer to V1 spec; preamble lists what carries
+  over vs. what changes.
+- **§1 Pipeline architecture**: invocation block rewritten as the
+  `/grade:*` command surface (`/grade:translate`, `/grade:seeds`,
+  `/grade:review-seeds`, `/grade:calibrate`, `/grade:test-universal`,
+  `/grade:question`, `/grade:gold-grade`, `/grade:course`,
+  `/grade:status`, `/grade:diff`). Added paragraph on the
+  skill → subagent dispatch → Python helper → role-tier-dispatch
+  layering.
+- **§4.0 Universal contracts**: trace mechanism reworded — JSON summary
+  per subagent at `traces/<stage>/<subagent_id>.json`; full transcripts
+  via Claude Code session history; explicit `role` tag taxonomy
+  (`pdf_translator`, `seed_gen`, `seed_validator`, `materialize_seed`,
+  `judge`, `critic`, `gold_annotator`, …).
+- **§4.1 Stage 0**: PDF rendering moved to a Python helper (`pdf_render.py`
+  using `pymupdf`); the LLM extraction is a single `pdf_translator`
+  subagent dispatch.
+- **§4.2 Stage 1**: each generation operation is now a `seed_gen` (and
+  optional `seed_validator`) subagent batched per type. User-review CLI
+  switched to `/grade:review-seeds`.
+- **§4.3 Stage 2**: per-seed scoring set produced by a single
+  `materialize_seed` subagent (9 answers + axis perturbations + throwaway
+  overlay + gold coverage in one batched JSON). Iteration loop dispatches
+  one `judge` subagent per val seed plus one `critic` subagent per
+  refinement. Standalone test command switched to `/grade:test-universal`.
+- **§4.4 Stage 3**: per-question scoring set materialized by one
+  `question_workup` subagent (answers + concept overlay + gold coverage
+  in one batched response). Sanity-check refines only the overlay via an
+  `overlay_critic` subagent.
+- **§4.5 Stage 4**: one `judge` subagent per question, batching all
+  answers × all (concept, axis) pairs in a single structured JSON.
+  Per-question parallelism is achieved at the *between-question* level by
+  the `/grade:course` wrapper.
+- **§4.6 `/grade:course`**: parallelism knob is `max_parallel_questions`
+  (default 3, tuned to MAX rate limits).
+- **§5 Tracing & retry**: full rewrite. Per-subagent JSON summary schema
+  (call_id, role, tier, inputs, outputs, status, session_transcript_ref).
+  Retry strategy is "Claude Code handles transient HTTP; main agent
+  re-dispatches on subagent `status: error` up to `max_redispatches`."
+  Per-stage `trace_summary.yaml` aggregates dispatches across roles.
+- **§6 Testing**: cassettes dropped. New: Python-helper unit tests,
+  subagent-output schema contract tests (independent of live LLM),
+  fixture-driven structural smoke test, live end-to-end manual workflow,
+  plugin-manifest validation, tier-dispatch config validation.
+- **§7.2**: removed cassette/API-key items; added role catalog,
+  parallelism limits, plugin-manifest schema, hook scripting language
+  as remaining implementation-time questions.
+- **§7.4**: refreshed audit-trail commitments to reference the new
+  Option D trace mechanism (session transcripts under `.specstory/` plus
+  per-subagent JSON summaries).
+- **§8 NEW**: plugin layout — full directory tree under
+  `plugins/grading/`, plugin.yaml manifest sketch, skill conventions,
+  example `tier_dispatch.yaml` showing role → model mapping, install
+  steps.
+
+**Next session:**
+
+- Invoke `superpowers:writing-plans` to produce a step-by-step
+  implementation plan from this V2 spec.
+- Scaffold `plugins/grading/` directory (manifest, skill stubs, command
+  stubs, Python helper modules with NotImplementedError bodies).
+
+---
+
 ## 2026-05-13 15:35 — Brainstormed gold preprocessing benchmark; mid-session pivot to Option D (Claude Code plugin)
 
 Brainstormed via `/superpowers:brainstorming` a gold-preprocessing pipeline

@@ -1,6 +1,6 @@
 # SNAPSHOT — autograder
 
-*Last updated: 2026-05-13 15:35*
+*Last updated: 2026-05-13 16:00*
 
 ## Purpose
 
@@ -17,19 +17,22 @@ LLM-based autograder for short-answer assignments. Three directions now coexist:
   Task 7 smoke run failed on `httpx.ReadTimeout`; pivot to a simpler offline
   preprocessing architecture was discussed and superseded by the v3 design
   below.
-- **v3 (design phase, 2026-05-13):** gold preprocessing benchmark. Produces
-  frozen rubrics (two-layer: 10 universal type rubrics + per-question concept
-  overlay), synthetic answers (good / less_good / wrong + axis perturbations),
-  gold concept coverage annotations, and gold reference scores — all from
-  foundational-tier LLMs. Output artifacts become a benchmark for evaluating
-  future cheap grading approaches (OSS judges, retrieval-only). Karpathy
-  refinement is dropped in favor of a concept-vote + score-band + axis-
-  discrimination calibration criterion. Architecture: a **Claude Code plugin**
-  at `plugins/grading/` running under MAX (no Anthropic API billing). Specs at
-  `docs/superpowers/specs/2026-05-13-preprocessing-benchmark-design.md` (V1
-  / Python+SDK; historical) and
+- **v3 (design ratified, 2026-05-13; not yet implemented):** gold
+  preprocessing benchmark. Produces frozen rubrics (two-layer: 10 universal
+  type rubrics + per-question concept overlay), synthetic answers (good /
+  less_good / wrong + axis perturbations), gold concept coverage annotations,
+  and gold reference scores. Output artifacts become a benchmark for
+  evaluating future cheap grading approaches (OSS judges, retrieval-only).
+  Karpathy refinement is dropped in favor of a concept-vote + score-band +
+  axis-discrimination calibration criterion. Architecture: a **Claude Code
+  plugin** at `plugins/grading/` running under MAX (no Anthropic API
+  billing); LLM operations are subagent dispatches with role→tier mapping in
+  plugin config; LLM calls batched aggressively (~450 calls per full run).
+  Specs at `docs/superpowers/specs/2026-05-13-preprocessing-benchmark-design.md`
+  (V1 / Python+SDK; historical) and
   `docs/superpowers/specs/2026-05-13-grading-plugin-design.md` (V2 / Option D;
-  rewrite in progress).
+  ratified). Next: invoke `superpowers:writing-plans` to produce an
+  implementation plan, then scaffold `plugins/grading/`.
 
 ## Scripts / Components
 
