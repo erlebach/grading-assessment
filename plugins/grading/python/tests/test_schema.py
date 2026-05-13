@@ -99,3 +99,61 @@ def test_score_level_value_constants():
         "none":    {"value": 0.0, "criterion": "x"},
     })
     assert sl.full.value == 1.0 and sl.partial.value == 0.5 and sl.none.value == 0.0
+
+
+from plugins.grading.python.schema import (
+    SeedQuestion,
+    Question,
+    SourceMeta,
+    SourceFormat,
+)
+
+
+def test_seed_question_minimal():
+    sq = SeedQuestion.model_validate({
+        "seed_id": "MECHANISM_001",
+        "type": "MECHANISM",
+        "topic": "physics",
+        "source": "claude_knowledge",
+        "text": "How does evaporation cool a liquid?",
+        "generated_by": "claude-sonnet-4-6",
+        "user_review": {"approved": True},
+    })
+    assert sq.user_review.approved is True
+
+
+def test_question_minimal():
+    q = Question.model_validate({
+        "question_id": "Q03",
+        "course": "data_quality",
+        "type": "MECHANISM",
+        "text": "Describe how schema drift develops.",
+        "sources": ["data_quality_lecture_01"],
+    })
+    assert q.type is TypeName.MECHANISM
+
+
+def test_source_meta_pdf():
+    sm = SourceMeta.model_validate({
+        "format": "pdf",
+        "courses": ["data_quality"],
+        "topics": ["data quality"],
+        "extraction": {"role": "pdf_translator", "tier": "claude-opus-4-7", "ts": "2026-05-13T00:00:00Z"},
+        "content_sha": "deadbeef" * 8,
+        "figure_count": 5,
+        "page_count": 12,
+    })
+    assert sm.format is SourceFormat.PDF
+
+
+def test_source_meta_markdown_no_figures():
+    sm = SourceMeta.model_validate({
+        "format": "markdown",
+        "courses": ["data_quality"],
+        "topics": [],
+        "extraction": None,
+        "content_sha": "abc" * 22,
+        "figure_count": 0,
+        "page_count": 0,
+    })
+    assert sm.format is SourceFormat.MARKDOWN

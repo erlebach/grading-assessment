@@ -258,3 +258,48 @@ def validate_grade(
             )
 
     return grades
+
+
+class UserReview(_Strict):
+    approved: bool
+    note: str | None = None
+
+
+class SeedQuestion(_Strict):
+    seed_id: str = Field(min_length=1)
+    type: TypeName
+    topic: str = Field(min_length=1)
+    source: str = Field(min_length=1)
+    text: str = Field(min_length=1)
+    generated_by: str = Field(min_length=1)
+    user_review: UserReview
+
+
+class Question(_Strict):
+    question_id: str = Field(min_length=1)
+    course: str = Field(min_length=1)
+    type: TypeName
+    text: str = Field(min_length=1)
+    sources: list[str] = Field(default_factory=list)
+    notes: str | None = None
+
+
+class SourceFormat(str, Enum):
+    PDF = "pdf"
+    MARKDOWN = "markdown"
+
+
+class ExtractionMeta(_Strict):
+    role: str
+    tier: str
+    ts: str
+
+
+class SourceMeta(_Strict):
+    format: SourceFormat
+    courses: list[str]
+    topics: list[str]
+    extraction: ExtractionMeta | None
+    content_sha: str = Field(min_length=8)
+    figure_count: int = Field(ge=0)
+    page_count: int = Field(ge=0)
