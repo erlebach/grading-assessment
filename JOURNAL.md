@@ -1,5 +1,24 @@
 ---
 
+## 2026-05-13 16:14 — Added per-stage activity timeline (`timeline.jsonl`) to spec §5
+
+User clarified that **all** agent/subagent activity must be logged with start
++ end times + agent/subagent name. The existing §5.1 covered each dispatched
+subagent (per-subagent JSON summary) but didn't make the orchestration-level
+timeline explicit. Added new §5.6 to the plugin spec specifying a per-stage
+`runs/<id>/traces/<stage>/timeline.jsonl` — one JSONL event per meaningful
+activity, with `start` and matching `end` events for: stages, calibration /
+overlay-refinement iterations, subagent dispatches, Python helper calls,
+gate decisions, and errors. Schema includes ISO-8601 timestamp, event_type,
+actor, name, phase, and event-type-specific details. Cross-references the
+per-subagent summary via `summary_ref`. Invariants: every start has a
+matching end; no activity goes unlogged. Also added a one-line reference
+from §4.0 (universal contracts) so the requirement is visible from the
+stage-procedure side. Header-only / additive change — no other sections
+modified.
+
+---
+
 ## 2026-05-13 16:07 — Labeling cleanup: drop V1/V2 in favor of "earlier draft" / "Option D" + autograder-v3 framing
 
 The 2026-05-13 specs had been calling themselves V1/V2, which collided
