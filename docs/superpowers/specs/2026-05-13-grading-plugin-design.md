@@ -416,6 +416,7 @@ Every stage (as orchestrated by its skill, executed by the main agent in this Cl
 - Validates inputs at load time using the §3.6 validators (Python helper `plugins/grading/python/schema.py`).
 - Writes outputs into the active run folder (`runs/<run_id>/...`).
 - Writes a JSON summary record for each dispatched subagent to `traces/<stage>/<subagent_id>.json` capturing: `task`, `role`, `tier`, `inputs[]` (file refs), `outputs[]` (file refs), `started_at`, `ended_at`, `status` (success / partial / error), `error_summary` (if any). The full subagent transcript lives in Claude Code session history (`.specstory/`).
+- Appends to `traces/<stage>/timeline.jsonl` for **every** agent / subagent activity (start + end timestamps, name, actor) — see §5.6 for the schema and event types. This is a hard invariant: no activity goes unlogged.
 - Hard errors on schema violations or invariant failures (halts the stage; trace records offending file).
 - Soft errors on per-item failures (one synthetic answer failed to generate, one seed validation timed out): main agent logs it, continues with the rest, marks the affected artifact `status: partial` and surfaces to the user at stage end.
 - Supports `--run <prefix>` (resolved via the Python helper) for selecting an active run folder; defaults to most recent run if omitted.
@@ -692,7 +693,58 @@ At stage completion, the main agent writes `runs/<id>/traces/<stage>/trace_summa
 
 This is the user-facing "what happened during Stage X" report.
 
-### 5.6 What `traces/` does *not* contain
+### 5.6 Per-stage activity timeline (`timeline.jsonl`)
+
+**Hard requirement:** every agent / subagent activity is logged with start time, end time, and a human-readable name. The per-subagent JSON summary (§5.1) covers each dispatched subagent; the per-stage **timeline.jsonl** covers the rest — every orchestration event the main agent emits, in chronological order.
+
+File: `runs/<id>/traces/<stage>/timeline.jsonl` — one JSON object per line, append-only over the stage's lifetime.
+
+Event schema:
+
+```json
+{
+  "ts": "2026-05-13T16:15:33.214Z",
+  "event_type": "subagent_dispatch",
+  "actor": "main_agent",                       // "main_agent" | "<subagent_id>"
+  "name": "materialize_seed:MECHANISM_seed_001",
+  "phase": "start",                            // "start" | "end"
+  "details": {
+    "role": "materialize_seed",
+    "subagent_id": "01HXYZ...",
+    "summary_ref": "traces/calibrate_types/01HXYZ....json"
+    // … event-type-specific fields below
+  }
+}
+```
+
+Event types (every meaningful activity gets `start` and matching `end` events):
+
+| event_type | name examples | emitted by |
+|---|---|---|
+| `stage` | `calibrate_types:MECHANISM` | main_agent at stage entry/exit |
+| `iteration` | `iter_3` (Stage 2 calibration), `overlay_iter_2` (Stage 3) | main_agent at iteration entry/exit |
+| `subagent_dispatch` | `materialize_seed:MECHANISM_seed_001`, `judge:Q03`, `critic:MECHANISM_iter_3` | main_agent when dispatching |
+| `python_helper_call` | `validate_universal_rubric`, `compute_aggregate`, `pdf_render` | main_agent when invoking a helper |
+| `gate_decision` | `review_seeds_gate`, `warning_test_marginal_ack`, `proceed_on_warning` | main_agent at user-decision points |
+| `error` | `subagent_redispatch_exhausted:critic_MECHANISM`, `validation_failed:rubrics/Q03/rubric.yaml` | main_agent when surfacing failures |
+
+**Invariants:**
+- Every `start` event has a matching `end` event with the same `name` (unless the run crashes). The Python helper's timeline-validation function checks this at run completion.
+- `subagent_dispatch:start` emits before the subagent's own JSON summary exists; `subagent_dispatch:end` emits after the summary is on disk, with `summary_ref` populated.
+- `python_helper_call` events bracket every Python helper invocation, capturing duration even when the helper finishes in milliseconds.
+- Timestamps are ISO 8601 with millisecond precision, UTC.
+
+**Reading the timeline:**
+- Reconstruct the full stage execution by sorting `timeline.jsonl` by `ts`.
+- Pair each `start` with its `end` to get per-activity duration.
+- Cross-reference `summary_ref` to drill into a specific subagent's summary; from there, `session_transcript_ref` (§5.1) drills into the full transcript.
+
+This gives three nested layers of trace, all explicit:
+- Stage-level: `trace_summary.yaml` (§5.5) — aggregate report.
+- Activity-level: `timeline.jsonl` (this section) — chronological log of every action.
+- Call-level: `<subagent_id>.json` (§5.1) — per-subagent metadata + transcript pointer.
+
+### 5.7 What `traces/` does *not* contain
 
 - No raw prompt / raw response text. Those live in `.specstory/history/`.
 - No retry-backoff tuning knobs. Claude Code handles those internally.
