@@ -3,13 +3,15 @@
 **Status:** DRAFT — Option D design ratified, 2026-05-13.
 **Author/Driver:** erlebach (with Claude)
 **Supersedes (in part):** `docs/superpowers/specs/2026-05-12-v2-self-contained-benchmark-design.md`
-**Diverges from:** `docs/superpowers/specs/2026-05-13-preprocessing-benchmark-design.md` (V1 / Python+SDK; preserved as historical record)
+**Diverges from:** `docs/superpowers/specs/2026-05-13-preprocessing-benchmark-design.md` (an earlier same-day draft assuming Python + Anthropic SDK; preserved as historical record).
 
-> **Architecture pivot from the sibling V1 spec.** The V1 design assumed a Python codebase calling the Anthropic API directly, which would have required separate API billing on top of the user's Claude MAX subscription. This V2 (Option D) re-architects the same preprocessing pipeline as a **Claude Code plugin**: every LLM operation runs through Claude Code subagents (covered by MAX), the whole thing ships as an installable plugin at `plugins/grading/`, LLM calls are batched aggressively, and operations are tagged by `role` resolved to a tier (Claude Opus / Sonnet / Haiku now; Ollama Gemma4 later) via plugin config.
+> **Both 2026-05-13 specs are drafts of the autograder's v3 direction** — the gold preprocessing benchmark, succeeding v1 (legacy keyword pipeline in `grading_pipeline/`) and v2 (concept-check pipeline in `v2/`, `version2/`). This file is the ratified design; the sibling file is preserved as a record of the earlier SDK-driven approach that was reconsidered mid-session once Claude MAX billing was factored in.
 >
-> **What carries over verbatim from V1:** §0 framing, §2 run-folder layout, §3 data model (schemas, aggregation formula, validators, score bands), §7 open questions (with §7.2 updated). Architecture-independent.
+> **Architecture pivot from the earlier same-day draft.** The earlier draft assumed a Python codebase calling the Anthropic API directly, which would have required separate API billing on top of the user's Claude MAX subscription. This Option D design re-architects the same preprocessing pipeline as a **Claude Code plugin**: every LLM operation runs through Claude Code subagents (covered by MAX), the whole thing ships as an installable plugin at `plugins/grading/`, LLM calls are batched aggressively, and operations are tagged by `role` resolved to a tier (Claude Opus / Sonnet / Haiku now; Ollama Gemma4 later) via plugin config.
 >
-> **What changes in V2:** §1 architecture (invocation via `/grade:*` slash commands), §4 stage details (algorithms as subagent dispatches + Python helper calls; LLM calls batched), §5 tracing & retry (Claude Code session history + subagent summaries replace SDK JSONL), §6 testing (cassettes dropped; tests Python helpers only). §8 is new (plugin layout).
+> **What carries over verbatim from the earlier draft:** §0 framing, §2 run-folder layout, §3 data model (schemas, aggregation formula, validators, score bands), §7 open questions (with §7.2 updated). Architecture-independent.
+>
+> **What changes here:** §1 architecture (invocation via `/grade:*` slash commands), §4 stage details (algorithms as subagent dispatches + Python helper calls; LLM calls batched), §5 tracing & retry (Claude Code session history + subagent summaries replace SDK JSONL), §6 testing (cassettes dropped; tests Python helpers only). §8 is new (plugin layout).
 
 ---
 

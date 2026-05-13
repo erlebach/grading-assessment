@@ -1,10 +1,15 @@
-# Gold Preprocessing Benchmark — Design
+# Gold Preprocessing Benchmark — Design (earlier same-day draft, Python + Anthropic SDK)
 
-**Status:** DRAFT — brainstorming in progress, started 2026-05-13.
+**Status:** SUPERSEDED same-day — see `docs/superpowers/specs/2026-05-13-grading-plugin-design.md`.
 **Author/Driver:** erlebach (with Claude)
 **Supersedes (in part):** `docs/superpowers/specs/2026-05-12-v2-self-contained-benchmark-design.md`
+**Superseded by:** `docs/superpowers/specs/2026-05-13-grading-plugin-design.md` (Option D — Claude Code plugin running under MAX; no separate Anthropic API billing).
 
-> This document is being written **as the design is agreed, section by section**, so that no work is lost if the session is interrupted. Sections marked DRAFT below have been ratified in conversation. Sections marked PENDING are still to be discussed.
+> This file captures the first design pass on 2026-05-13, brainstormed section-by-section, assuming the preprocessing pipeline would be a Python codebase calling the Anthropic SDK directly. After the user pointed out that this would duplicate billing on top of their Claude MAX subscription, the design was re-architected as a Claude Code plugin (the "Option D" rewrite). The plugin design carries §§0 (framing), 2 (run-folder layout), 3 (data model / schemas / aggregation / validators), and 7 (open questions) verbatim from here; the architecture-specific sections (§1, §4 stage algorithms, §5 tracing, §6 testing) were rewritten.
+>
+> This file is preserved as a historical record of the SDK-driven approach. Active work lives in the plugin design.
+>
+> **In the autograder's broader versioning:** both 2026-05-13 specs are drafts of the same direction — the autograder's **v3** push (gold preprocessing benchmark), succeeding v1 (legacy keyword pipeline in `grading_pipeline/`) and v2 (concept-check pipeline in `v2/`, `version2/`).
 
 ---
 
