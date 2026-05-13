@@ -1,6 +1,6 @@
 # SNAPSHOT — autograder
 
-*Last updated: 2026-05-13 16:00*
+*Last updated: 2026-05-13 16:07*
 
 ## Purpose
 
@@ -29,10 +29,11 @@ LLM-based autograder for short-answer assignments. Three directions now coexist:
   billing); LLM operations are subagent dispatches with role→tier mapping in
   plugin config; LLM calls batched aggressively (~450 calls per full run).
   Specs at `docs/superpowers/specs/2026-05-13-preprocessing-benchmark-design.md`
-  (V1 / Python+SDK; historical) and
-  `docs/superpowers/specs/2026-05-13-grading-plugin-design.md` (V2 / Option D;
-  ratified). Next: invoke `superpowers:writing-plans` to produce an
-  implementation plan, then scaffold `plugins/grading/`.
+  (earlier same-day SDK-driven draft; superseded — preserved as historical
+  record) and `docs/superpowers/specs/2026-05-13-grading-plugin-design.md`
+  (Option D / plugin design; ratified). Next: invoke
+  `superpowers:writing-plans` to produce an implementation plan, then
+  scaffold `plugins/grading/`.
 
 ## Scripts / Components
 

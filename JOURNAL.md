@@ -1,5 +1,32 @@
 ---
 
+## 2026-05-13 16:07 — Labeling cleanup: drop V1/V2 in favor of "earlier draft" / "Option D" + autograder-v3 framing
+
+The 2026-05-13 specs had been calling themselves V1/V2, which collided
+with the autograder's existing v1 (legacy keyword pipeline) and v2
+(concept-check pipeline under `v2/`, `version2/`). Both 2026-05-13
+specs are drafts of the autograder's **v3** direction (gold
+preprocessing benchmark); the earlier one (SDK-driven) was superseded
+same-day by the plugin design (Option D). Header-only cleanup, no
+substantive design changes:
+
+- `2026-05-13-grading-plugin-design.md` header: replaced "V1 spec" / "V2"
+  labels with "earlier same-day draft" / "this design"; added paragraph
+  clarifying that both 2026-05-13 specs are drafts of the autograder's
+  broader v3 direction.
+- `2026-05-13-preprocessing-benchmark-design.md` header: status switched
+  from "DRAFT — brainstorming in progress" to "SUPERSEDED same-day" with
+  a forward pointer to the plugin design; preserved as historical
+  record of the considered SDK approach.
+- SNAPSHOT.md: same labeling cleanup applied to the v3 bullet.
+
+Earlier today's JOURNAL entries (15:35, 16:00) still use "V1/V2" — those
+are kept as written so the timeline remains lossless; future readers
+should map "V1 spec" → "2026-05-13 SDK draft" and "V2 spec" → "2026-05-13
+plugin design / Option D."
+
+---
+
 ## 2026-05-13 16:00 — Rewrote V2 spec under Option D (Claude Code grading plugin)
 
 Rewrote `docs/superpowers/specs/2026-05-13-grading-plugin-design.md` from
