@@ -1,10 +1,15 @@
-# Gold Preprocessing Benchmark — Design
+# Gold Preprocessing Benchmark — Design (Option D: Claude Code Grading Plugin)
 
-**Status:** DRAFT — brainstorming in progress, started 2026-05-13.
+**Status:** DRAFT — Option D design ratified, 2026-05-13.
 **Author/Driver:** erlebach (with Claude)
 **Supersedes (in part):** `docs/superpowers/specs/2026-05-12-v2-self-contained-benchmark-design.md`
+**Diverges from:** `docs/superpowers/specs/2026-05-13-preprocessing-benchmark-design.md` (V1 / Python+SDK; preserved as historical record)
 
-> This document is being written **as the design is agreed, section by section**, so that no work is lost if the session is interrupted. Sections marked DRAFT below have been ratified in conversation. Sections marked PENDING are still to be discussed.
+> **Architecture pivot from the sibling V1 spec.** The V1 design assumed a Python codebase calling the Anthropic API directly, which would have required separate API billing on top of the user's Claude MAX subscription. This V2 (Option D) re-architects the same preprocessing pipeline as a **Claude Code plugin**: every LLM operation runs through Claude Code subagents (covered by MAX), the whole thing ships as an installable plugin at `plugins/grading/`, LLM calls are batched aggressively, and operations are tagged by `role` resolved to a tier (Claude Opus / Sonnet / Haiku now; Ollama Gemma4 later) via plugin config.
+>
+> **What carries over verbatim from V1:** §0 framing, §2 run-folder layout, §3 data model (schemas, aggregation formula, validators, score bands), §7 open questions (with §7.2 updated). Architecture-independent.
+>
+> **What changes in V2:** §1 architecture (invocation via `/grade:*` slash commands), §4 stage details (algorithms as subagent dispatches + Python helper calls; LLM calls batched), §5 tracing & retry (Claude Code session history + subagent summaries replace SDK JSONL), §6 testing (cassettes dropped; tests Python helpers only). §8 is new (plugin layout).
 
 ---
 
@@ -96,21 +101,32 @@ synthetic_answers/<course>/<q>/answers.yaml + gold_concept_coverage
 grades/<course>/<q>/grades.yaml   (the benchmark output)
 ```
 
-Every Claude call across all stages writes JSONL to `traces/<stage>/`.
+Every subagent dispatched across all stages leaves a JSON summary at `traces/<stage>/<subagent_id>.json` and a full transcript in Claude Code's session history.
 
 ### Invocation
 
-Each stage is a separate CLI module, independently runnable, idempotent:
+Each stage is a Claude Code slash command provided by the `grading` plugin (see §8). The main agent (you in this Claude Code session) reads the command's skill, dispatches subagents for LLM operations, and calls Python helpers for pure-computation tasks:
 
-```bash
-python -m preprocessing.translate_sources <source_path>
-python -m preprocessing.prepare_seed_questions [--types DEFINITION,MECHANISM,...]
-python -m preprocessing.calibrate_types
-python -m preprocessing.generate_rubric --course data_quality --question Q03
-python -m preprocessing.gold_grade --course data_quality --question Q03
+```
+/grade:translate <source_path>
+/grade:seeds [--types DEFINITION,MECHANISM,...]
+/grade:review-seeds [--type <T>] [--accept-all]
+/grade:calibrate [--types <T,...>] [--proceed-on-warning]
+/grade:test-universal [--type <T>] [--seeds <N>]
+/grade:question --course <course_id> --question <q_id>
+/grade:gold-grade --course <course_id> --question <q_id>
+/grade:course <course_id>          # runs /grade:question + /grade:gold-grade for each question
+/grade:status                       # current run state
+/grade:diff <run_a> <run_b>         # compare two runs
 ```
 
-A wrapper `python -m preprocessing.run_course --course data_quality` runs Stages 3 + 4 for every question in the course (Stage 0–2 are explicit prerequisites).
+`/grade:course <course_id>` is the orchestrating wrapper: it iterates through every question in `inputs/questions/<course>/`, dispatches a per-question subagent that invokes the Stage 3 + Stage 4 logic, and writes a course-level summary. Stages 0–2 are explicit prerequisites — the wrapper refuses to start if their outputs are missing from the active run folder.
+
+Behind every `/grade:*` command:
+- A **skill** (`plugins/grading/skills/preprocessing/<stage>.md`) holds the procedure the main agent follows.
+- The main agent **dispatches subagents** via the Agent tool for batched LLM operations. Each subagent receives a focused task with the necessary file references, performs its LLM work, writes outputs to disk, returns a short confirmation.
+- The main agent invokes **Python helpers** (`plugins/grading/python/*.py`) via Bash for deterministic computation: schema validation, aggregation arithmetic, semantic diff, snapshot tarball creation. No `anthropic` SDK, no API key.
+- **Tier dispatch**: each subagent task carries a `role` (e.g., `role: judge`, `role: critic`, `role: answer_gen`); the plugin's `config/tier_dispatch.yaml` maps roles to tiers (Claude Opus / Sonnet / Haiku now; Ollama Gemma4 later).
 
 ---
 
@@ -394,13 +410,14 @@ All scores positive, totals in `[0, 10]`, by construction. Validators enforce ex
 
 ### 4.0 Universal contracts
 
-Every stage:
-- Validates inputs at load time using the §3.6 validators.
+Every stage (as orchestrated by its skill, executed by the main agent in this Claude Code session):
+- Validates inputs at load time using the §3.6 validators (Python helper `plugins/grading/python/schema.py`).
 - Writes outputs into the active run folder (`runs/<run_id>/...`).
-- Streams one JSONL trace record per Claude call into `traces/<stage>/calls.jsonl` (full prompt + full response, no truncation).
-- Hard errors on schema violations or invariant failures (halts run; trace records offending file).
-- Soft errors on per-item failures (one synthetic answer failed to generate, one seed validation timed out): log it, continue with the rest, mark the affected artifact `status: partial`.
-- Supports `--run <prefix>` for resolving run folder; defaults to most recent run if omitted.
+- Writes a JSON summary record for each dispatched subagent to `traces/<stage>/<subagent_id>.json` capturing: `task`, `role`, `tier`, `inputs[]` (file refs), `outputs[]` (file refs), `started_at`, `ended_at`, `status` (success / partial / error), `error_summary` (if any). The full subagent transcript lives in Claude Code session history (`.specstory/`).
+- Hard errors on schema violations or invariant failures (halts the stage; trace records offending file).
+- Soft errors on per-item failures (one synthetic answer failed to generate, one seed validation timed out): main agent logs it, continues with the rest, marks the affected artifact `status: partial` and surfaces to the user at stage end.
+- Supports `--run <prefix>` (resolved via the Python helper) for selecting an active run folder; defaults to most recent run if omitted.
+- Operations carry a `role` tag (`pdf_translator`, `seed_gen`, `seed_validator`, `materialize_seed`, `judge`, `critic`, `gold_annotator`, `answer_gen`, `overlay_gen`). The plugin's `config/tier_dispatch.yaml` resolves `role → tier (model)` at dispatch time.
 
 **Persistence policy (applies to every stage):** *nothing inside a run folder is ever discarded by the pipeline.* "Throwaway" artifacts — Stage 2's per-seed concept overlays, every iteration's intermediate rubric + judge outputs + critic proposals, Stage 3's overlay refinement iterations — are all persisted as their own files. The downstream pipeline may not read them, but the user can. Disk is cheap; auditability is not.
 
@@ -409,18 +426,18 @@ Every stage:
 **Purpose**: convert each input source (PDF or markdown) into canonical markdown + page-level figure snapshots.
 
 **For PDFs:**
-1. `pymupdf` renders every page to `figures/page_NNN.png` (3-digit zero-padded). Page-level snapshots are lossless — they preserve all visual content for downstream stages that need visual grounding (e.g., "what does the diagram show" questions). Per-figure crops are a future enhancement.
-2. One Claude vision call reads the PDF (full doc as attachment) and outputs `content.md`. The markdown includes `[Figure: page_NNN]` markers where a page is visually load-bearing. Otherwise plain text/headings/code blocks/tables.
-3. `meta.yaml` records `format: pdf`, `page_count`, `figure_count`, `content_sha` (of resulting markdown), `extraction.model`, `extraction.ts`, `extraction.tier`.
+1. Python helper `plugins/grading/python/pdf_render.py` runs `pymupdf` to render every page to `figures/page_NNN.png` (3-digit zero-padded). Page-level snapshots are lossless — they preserve all visual content for downstream stages that need visual grounding. Per-figure crops are a future enhancement.
+2. Main agent dispatches **one subagent** (`role: pdf_translator`) that reads the rendered pages, outputs `content.md`. The markdown includes `[Figure: page_NNN]` markers where a page is visually load-bearing. Otherwise plain text/headings/code blocks/tables.
+3. Python helper writes `meta.yaml` recording `format: pdf`, `page_count`, `figure_count`, `content_sha`, `extraction.role`, `extraction.tier`, `extraction.ts`.
 
 **For markdown inputs:**
-1. Read input. Optional light validation (front matter, heading structure).
-2. Copy verbatim to `content.md`. No figures unless inline image links exist (those images are then copied too).
-3. `meta.yaml` with `format: markdown`.
+1. Python helper validates front matter + heading structure (optional, configurable).
+2. Python helper copies verbatim to `content.md`. No figures unless inline image links exist (those images are copied too).
+3. `meta.yaml` with `format: markdown`. No subagent dispatch needed (no LLM work).
 
-**Source naming**: `<source_name>` = input filename stem, lowercased + snake_cased. `--name` CLI arg overrides on collision.
+**Source naming**: `<source_name>` = input filename stem, lowercased + snake_cased. `--name` arg to `/grade:translate` overrides on collision.
 
-**Knobs (config.yaml)**: vision model id, output verbosity (terse / detailed markdown), figure inclusion threshold (always / on-detection / never).
+**Knobs (plugin `config/pipeline.yaml`)**: `pdf_translator` role's verbosity (terse / detailed markdown), figure inclusion threshold (always / on-detection / never). Role-to-tier mapping in `config/tier_dispatch.yaml`.
 
 ### 4.2 Stage 1 — `prepare_seed_questions`
 
@@ -438,7 +455,7 @@ seeds_per_type:
 
 Shortfalls in `from_user_curated` rebalance into `from_claude_knowledge`.
 
-**Claude-knowledge generation** (one batched call per type):
+**Claude-knowledge generation**: main agent dispatches **one subagent (`role: seed_gen`) per type**, instructed to emit a batch of N seeds in a single structured JSON response. Subagent prompt:
 ```
 TASK: Generate <N> distinct <TYPE> questions matching the criterion: <type_description>.
 
@@ -451,46 +468,50 @@ CONSTRAINTS:
 - Self-contained (no external context required).
 - Avoid politically charged or sensitive topics.
 
-OUTPUT (JSON array): [ { "topic": "...", "text": "...", "rationale": "..." }, ... ]
+OUTPUT (JSON array, written to <output_file>):
+  [ { "topic": "...", "text": "...", "rationale": "..." }, ... ]
 ```
+Subagent writes the JSON array to a file under `seed_questions/<type>/`. Main agent reads it and emits one YAML per seed.
 
-**Source-derived generation**: same prompt, but with a translated source's `content.md` in the cached prefix and "draw questions from the material below" replacing the diversity instruction.
+**Source-derived generation**: same shape; subagent is also given a translated source's `content.md` and told "draw questions from the material below" instead of the diversity instruction.
 
-**Validation pass** (Claude, second call per seed batch): scores "is this a well-formed <TYPE> question? yes / no / borderline + rationale". Borderline + no are flagged for user review.
+**Validation pass** (optional, controlled by `validation_pass_enabled` knob): main agent dispatches **one subagent (`role: seed_validator`) per type** that receives the generated seeds in batch and returns per-seed `well_formed: yes | no | borderline + rationale`. Borderline + no are flagged for user review.
 
-**User review gate** (CLI):
+**User review gate** (slash command, interactive or batch):
 ```
-python -m preprocessing.review_seeds --type MECHANISM [--accept-all]
+/grade:review-seeds --type MECHANISM [--accept-all]
 ```
-Interactive (or batch with `--accept-all` if trusted). Each seed's `user_review.approved` is set to `true | false`. Stage 2 only loads `approved == true`.
+The main agent presents each unreviewed seed for the user to approve / reject / edit, then writes `user_review.approved: true | false` back to each seed file. Stage 2 only loads `approved == true`.
 
-**Knobs**: `seeds_per_type`, `topical_domains_min` (J), `composition` shares, `validation_pass_enabled`.
+**Knobs**: `seeds_per_type`, `topical_domains_min` (J), `composition` shares, `validation_pass_enabled`. Role-to-tier mapping in `config/tier_dispatch.yaml`.
 
 ### 4.3 Stage 2 — `calibrate_types` (per type; produces frozen universal layer)
 
-**Per-type algorithm:**
+**Per-type algorithm** (the main agent orchestrates; `/grade:calibrate` invokes the `calibrate_types.md` skill):
 
-1. **Initialize**: candidate axes from `type_catalog.yaml`; uniform weights; Claude drafts initial `score_levels.{full, partial, none}.criterion` from the type description.
+1. **Initialize**: Python helper loads candidate axes from `type_catalog.yaml`; uniform weights. Main agent dispatches one **`role: axis_criterion_drafter`** subagent that drafts initial `score_levels.{full, partial, none}.criterion` from the type description (one subagent per type, one batched response covering all axes for that type).
 
-2. **Materialize per-seed scoring set** (for each approved seed of this type):
-   - **Synthetic answers**: 3 good + 3 less_good + 3 wrong (Claude, one call per quality level).
-   - **Axis-perturbation answers**: 1 per candidate axis (Claude, one call per axis; the prompt holds all other axes high while weakening the target).
-   - **Throwaway per-seed concept overlay** (Claude, one call): 2-5 concepts with weights + `relevant_axes` referencing candidate universal axes. Used only for calibration scoring; never frozen. Persisted only in `calibration_meta.yaml` for audit.
-   - **Gold concept coverage** (Claude, one call per answer): per-(concept, axis) labels.
+2. **Materialize per-seed scoring set** — for each approved seed of this type, the main agent dispatches a **`role: materialize_seed`** subagent (parallelizable across seeds). The subagent's task in one batched call:
+   - Generate 3 good + 3 less_good + 3 wrong synthetic answers (9 total).
+   - Generate 1 axis-perturbation answer per candidate axis (~4 more).
+   - Propose a throwaway 2–5 concept overlay (per-seed; used only for calibration scoring; never frozen).
+   - Annotate gold per-(concept, axis) coverage on every answer above.
+   - Write all outputs to `types/<type>/seed_artifacts/<seed_id>/`.
+   One subagent dispatch per seed produces all of the above in a single structured JSON response, avoiding the per-item dispatch overhead.
 
 3. **Train / val / test split**: 60 / 20 / 20 over approved seeds, deterministic by `SHA(seed_id)`.
    - **Train**: critic uses these failure cases to propose refinements.
    - **Val**: iteration stop signal — criterion must pass on val to declare calibration done.
    - **Test**: never touched during calibration. Used only in the held-out test pass below.
 
-4. **Iterate** (≤ `max_iterations`, default 6):
-   - Apply candidate universal rubric (with each seed's throwaway overlay) via the judge to all val-set answers.
-   - Compute three criteria:
+4. **Iterate** (≤ `max_iterations`, default 6). Each iteration:
+   - **Judge pass**: main agent dispatches **one `role: judge` subagent per val seed** (parallelizable). Each subagent receives `(seed, throwaway_overlay, candidate_universal_rubric, all answers for this seed)` and returns per-(answer, concept, axis) labels in one batched JSON response. ~`|val|` subagents per iteration.
+   - Python helper aggregates judge outputs and computes the three criteria:
      - **Concept-vote agreement** ≥ 0.85 — fraction of (concept, axis) pairs where judge label == gold label.
      - **Score-band satisfaction** ≥ 0.90 — fraction of answers landing in their quality-level's target band.
      - **Axis discrimination** — for each axis-perturbation answer, the targeted axis must show a clearly lower per-pair score than non-target axes. Quantified as: target-axis mean score < non-target-axes mean score by at least 0.25.
    - If all three pass on val → exit loop (proceed to held-out test pass).
-   - Else: Claude critic call. Critic sees current rubric + outcomes + concrete failures from the **train** set (e.g., "axis X showed 'full' but gold was 'partial' on 8 of 12 less_good answers"). Critic returns proposed revisions to weights and/or level criteria. Apply revisions; record in `calibration_meta.yaml`.
+   - Else: main agent dispatches **one `role: critic` subagent** that sees current rubric + criterion outcomes + concrete failure cases from the **train** set (e.g., "axis X showed 'full' but gold was 'partial' on 8 of 12 less_good answers"). Critic returns proposed revisions to weights and/or level criteria in structured JSON. Python helper applies revisions; main agent persists `iter_NN/` artifacts.
 
 5. **Held-out test pass** (after the iteration loop exits, with the candidate-now-frozen rubric):
    - Apply the rubric to the **test** set (never seen during iteration).
@@ -518,7 +539,7 @@ Interactive (or batch with `--accept-all` if trusted). Each seed's `user_review.
    - Max iterations reached without val pass → `status: failed_to_converge`, halt the run.
    - Val pass but test fails → `status: warning_test_marginal`, run halts at the universal layer; Stage 3 will not proceed without `--proceed-on-warning`.
 
-8. **Standalone test CLI**: `python -m preprocessing.test_universal --type MECHANISM [--seeds <N>]` runs an additional ad-hoc test pass against fresh Claude-generated seeds (not in the original pool). Useful as a sanity check before kicking off a batch of per-question runs in Stage 3. Writes `types/<type>/adhoc_test_<timestamp>.yaml`; does not modify `status`.
+8. **Standalone test command**: `/grade:test-universal --type MECHANISM [--seeds <N>]` runs an additional ad-hoc test pass against fresh Claude-generated seeds (not in the original pool). Useful as a sanity check before kicking off a batch of per-question runs in Stage 3. Main agent dispatches fresh `seed_gen` + `materialize_seed` + `judge` subagents and writes `types/<type>/adhoc_test_<timestamp>.yaml`; does not modify the frozen `status`.
 
 **Knobs**: `max_iterations`, split ratios (`train/val/test`), three criterion thresholds, critic prompt strategy, perturbation magnitude expectation, `proceed_on_warning`.
 
@@ -526,26 +547,25 @@ Interactive (or batch with `--accept-all` if trusted). Each seed's `user_review.
 
 Reuses §4.3 machinery but with a **frozen** universal rubric. Universal layer is immutable in this stage; only the per-question overlay is iterated.
 
-**Pre-flight check**: Stage 3 reads `types/<type>/universal_rubric.yaml` at startup. If `status: warning_test_marginal`, Stage 3 **refuses to run** unless `--proceed-on-warning` is set. If `status: failed_to_converge`, Stage 3 refuses outright (no override). This is the guard rail: a fundamentally bad universal rubric does not get to corrupt downstream per-question artifacts silently.
+**Pre-flight check** (Python helper): Stage 3 reads `types/<type>/universal_rubric.yaml`. If `status: warning_test_marginal`, the main agent refuses to dispatch the question's subagent unless `--proceed-on-warning` was passed. If `status: failed_to_converge`, refuses outright (no override). Guard rail: a fundamentally bad universal rubric cannot silently corrupt downstream per-question artifacts.
 
-**Per-question algorithm:**
+**Per-question algorithm** (`/grade:question --course <c> --question <q>`):
 
-1. Load `inputs/questions/<course>/<q>.yaml`. Load frozen `types/<type>/universal_rubric.yaml` for the question's type.
+1. Python helper loads `inputs/questions/<course>/<q>.yaml` + frozen `types/<type>/universal_rubric.yaml`.
 
-2. **Generate synthetic answers**:
-   - 3 good (grounded in the source material listed in the question's `sources:` field; Claude has the relevant `content.md` in the cached prefix).
-   - 3 less_good (partially correct; missing or weak on some concepts).
-   - 3 wrong (off-direction or off-topic).
-   - 1 axis-perturbation per universal axis for this type (benchmark integrity check, not used as a calibration signal here since universal is frozen).
+2. **Materialize question scoring set** — main agent dispatches **one `role: question_workup` subagent** that, in a single batched JSON response:
+   - Generates 3 good answers (grounded in the source material referenced by the question's `sources:` field; subagent receives the relevant `content.md`).
+   - Generates 3 less_good answers (partially correct).
+   - Generates 3 wrong answers (off-direction or off-topic).
+   - Generates 1 axis-perturbation per universal axis for this type (benchmark integrity check).
+   - Proposes the per-question concept overlay (2–5 concepts with weights summing to 1.0; each with `relevant_axes ⊆ universal axes`).
+   - Annotates gold per-(concept, axis) coverage on every answer.
+   One subagent produces it all (parallels Stage 2's `materialize_seed`, but writing frozen artifacts instead of throwaway ones).
 
-3. **Generate concept overlay** (Claude, one call): given question + answer set + universal axes for this type, propose 2-5 concepts with weights (summing to 1.0) and `relevant_axes` (each a non-empty subset of universal axes).
-
-4. **Annotate gold concept coverage** (Claude, one call per answer): per-(concept, axis) labels.
-
-5. **Sanity-check** (apply judge with rubric to all answers, then check ordering + bands hold):
-   - If pass: proceed.
-   - If fail: refine **only the concept overlay** (weights or `relevant_axes`). Universal layer untouchable. Max `overlay_refinement_iterations`, default 3.
-   - On exhaustion: write rubric with `status: degraded`, halt the run. Many `degraded` per-question rubrics ⇒ signal to re-run Stage 2 with a broader seed pool.
+3. **Sanity-check** — Python helper applies a `judge` subagent's output (one dispatch over all answers, batched) and checks ordering + bands:
+   - If pass: proceed; mark `status: frozen`.
+   - If fail: dispatch a `role: overlay_critic` subagent that proposes refinements to **only the per-question concept overlay** (weights and/or `relevant_axes`). Universal layer untouchable. Max `overlay_refinement_iterations`, default 3.
+   - On exhaustion: write rubric with `status: degraded`, halt this question (run continues for other questions). Many `degraded` per-question rubrics ⇒ signal to re-run Stage 2 with a broader seed pool.
 
 6. **Output** (every artifact persisted; nothing discarded):
    - `rubrics/<course>/<q>/rubric.yaml` (final frozen overlay).
@@ -561,171 +581,186 @@ Reuses §4.3 machinery but with a **frozen** universal rubric. Universal layer i
 
 ### 4.5 Stage 4 — `gold_grade` (per question; produces gold reference scores)
 
-**Judge call** — one Claude call per synthetic answer, batches all (concept, axis) pairs:
+**Judge dispatch** — main agent dispatches **one `role: judge` subagent per question**, batching all answers + all (concept, axis) pairs into one structured JSON response. The subagent's task:
 
 ```
-SYSTEM: You are a careful grader. For each (concept, axis) pair below, classify the
-answer's coverage as "full" / "partial" / "none" using the per-axis criteria provided.
+SYSTEM: You are a careful grader. For each (answer × concept × axis) triple below,
+classify the answer's coverage on that (concept, axis) as "full" / "partial" / "none"
+using the per-axis criteria provided.
 
-INPUT (cached prefix):
-  Source content: <content.md inline>
-  Universal rubric for <TYPE>: { axes + score_levels }
-  Per-question rubric for <Q_ID>: { concepts + relevant_axes }
+CONTEXT (in the subagent's task body):
+  - Source content: <content.md inline>
+  - Universal rubric for <TYPE>: axes + score_levels
+  - Per-question rubric for <Q_ID>: concepts + relevant_axes
+  - Answers: [{ id: "good_1", text: "..." }, { id: "good_2", text: "..." }, ...]
+    (all ~13 synthetic answers for this question, batched)
 
-INPUT (variable per call):
-  Answer text: <one synthetic answer>
-
-OUTPUT (JSON array, one entry per (concept, axis) pair):
+OUTPUT (JSON array, one entry per (answer × concept × axis), written to <output_file>):
   [
-    { "concept_id": "...", "axis": "...", "level": "full" | "partial" | "none",
-      "rationale": "<1-2 sentences>" },
+    { "answer_id": "...", "concept_id": "...", "axis": "...",
+      "level": "full" | "partial" | "none", "rationale": "<1-2 sentences>" },
     ...
   ]
 ```
 
 **Design choices**:
-- One call per answer (batches all pairs). Internal consistency > per-pair isolation; cost lower; cache hits the prefix.
-- Rationale per pair mandatory; stored in `traces/gold_grade/<call_id>.jsonl` AND propagated into `grades.yaml` per pair.
-- Prompt caching for the prefix (source + both rubrics). Subsequent answers in the same run hit cache at ~10% of full input cost.
+- One subagent per question, batching all answers and all (concept, axis) pairs. Internal consistency across the question's answers is improved by Claude seeing the full picture at once; per-question parallelism is achieved at the *between-question* level (the `/grade:course` wrapper dispatches per-question subagents in parallel).
+- Rationale per pair mandatory; subagent writes the JSON array to disk; the main agent reads it, runs aggregation via Python helper, propagates rationales into `grades.yaml` per pair.
 
-**Per-question summary** (computed from the grades, written into `grades.yaml`'s `summary` block):
+**Per-question summary** (Python helper `aggregation.py`, written into `grades.yaml` `summary` block):
 - `mean_by_quality`: average aggregate per quality level (good / less_good / wrong / axis_perturbation).
 - `ordering_preserved`: mean(good) > mean(less_good) > mean(wrong)?
 - `bands_satisfied`: all answers in their target band?
 - `axis_discrimination_passed`: each axis-perturbation drop targeted right axis?
 
-**Failure mode at Stage 4**: if `bands_satisfied == false` or `ordering_preserved == false`, this question's benchmark output is flagged `degraded` in the run summary. The run continues for other questions (a single bad question doesn't kill the whole gold pipeline).
+**Failure mode at Stage 4**: if `bands_satisfied == false` or `ordering_preserved == false`, this question's benchmark output is flagged `degraded` in the run summary. The run continues for other questions.
 
-### 4.6 Stage glue and `run_course` wrapper
+### 4.6 Stage glue and `/grade:course` wrapper
 
-`python -m preprocessing.run_course --course data_quality` runs **Stages 3 + 4 for every question in the course's questions list**, in parallel where allowed (subject to API rate limits). Stages 0–2 are explicit prerequisites — `run_course` checks the run folder for their outputs and refuses to start if any are missing.
+`/grade:course <course_id>` runs **Stages 3 + 4 for every question in the course's questions list**. The main agent dispatches per-question subagents in parallel up to the configured concurrency (knob `max_parallel_questions`, default 3 — tuned to stay comfortably within MAX rate limits). Each per-question subagent invokes Stage 3 + Stage 4 sequentially for one question. Stages 0–2 are explicit prerequisites — the main agent checks the run folder for their outputs and refuses to start if any are missing.
 
-The wrapper writes a course-level summary at `runs/<id>/summary_<course>.yaml`:
+After all per-question subagents complete, a Python helper writes a course-level summary at `runs/<id>/summary_<course>.yaml`:
 - per-question pass/degrade status,
 - aggregate grades by quality level across all questions,
-- total Claude calls, tokens, cost,
-- elapsed time per stage.
+- total subagent dispatches per role,
+- elapsed time per stage and per question.
 
 ## 5. Tracing and retry infrastructure (DRAFT — agreed)
 
-### 5.1 JSONL trace record schema
+All LLM work happens inside Claude Code subagents. The trace machinery is therefore very different from V1's SDK-call JSONL: the main agent writes a structured **subagent-summary** record per dispatch, while the full subagent transcripts (prompt + response, no truncation) are captured by Claude Code's session history.
 
-One file per stage per run: `runs/<id>/traces/<stage>/calls.jsonl`. One JSONL record per Claude call, full prompt and full response, no truncation.
+### 5.1 Subagent summary record
 
-```jsonl
+For each subagent dispatch, the main agent writes a JSON file at `runs/<id>/traces/<stage>/<subagent_id>.json`:
+
+```json
 {
-  "call_id": "01HXYZAB...",                        // ULID, sortable
+  "subagent_id": "01HXYZAB...",                  // ULID; matches Claude Code's dispatch id
   "ts_start": "2026-05-13T13:15:01.234Z",
   "ts_end":   "2026-05-13T13:15:33.567Z",
-  "latency_ms": 32333,
+  "duration_ms": 32333,
   "stage": "calibrate_types",
-  "sub_operation": "iter_3_critic_MECHANISM",      // descriptive sub-call label
-  "model": "claude-opus-4-7",
-  "tier": "foundational",
-  "request": {
-    "system": "<full system prompt text>",
-    "messages": [
-      { "role": "user", "content": [<full content blocks>] }
-    ],
-    "max_tokens": 4096,
-    "temperature": 0.0,
-    "cache_control_markers": [<positions>]
-  },
-  "response": {
-    "stop_reason": "end_turn",
-    "content": [<full output content blocks>],
-    "text": "<extracted text concatenation if applicable>"
-  },
-  "usage": {
-    "input_tokens": 4521,
-    "output_tokens": 892,
-    "cache_creation_input_tokens": 0,
-    "cache_read_input_tokens": 4200
-  },
+  "sub_operation": "materialize_seed:MECHANISM_gen_003",
+  "role": "materialize_seed",                    // resolved via config/tier_dispatch.yaml
+  "tier": "claude-opus-4-7",                     // the actual model the role resolved to
+  "task_summary": "Materialize scoring set for seed MECHANISM_gen_003 (9 quality answers, 4 axis perturbations, throwaway overlay, gold coverage).",
+  "inputs": [
+    "seed_questions/MECHANISM/MECHANISM_gen_003.yaml",
+    "types/MECHANISM/iter_01/candidate_rubric.yaml"
+  ],
+  "outputs": [
+    "types/MECHANISM/seed_artifacts/MECHANISM_gen_003/synthetic_answers.yaml",
+    "types/MECHANISM/seed_artifacts/MECHANISM_gen_003/concept_overlay.yaml",
+    "types/MECHANISM/seed_artifacts/MECHANISM_gen_003/gold_concept_coverage.yaml"
+  ],
+  "status": "success",                           // success | partial | error
   "retry_count": 0,
-  "attempts": [...],                               // populated on retried calls
-  "status": "success",                             // success | error_transient | error_permanent | error_parse
-  "error": null                                    // or { type, message, http_status }
+  "error_summary": null,                         // or "{ type, message }"
+  "session_transcript_ref": ".specstory/history/2026-05-13_13-15-00Z-calibrate-mechanism.md"
 }
 ```
 
-**Large-prompt handling**: if a single trace record exceeds 10 MB (e.g., a vision call with a very large attached PDF), the request payload is moved to `traces/<stage>/large/<call_id>.json` and the JSONL record stores `request_ref: large/<call_id>.json` instead. The response is always inlined.
+**The full prompt + full response are NOT in this JSON record.** They live in Claude Code's session transcript at the `session_transcript_ref` path. That transcript is the audit trail; the JSON summary is a structured index over it.
 
-### 5.2 Retry policy
+### 5.2 Session-level audit trail
 
-- **3 attempts per call** with exponential backoff: 5s, 15s, 45s.
-- **Retry on**: `httpx.ReadTimeout`, `httpx.ConnectError`, HTTP 5xx, HTTP 429 (rate limit; `Retry-After` honored if present).
-- **Don't retry on**: HTTP 4xx (other than 429), schema validation failure on our request construction.
-- **JSON-parse failures on response**: 1 retry with a "your previous response was not valid JSON; return only the requested JSON" reminder appended; then hard fail. Recorded with `status: error_parse`.
-- **Per-attempt sub-records** under `attempts: [...]` in the JSONL record, including failed attempts. Final `status` reflects the outcome of the last attempt; `retry_count` reflects total attempts minus one.
+Claude Code automatically captures every subagent's prompt and response in `.specstory/history/<session>.md`. The persistence policy (§4.0) extends here: nothing is discarded. To inspect what a particular subagent said, the user (or future Claude session) opens the session transcript referenced from the JSON summary.
 
-### 5.3 Prompt cache strategy
+### 5.3 Retry strategy
 
-Anthropic prompt caching enabled by default for cost amortization across calls in the same stage. Per-stage cache layout:
-
-- **Stage 0** (translate_sources): no caching — single call per source.
-- **Stage 1** (prepare_seed_questions): if multiple types share a source-derived call against the same translated source, that source's `content.md` is cached.
-- **Stage 2** (calibrate_types): per-seed source content + candidate rubric in cached prefix when scoring multiple answers; refreshed each iteration when rubric changes.
-- **Stage 3** (generate_rubric): question's source content + frozen universal rubric in cached prefix across all per-question calls.
-- **Stage 4** (gold_grade): source content + universal rubric + per-question rubric in cached prefix; subsequent answers in the same run hit cache.
-
-Cache markers at chunk boundaries. Cache TTL = 5 minutes (Anthropic default). `cache_read_input_tokens` recorded per call; aggregate cache savings reported in `traces/<stage>/cache_summary.yaml`.
+- Within a single subagent run, Claude Code handles transient retries (rate limits, transient HTTP errors) per its own internal policy. We don't re-implement that.
+- At the dispatch level, the main agent monitors subagent completion. If a subagent returns `status: error`, the main agent re-dispatches up to `max_redispatches` (default 2) with a slightly adjusted task ("your previous attempt failed with `<error_summary>`; please retry"). Each redispatch gets its own `subagent_id` and JSON summary, with `retry_count` incremented and a `prev_subagent_id` pointer in the JSON.
+- **JSON parsing failures** on a subagent's structured output get one redispatch with a "your previous output was not valid JSON; return only valid JSON" reminder, then hard fail.
+- **Hard fail** on a critical subagent (e.g., Stage 2 critic) halts the stage; main agent surfaces to the user with the failed subagent's transcript ref.
 
 ### 5.4 Error escalation
 
-- **Per-call retries exhausted** → trace records `status: error_*`. The caller decides: a per-answer-generation failure inside Stage 3 might be soft (skip this answer, mark `status: partial`); a critic call failure inside Stage 2 is hard (halt the run — we cannot proceed without a refinement proposal).
-- **Halt-on-fail** decisions are documented per call site in the stage's source code.
-- The run's `run_meta.yaml` final `status` field is the worst status across all stages: `success` | `partial` | `failed`.
+- **Per-subagent error**: written to its JSON summary with `status: error` + `error_summary`. The dispatching stage's skill decides soft vs. hard.
+- **Soft failure** (one item in a batch failed, e.g., one synthetic answer didn't generate): main agent logs it, marks the affected artifact `status: partial`, continues.
+- **Hard failure** (critic, judge on val set, type calibration itself): halts the stage; main agent surfaces to user.
+- The run's `run_meta.yaml` final `status` is the worst status across all stages: `success` | `partial` | `failed`.
+
+### 5.5 Per-stage `trace_summary.yaml`
+
+At stage completion, the main agent writes `runs/<id>/traces/<stage>/trace_summary.yaml` aggregating across all subagent summaries in that stage:
+- count by `role`, count by `status`,
+- total duration, p50/p95 duration,
+- per-role tier distribution (useful when verifying tier dispatch worked as intended),
+- list of subagents marked `status: error` with refs.
+
+This is the user-facing "what happened during Stage X" report.
+
+### 5.6 What `traces/` does *not* contain
+
+- No raw prompt / raw response text. Those live in `.specstory/history/`.
+- No retry-backoff tuning knobs. Claude Code handles those internally.
+- No Anthropic-API usage metrics (input_tokens, cache_read_input_tokens). Replaced by subagent count + duration; if granular billing data is needed later, query MAX usage dashboard directly.
 
 ---
 
 ## 6. Testing strategy (DRAFT — agreed)
 
-The preprocessing pipeline runs many Claude calls. We can't run them in CI. The test pipeline uses recorded fixtures for everything LLM-touching.
+LLM-side work lives in Claude Code subagents, which can't be replayed in CI cheaply. Tests therefore focus on **the pure-Python helpers and the structural contracts** — anything that doesn't require an LLM call. End-to-end pipeline verification is manual, performed against a tiny fixture run-folder by dispatching real subagents.
 
-### 6.1 Unit tests (no LLM)
+### 6.1 Unit tests for Python helpers (no LLM, run in CI)
 
-- `tests/preprocessing/test_models.py` — schema validation for every YAML artifact in §3 (positive + negative cases).
-- `tests/preprocessing/test_aggregation.py` — the §3.3 formula with worked numeric examples (including the Q03 walked example).
-- `tests/preprocessing/test_validators.py` — every validator in §3.6: positives pass, negatives raise the expected error type.
-- `tests/preprocessing/test_run_resolution.py` — `--run <prefix>` resolution: exact / partial / ambiguous (errors) / no match.
-- `tests/preprocessing/test_diff.py` — semantic diff for rubrics, grades, seeds, against fixed-input fixtures.
-- `tests/preprocessing/test_prompts.py` — prompt construction is deterministic given inputs (snapshot tests against committed expected prompts).
-- `tests/preprocessing/test_aggregation_invariant.py` — random rubrics + random level inputs ⇒ aggregate ∈ [0, 1], aggregate_x10 ∈ [0, 10] (property-based, hypothesis library).
+Tests live under `plugins/grading/python/tests/`:
 
-### 6.2 Integration tests with cassettes (replay; no live calls)
+- `test_schema.py` — schema validation for every YAML artifact in §3 (positive + negative cases): `universal_rubric.yaml`, per-question `rubric.yaml`, `grades.yaml`, `seed_questions/*.yaml`, `meta.yaml`, `run_meta.yaml`, `config.yaml`, `tier_dispatch.yaml`.
+- `test_aggregation.py` — the §3.3 formula with worked numeric examples (including the Q03 walked example). Asserts exact outputs from fixed inputs.
+- `test_validators.py` — every validator in §3.6: positives pass; negatives raise the expected error type with a useful message.
+- `test_run_resolution.py` — `--run <prefix>` resolution: exact / partial / ambiguous (errors with a list) / no-match.
+- `test_diff.py` — semantic diff between two fixture run folders for each artifact type (rubrics / grades / seeds).
+- `test_snapshot.py` — `src_snapshot.tar.gz` creation: excludes expected paths (`.git/`, `.venv/`, `__pycache__/`, `.specstory/`, `runs/`); includes `pyproject.toml`, `plugins/grading/`, lockfile.
+- `test_aggregation_invariant.py` — property-based (hypothesis): random rubrics + random level inputs ⇒ `aggregate ∈ [0, 1]`, `aggregate_x10 ∈ [0, 10]`, `aggregate_x10 = aggregate × 10 ± ε`. Random concept-weight / axis-weight distributions normalized; no NaNs.
 
-Use `pytest-recording` (or hand-rolled VCR) to record real Claude responses once, replay in CI. Cassettes live in `tests/preprocessing/cassettes/<test_name>.yaml`. Recorded request fingerprints are compared on replay; mismatches fail with a clear message ("prompt has changed; re-record cassette").
+### 6.2 Subagent-output contract tests (no live LLM)
 
-- `test_translate_sources_pdf.py` — feeds a tiny fixture PDF (1-2 pages), replays vision response.
-- `test_prepare_seed_questions_claude_knowledge.py` — replays seed generation + validation.
-- `test_calibrate_types_one_iteration.py` — replays one calibration iteration on a tiny seed pool.
-- `test_generate_rubric_one_question.py` — replays full Stage 3 for one question.
-- `test_gold_grade_one_answer.py` — replays one judge call.
+Each subagent role produces a structured JSON output with a documented schema. We test the **schema** of these outputs against hand-built fixtures, independent of any live LLM call. Tests under `plugins/grading/python/tests/contracts/`:
 
-To re-record after prompt changes: `pytest --record-mode=rewrite` (requires `ANTHROPIC_API_KEY`).
+- `test_judge_output_schema.py` — given a fixture JSON array (built by hand), verify the parser accepts well-formed rows and rejects malformed ones.
+- `test_critic_output_schema.py` — same for critic-proposed revisions.
+- `test_materialize_seed_output_schema.py` — same for the batched output of `materialize_seed`.
+- `test_seed_gen_output_schema.py` — same for seed-generation output.
 
-### 6.3 End-to-end smoke test (cassette-driven)
+These tests confirm the Python side will not crash on the structured outputs of any subagent role. They do not verify that Claude *produces* well-formed output — that's the live-test concern below.
 
-`tests/preprocessing/test_smoke.py` runs a minimal pipeline through all 5 stages from a tiny fixture: 1 source (5 pages), 2 types calibrated, 2 seeds per type, 1 assessment question. Uses recorded cassettes.
+### 6.3 Fixture-driven structural smoke test (no LLM)
 
-Verifies:
-- Run folder structure as in §2.
-- All `status` tags as expected for the recorded path.
+`plugins/grading/python/tests/test_smoke_fixture.py` reads a committed fixture run-folder at `tests/fixtures/run_smoke/` and asserts:
+- Folder layout matches §2.
+- All `status` tags as expected.
 - Validators pass at every artifact boundary.
-- Aggregation arithmetic correct (numeric comparison against handwritten expected).
-- Trace JSONL records well-formed and queryable.
+- Aggregation arithmetic in `grades.yaml` matches a handwritten expected.
+- All `traces/<stage>/*.json` summaries are well-formed.
 
-Runs in CI without Claude credits.
+This is what runs in CI. The fixture is hand-crafted (not generated by live subagents); it represents a "what a successful run folder should look like" reference. The fixture is updated whenever §2 / §3 schemas change.
 
-### 6.4 Live tests (manual, marked `@pytest.mark.live`)
+### 6.4 Live end-to-end (manual; outside CI)
 
-- `tests/preprocessing/test_live_smoke.py` — same as smoke but live. Used to re-record cassettes, verify prompts still work after Claude model updates, and spot-check artifact quality.
-- Not run in CI. Owner runs manually with `pytest -m live`.
+When the user wants to verify the pipeline end-to-end against real Claude work, they run a tiny live pipeline manually:
 
-### 6.5 Schema-level CI checks
+```
+/grade:translate tests/fixtures/sources/tiny_5page.pdf
+/grade:seeds --types DEFINITION,MECHANISM   # K=2 per type
+/grade:review-seeds --accept-all            # if trusted
+/grade:calibrate --types DEFINITION,MECHANISM
+/grade:test-universal --type MECHANISM
+/grade:question --course fixture --question Qfix01
+/grade:gold-grade --course fixture --question Qfix01
+/grade:status                                # inspect outcome
+```
 
-Every YAML artifact in the run folder validates against the §3 schemas. CI runs `python -m preprocessing.validate_run runs/<id>` on the smoke test's output and the latest committed example run. Failure ⇒ build red.
+This uses real subagent dispatches and consumes MAX quota. It is **not** part of automated CI; it is the user's bring-up smoke. After the first successful live run, the resulting run folder is what `tests/fixtures/run_smoke/` is replaced by (with sensitive content removed) — fixtures stay grounded in real shapes.
+
+### 6.5 Schema-level CI checks against the latest committed run
+
+CI runs the Python validators against any run folder committed under `tests/fixtures/runs/`. Failure (schema invariant violation, broken cross-ref between `rubrics/<q>/rubric.yaml` and `types/<type>/universal_rubric.yaml`) ⇒ build red. Catches regressions when §3 schemas evolve.
+
+### 6.6 Plugin-level tests
+
+- `test_plugin_manifest.py` — `plugins/grading/plugin.yaml` validates against a manifest schema (see §8). Required fields present; semver version string; declared skills resolve to existing files; declared commands resolve to existing files; declared hooks have executable permission.
+- `test_tier_dispatch.py` — `config/tier_dispatch.yaml` validates: every declared role maps to a known tier; every tier is one of the supported set (Claude Opus / Sonnet / Haiku / Ollama Gemma4); no orphan roles relative to the role catalog.
 
 ---
 
@@ -742,10 +777,14 @@ Every YAML artifact in the run folder validates against the §3 schemas. CI runs
 
 ### 7.2 Implementation-time questions (resolved during writing-plans)
 
-- Exact CLI module names (`preprocessing.translate_sources` vs `preprocessing.translate` vs other).
-- Concrete model versions and tier-dispatch wiring (touches `version2/config/llm_config.py`; spec only commits to "foundational tier").
-- Cassette library choice (`pytest-recording` vs `vcrpy` vs hand-rolled).
-- Whether to use `pydantic` vs `attrs` vs `dataclasses` for YAML model validation.
+- Exact slash-command names (`/grade:translate` vs `/grade:source` vs other; user-friendly naming).
+- Subagent task-profile YAML format (under `plugins/grading/agents/` or inline in skills).
+- Role catalog completeness (`pdf_translator`, `seed_gen`, `seed_validator`, `materialize_seed`, `axis_criterion_drafter`, `judge`, `critic`, `overlay_critic`, `question_workup`, `answer_gen`, `gold_annotator`, …) — final set ratified against actual implementation needs.
+- Concrete role-to-tier mapping defaults in `config/tier_dispatch.yaml` (which roles benefit from Opus vs. Sonnet vs. Haiku, and where Ollama Gemma4 plugs in once integrated).
+- `max_parallel_questions` and `max_parallel_seeds` defaults — tuned to stay within MAX rate limits comfortably.
+- Plugin manifest schema (the `plugin.yaml` field set and validation rules) — confirm against the Claude Code plugin spec at implementation time.
+- Whether to use `pydantic` vs `attrs` vs `dataclasses` for the Python helper schema models.
+- Hook scripting language (shell, Python) for `post_subagent_validate`.
 
 ### 7.3 Open quality questions
 
@@ -758,9 +797,179 @@ These tunables are all in `config.yaml`. Each run records the config it used in 
 
 ### 7.4 Things the user explicitly requested be preserved (audit trail)
 
-- All Claude prompts and responses, full text, no truncation (§5.1).
+- **All Claude prompts and responses**, full text, no truncation — captured in Claude Code session history under `.specstory/history/`, linked from each subagent's JSON summary at `traces/<stage>/<subagent_id>.json` via `session_transcript_ref` (§5.1, §5.2).
 - All Stage 2 per-seed throwaway artifacts (concept overlays, synthetic answers, gold coverage) — persisted as named files in `types/<type>/seed_artifacts/<seed_id>/` (§4.3, step 6).
 - All Stage 2 per-iteration intermediate state (candidate rubric, judge outputs, criterion outcomes, critic proposal) — persisted in `types/<type>/iterations/iter_NN/` (§4.3, step 6).
 - All Stage 3 overlay refinement iterations — persisted in `rubrics/<course>/<q>/iterations/iter_NN/` (§4.4, step 6).
 - Per-run full source-code snapshot via `src_snapshot.tar.gz` (§2).
-- `REPRODUCE.md` per run with exact CLI commands (§2).
+- `REPRODUCE.md` per run with exact slash-command invocations (§2).
+- Per-stage `traces/<stage>/trace_summary.yaml` aggregating subagent dispatches (§5.5).
+
+---
+
+## 8. Plugin layout (DRAFT — agreed)
+
+The pipeline ships as a single Claude Code plugin at `plugins/grading/` inside this repo. The plugin bundles skills (procedures the main agent follows), slash commands (user-facing entrypoints), hooks (post-write validation), Python helpers (deterministic computation), prompt fragments, and config files.
+
+### 8.1 Directory layout
+
+```
+plugins/grading/
+  plugin.yaml                      # manifest: name, version, deps, declared skills/commands/hooks
+  README.md                        # quick-start, slash-command summary, MAX quota notes
+
+  config/
+    pipeline.yaml                  # knobs: seeds_per_type, max_iterations, score_bands, parallelism, …
+    tier_dispatch.yaml             # role → tier mapping
+    role_catalog.yaml              # canonical list of all roles + descriptions (~10 roles)
+
+  skills/preprocessing/
+    translate_sources.md           # Stage 0 procedure
+    prepare_seed_questions.md      # Stage 1
+    review_seeds.md                # interactive review gate
+    calibrate_types.md             # Stage 2 with iteration loop
+    test_universal.md              # ad-hoc Stage 2 test pass
+    generate_rubric.md             # Stage 3
+    gold_grade.md                  # Stage 4
+    run_course.md                  # the orchestrating wrapper
+
+  commands/
+    grade-translate.md             # /grade:translate <source_path>
+    grade-seeds.md                 # /grade:seeds [--types ...]
+    grade-review-seeds.md          # /grade:review-seeds [--type ...]
+    grade-calibrate.md             # /grade:calibrate [--types ...] [--proceed-on-warning]
+    grade-test-universal.md        # /grade:test-universal [--type ...]
+    grade-question.md              # /grade:question --course <c> --question <q>
+    grade-gold-grade.md            # /grade:gold-grade --course <c> --question <q>
+    grade-course.md                # /grade:course <course_id>
+    grade-status.md                # /grade:status
+    grade-diff.md                  # /grade:diff <run_a> <run_b>
+
+  hooks/
+    post_subagent_validate.sh      # post-write YAML schema validation; halts stage on invariant violation
+
+  agents/                          # optional: pre-baked agent profiles per role
+    materialize_seed.md            # task profile for role: materialize_seed
+    judge.md                       # task profile for role: judge
+    critic.md                      # task profile for role: critic
+    ...
+
+  prompts/                         # reusable prompt fragments referenced by skills + agents
+    judge_system.md
+    critic_system.md
+    materialize_seed_template.md
+    seed_gen_template.md
+    pdf_translator_template.md
+    ...
+
+  python/
+    schema.py                      # pydantic/dataclass models + §3.6 validators
+    aggregation.py                 # §3.3 formula (single source of truth)
+    diff.py                        # semantic diff between two run folders
+    snapshot.py                    # produce src_snapshot.tar.gz
+    pdf_render.py                  # pymupdf-based page rendering
+    run_resolution.py              # `--run <prefix>` matching
+    validate_run.py                # CLI: validate every artifact in a run folder
+    tests/
+      test_schema.py
+      test_aggregation.py
+      ...                          # see §6
+```
+
+No `anthropic` SDK is imported anywhere in `python/`. No `ANTHROPIC_API_KEY` is read. All LLM work happens through subagents dispatched by the main agent in this Claude Code session.
+
+### 8.2 Plugin manifest (`plugin.yaml`)
+
+```yaml
+name: grading
+version: 0.1.0
+description: |
+  Gold preprocessing benchmark for the autograder. Produces frozen rubrics,
+  synthetic answers, gold concept coverage, and gold reference scores via
+  Claude Code subagents under MAX.
+authors:
+  - erlebach
+
+skills:
+  - skills/preprocessing/translate_sources.md
+  - skills/preprocessing/prepare_seed_questions.md
+  - skills/preprocessing/review_seeds.md
+  - skills/preprocessing/calibrate_types.md
+  - skills/preprocessing/test_universal.md
+  - skills/preprocessing/generate_rubric.md
+  - skills/preprocessing/gold_grade.md
+  - skills/preprocessing/run_course.md
+
+commands:
+  - commands/grade-translate.md
+  - commands/grade-seeds.md
+  - commands/grade-review-seeds.md
+  - commands/grade-calibrate.md
+  - commands/grade-test-universal.md
+  - commands/grade-question.md
+  - commands/grade-gold-grade.md
+  - commands/grade-course.md
+  - commands/grade-status.md
+  - commands/grade-diff.md
+
+hooks:
+  - event: post_subagent
+    script: hooks/post_subagent_validate.sh
+
+python_helpers:
+  package_root: python
+  entrypoints:
+    - python.validate_run:main          # invoked as: python -m plugins.grading.python.validate_run
+    - python.diff:main
+    - python.snapshot:main
+```
+
+Exact field names are subject to whatever the Claude Code plugin format requires; the schema above is illustrative. The `test_plugin_manifest.py` test (§6.6) validates against the actual format at implementation time.
+
+### 8.3 Skill conventions
+
+Each skill file (`skills/preprocessing/<stage>.md`) follows a uniform structure:
+
+1. **Frontmatter**: name, description, trigger keywords.
+2. **Inputs read**: which files in `runs/<id>/` the main agent reads at startup.
+3. **Algorithm**: numbered steps mapping directly to §4's per-stage algorithm. Each step explicitly says whether it dispatches a subagent (with `role:` tag), invokes a Python helper, or makes a control-flow decision.
+4. **Subagent task profiles referenced**: links to `agents/<role>.md` for each role used.
+5. **Outputs written**: which files in `runs/<id>/` get created or appended to.
+6. **Failure modes + halt conditions**: explicit, mapping to §4's "Failure" notes.
+
+### 8.4 Tier dispatch config (`config/tier_dispatch.yaml`)
+
+```yaml
+# Maps subagent role → tier (model). The plugin's role_catalog.yaml is the
+# canonical list of declared roles; this file binds each to a tier. Tier
+# names must resolve to a Claude Code-available model.
+default_tier: claude-sonnet-4-6
+
+roles:
+  pdf_translator:           claude-opus-4-7        # vision-capable; complex extraction
+  seed_gen:                 claude-sonnet-4-6
+  seed_validator:           claude-haiku-4-5
+  materialize_seed:         claude-opus-4-7        # heavy: 9 answers + perturbations + overlay + gold
+  axis_criterion_drafter:   claude-sonnet-4-6
+  judge:                    claude-opus-4-7        # gold standard — the benchmark scores
+  critic:                   claude-opus-4-7
+  overlay_critic:           claude-sonnet-4-6
+  question_workup:          claude-opus-4-7
+  gold_annotator:           claude-opus-4-7
+
+# Future: Ollama Gemma4 entries below once integrated.
+# gold_annotator: ollama:gemma4-26b   # cheap path for re-running annotation at scale
+```
+
+The user edits this file to control where compute goes. Swapping `judge` to Sonnet would, e.g., reduce cost at the price of benchmark quality — a deliberate, audit-visible trade-off.
+
+### 8.5 Plugin install
+
+Inside this repo, the plugin lives at `plugins/grading/`. Claude Code discovers it via the standard plugin-discovery path (`.claude/plugins/` or repo-root `plugins/`, depending on environment). Initial install:
+
+1. Place the plugin folder at `plugins/grading/`.
+2. Register it in `.claude/settings.json` if required by the user's Claude Code setup.
+3. Verify: `/grade:status` resolves and emits "no runs yet."
+4. Run the live smoke (§6.4) to bring up the first run folder.
+
+The plugin has no external dependencies beyond what `pyproject.toml` declares for the Python helpers (`pymupdf`, `pydantic`, `pyyaml`).
