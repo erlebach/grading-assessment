@@ -1,0 +1,15 @@
+{
+  "name": "grading",
+  "description": "Gold preprocessing benchmark for the autograder. Produces frozen rubrics, synthetic answers, gold concept coverage, and gold reference scores via Claude Code subagents under MAX.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Gordon Erlebach"
+  },
+  "license": "Proprietary",
+  "keywords": [
+    "grading",
+    "rubrics",
+    "preprocessing",
+    "benchmark"
+  ]
+}
