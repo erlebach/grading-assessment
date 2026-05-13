@@ -1,5 +1,95 @@
 ---
 
+## 2026-05-12 22:18 — Follow-up idea: subagent-per-grade fan-out (not yet designed)
+
+If grading shifts to Claude (rather than an OSS judge), the work is
+embarrassingly parallel and a subagent could grade independently with its
+own isolated context. Two natural fan-out shapes both have problems:
+**(a) one subagent per test** — grades all 10 questions for one student;
+each subagent loads 10 rubrics + 10 question texts + 30 exemplar answers +
+10 student answers, which risks context overload. **(b) one subagent per
+question** — grades that question for all 50 students; same overload risk
+plus less natural caching of the per-student state. **(c) per-(student,
+question)** — one subagent grades one student on one question, against
+one rubric + 3 exemplars + 1 answer; fits comfortably in context, but each
+subagent does very little work and the dispatch overhead per grade is
+non-trivial.
+
+Right granularity is open. Possible middle-ground: one subagent per
+student (grades all 10 questions sequentially) with rubrics + exemplars
+streamed in question-by-question to bound peak context. Design needed
+before implementation.
+
+Subagent-driven execution vendored Tasks 1–6 of the version2/ benchmark
+plan (commits `bb891e7..ff1e482`): skeleton, v2 modules, config + slides
+PDF, run_v2_benchmark.py with PDF_PATH re-anchored, tests/v2/ (44 pass,
+1 pre-existing fail in test_llm_tier.py). Task 7 smoke run failed:
+`httpx.ReadTimeout` on the 7th LLM call under 300s timeout — single
+anomalous call, not structural. Reading v2 surfaced three real gaps: no
+retry logic at any `.complete()` site, no prompt/response trace, and
+`KarpathyLoop._score_set` only scores `answers[0]` so multi-variant
+generation is mostly unused. Conversation pivoted to a simpler
+architecture: foundational model preprocesses (questions, exemplar
+answers, rubrics) offline; OSS grades at runtime per rubric dimension
+with retrieval_core wired in; Karpathy loop dropped. No code from the
+pivot yet — paused on Task 7. Wrote V2_BENCHMARK_2026-05-12.md (flowchart).
+
+### Details
+
+**Branch:** new branch `version2-self-contained-benchmark` cut from
+`v2-concept-rubrics` at HEAD `4399723`. All work below is on the new branch.
+
+**Vendoring commits (Tasks 1–6):**
+- `bb891e7` Task 1 — directory scaffold (7 dirs, 4 marker files).
+- `19ac471` Task 2 — `version2/v2/*.py`, 12 files vendored verbatim from `autograder/v2/`.
+- `7414fb9` Task 3 — `version2/config/{llm_config.py,rubric_generation.yaml}`
+  copied whole (not trimmed — deviation from spec, documented in plan).
+- `01989ae` Task 4 — slides PDF (1,125,947 bytes, byte-identical).
+- `9d2fc4c` Task 5 — `run_v2_benchmark.py` with single edit:
+  `PDF_PATH = REPO_ROOT / "sources" / "slides_data_type_quality.pdf"`.
+- `ff1e482` Task 6 — `tests/v2/*.py`, 11 files vendored; pytest from
+  `version2/` reports 44 passed / 1 failed (pre-existing).
+
+**Task 7 smoke failure:**
+- Command: `cd version2 && PYTHONPATH=. ../.venv/bin/python scripts/run_v2_benchmark.py --questions q01 --tier oss --report results/v2_smoke_q01.md`.
+- First 6 answer-gen LLM calls completed in 22–45s each (good ×3, less_good ×3).
+- Call 7 (`wrong variant 1/3`) stalled past 300s → `httpx.ReadTimeout`. The
+  script caught the exception, wrote a `QuestionResult(error="ReadTimeout: timed out")`,
+  exited 0. Partial artifacts at `version2/results/v2_smoke_q01.{md,log,stdout}`,
+  uncommitted, retained for diagnosis.
+- Ollama state at failure: `gemma4:26b` loaded (22.9 GB VRAM, context 8192),
+  no crash on Ollama side. Root cause not pinned (probably model-internal
+  generation slowness on one sample); 17.5k-char prompt is identical across
+  all 9 answer_gen calls, so no structural reason "wrong" should be slower.
+
+**Architectural pivot (under discussion, not yet implemented):**
+
+| User's 9-step process | v2 today | Offline (foundational) / Runtime (OSS) | Mod needed |
+|---|---|---|---|
+| Generate 10 questions from slides | hardcoded `QUESTIONS` dict | offline | New `version2/preprocess/gen_questions.py` → `questions.yaml` |
+| Generate good/less_good/wrong answers | `AnswerGenerator` at runtime | offline | New `gen_answers.py` → `answers.yaml`; runtime loads |
+| Generate rubric per question | `RubricGeneratorV2` at runtime | offline | New `gen_rubrics.py` → `rubrics/q0N.yaml`; runtime loads |
+| Word + sentence chunking | exists in `retrieval_core/` | offline | Already there; persist index once |
+| Retrieve chunks by query | not wired into v2 | runtime, no LLM | Wire `retrieval_core` call |
+| Rerank by rubric dimension | exists in `retrieval_core/multi_retriever.py` | runtime, no LLM | Wire it in |
+| LLM judge per dimension w/ chunks | `ConceptJudge` exists, `evidence_context=""` | runtime, OSS | Fill `evidence_context` with reranked chunks |
+| Average grade | `compute_grade` in `v2/scoring.py` | runtime | Already there |
+
+**Dropped:** Karpathy refinement loop (offline-trusted rubric makes
+per-run iteration redundant). The plan's Tasks 7–10 are obsolete in their
+current form.
+
+**Files added on this branch (uncommitted at journal-write time):**
+`V2_BENCHMARK_2026-05-12.md` (flowchart) at the repo root.
+
+**Open architectural question:** whether the OSS judge should receive
+(a) reranked PDF chunks as context (the 9-step process), or (b) the 9
+labeled exemplar answers as in-context anchors (an earlier proposal in
+this session). Both ground the judge; (b) has a much smaller prompt and
+no retrieval dependency, (a) is closer to the validated 8.5/6.5/1.5 result.
+
+---
+
 ## 2026-05-12 16:45 — rubric-layer analysis, v2 rationale captured, Ollama timeout 120→300
 
 Bumped Ollama `request_timeout` 120→300 s in `config/llm_config.py` — follow-on
