@@ -303,3 +303,98 @@ class SourceMeta(_Strict):
     content_sha: str = Field(min_length=8)
     figure_count: int = Field(ge=0)
     page_count: int = Field(ge=0)
+
+
+class RunStatus(str, Enum):
+    SUCCESS = "success"
+    PARTIAL = "partial"
+    FAILED = "failed"
+
+
+class RunMeta(_Strict):
+    run_id: str = Field(min_length=1)
+    started_at: str
+    ended_at: str | None = None
+    git_sha: str | None = None
+    git_dirty: bool = False
+    status: RunStatus
+    stages_run: list[str] = Field(default_factory=list)
+
+
+class RunConfig(_Strict):
+    """The config that drove a run; mirror of pipeline.yaml plus overrides."""
+    seeds_per_type: dict
+    calibration: dict
+    score_bands: dict
+    generate_rubric: dict
+    parallelism: dict
+    retries: dict
+
+
+class CalibrationMeta(_Strict):
+    type: TypeName
+    seed_ids_train: list[str]
+    seed_ids_val: list[str]
+    seed_ids_test: list[str]
+    iterations: list[dict]
+    final_criterion_outcomes: dict
+    limitation_notes: str | None = None
+
+
+class AnswerQuality(str, Enum):
+    GOOD = "good"
+    LESS_GOOD = "less_good"
+    WRONG = "wrong"
+    AXIS_PERTURBATION = "axis_perturbation"
+
+
+class SyntheticAnswer(_Strict):
+    answer_id: str = Field(min_length=1)
+    quality: AnswerQuality
+    text: str = Field(min_length=1)
+    target_axis: str | None = None
+
+    @field_validator("target_axis")
+    @classmethod
+    def axis_perturbation_requires_target(cls, v, info):
+        quality = info.data.get("quality")
+        if quality is AnswerQuality.AXIS_PERTURBATION and not v:
+            raise ValueError("axis_perturbation answers must specify target_axis")
+        if quality is not AnswerQuality.AXIS_PERTURBATION and v:
+            raise ValueError(f"non-axis_perturbation answer must not set target_axis (got {v})")
+        return v
+
+
+class SyntheticAnswerSet(_Strict):
+    question_id: str = Field(min_length=1)
+    answers: list[SyntheticAnswer] = Field(min_length=1)
+
+
+class GoldConceptCoverage(_Strict):
+    """Per-answer-per-concept-per-axis Claude-annotated gold labels."""
+    question_id: str
+    coverage: dict[str, dict[str, dict[str, Level]]]
+    target_axis_weakness: dict[str, str] = Field(default_factory=dict)
+
+
+class TimelineEventType(str, Enum):
+    STAGE = "stage"
+    ITERATION = "iteration"
+    SUBAGENT_DISPATCH = "subagent_dispatch"
+    PYTHON_HELPER_CALL = "python_helper_call"
+    GATE_DECISION = "gate_decision"
+    ERROR = "error"
+
+
+class TimelineEventPhase(str, Enum):
+    START = "start"
+    END = "end"
+
+
+class TimelineEvent(_Strict):
+    ts: str
+    event_type: TimelineEventType
+    actor: str
+    name: str
+    phase: TimelineEventPhase
+    details: dict = Field(default_factory=dict)

@@ -157,3 +157,78 @@ def test_source_meta_markdown_no_figures():
         "page_count": 0,
     })
     assert sm.format is SourceFormat.MARKDOWN
+
+
+from plugins.grading.python.schema import (
+    RunMeta,
+    RunConfig,
+    CalibrationMeta,
+    SyntheticAnswerSet,
+    AnswerQuality,
+    GoldConceptCoverage,
+    TimelineEvent,
+    TimelineEventType,
+)
+
+
+def test_run_meta_minimal():
+    rm = RunMeta.model_validate({
+        "run_id": "2026-05-13_13-15-00Z__abc1",
+        "started_at": "2026-05-13T13:15:00Z",
+        "ended_at": "2026-05-13T14:00:00Z",
+        "git_sha": "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+        "git_dirty": False,
+        "status": "success",
+        "stages_run": ["calibrate_types"],
+    })
+    assert rm.run_id.startswith("2026-05-13")
+
+
+def test_synthetic_answer_qualities():
+    assert {q.value for q in AnswerQuality} == {
+        "good", "less_good", "wrong", "axis_perturbation",
+    }
+
+
+def test_synthetic_answer_set_axis_perturbation_requires_target_axis():
+    raw = {
+        "question_id": "Q03",
+        "answers": [
+            {
+                "answer_id": "ap_1",
+                "quality": "axis_perturbation",
+                "text": "...",
+                "target_axis": None,
+            }
+        ],
+    }
+    with pytest.raises(Exception):
+        SyntheticAnswerSet.model_validate(raw)
+
+
+def test_synthetic_answer_set_good_requires_no_target_axis():
+    SyntheticAnswerSet.model_validate({
+        "question_id": "Q03",
+        "answers": [
+            {"answer_id": "good_1", "quality": "good", "text": "..."},
+        ],
+    })
+
+
+def test_timeline_event_event_types():
+    assert {e.value for e in TimelineEventType} == {
+        "stage", "iteration", "subagent_dispatch",
+        "python_helper_call", "gate_decision", "error",
+    }
+
+
+def test_timeline_event_round_trip():
+    ev = TimelineEvent.model_validate({
+        "ts": "2026-05-13T16:15:33.214Z",
+        "event_type": "subagent_dispatch",
+        "actor": "main_agent",
+        "name": "materialize_seed:MECHANISM_seed_001",
+        "phase": "start",
+        "details": {"role": "materialize_seed"},
+    })
+    assert ev.phase == "start"
