@@ -1,0 +1,25 @@
+# Canonical list of subagent roles dispatched by the grading plugin's stages.
+# Every operation tagged with `role:` must appear here.
+# tier_dispatch.yaml binds each role to a model.
+
+roles:
+  - name: pdf_translator
+    description: Translates a PDF (rendered page images) into canonical markdown with figure markers. Stage 0.
+  - name: seed_gen
+    description: Generates a batch of seed questions for one type, spanning >= J topical domains, in one structured JSON response. Stage 1.
+  - name: seed_validator
+    description: Receives a batch of seeds, returns per-seed well_formed = yes / no / borderline + rationale. Stage 1, optional pass.
+  - name: materialize_seed
+    description: For one seed, generates 9 quality answers + axis-perturbation answers + a throwaway 2-5 concept overlay + gold per-concept-axis coverage, in one structured JSON response. Stage 2.
+  - name: axis_criterion_drafter
+    description: Drafts initial score-level criteria (full / partial / none) for every axis of one type. Stage 2 initialization.
+  - name: judge
+    description: For one question's batch of answers, classifies each (answer, concept, axis) coverage as full / partial / none with a 1-2 sentence rationale. Stage 2 iterations + Stage 4 gold grade.
+  - name: critic
+    description: Sees the current rubric + criterion outcomes + concrete train-set failures, proposes weight/criterion revisions. Stage 2.
+  - name: overlay_critic
+    description: Proposes refinements to a per-question concept overlay only (weights and relevant_axes). Universal layer is untouchable. Stage 3.
+  - name: question_workup
+    description: For one assessment question, materializes synthetic answers + axis perturbations + the per-question concept overlay + gold coverage. Stage 3.
+  - name: gold_annotator
+    description: Annotates gold per-concept-axis coverage on a synthetic answer. May be merged into materialize_seed / question_workup or dispatched standalone, depending on stage. Used in Stages 2 and 3.
