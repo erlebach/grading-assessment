@@ -131,3 +131,74 @@ def test_validate_pqr_rejects_duplicate_concept_ids():
     raw["concept_overlay"][1]["id"] = raw["concept_overlay"][0]["id"]
     with pytest.raises(ValueError, match="duplicate"):
         validate_per_question_rubric(raw, universal=_universal_for_test())
+
+
+from plugins.grading.python.schema import validate_grade
+
+
+def _good_grades(universal, pqr):
+    return {
+        "question_id": "Q03",
+        "rubric_ref": "rubrics/data_quality/Q03/rubric.yaml",
+        "universal_rubric_ref": "types/MECHANISM/universal_rubric.yaml",
+        "grades": [
+            {
+                "answer_id": "good_1",
+                "per_concept": {
+                    "c1": {"a": "full"},
+                    "c2": {"a": "full", "b": "full"},
+                },
+                "aggregate": 1.0,
+                "aggregate_x10": 10.0,
+            },
+        ],
+        "summary": {
+            "mean_by_quality": {"good": 1.0, "less_good": 0.5, "wrong": 0.0},
+            "ordering_preserved": True,
+            "bands_satisfied": True,
+            "axis_discrimination_passed": True,
+        },
+    }
+
+
+def test_validate_grade_accepts_good():
+    universal = _universal_for_test()
+    pqr = validate_per_question_rubric(_good_pqr(), universal=universal)
+    validate_grade(_good_grades(universal, pqr), rubric=pqr, universal=universal)
+
+
+def test_validate_grade_rejects_aggregate_out_of_range():
+    universal = _universal_for_test()
+    pqr = validate_per_question_rubric(_good_pqr(), universal=universal)
+    raw = _good_grades(universal, pqr)
+    raw["grades"][0]["aggregate"] = 1.5
+    with pytest.raises(ValueError, match="aggregate"):
+        validate_grade(raw, rubric=pqr, universal=universal)
+
+
+def test_validate_grade_rejects_x10_inconsistent_with_aggregate():
+    universal = _universal_for_test()
+    pqr = validate_per_question_rubric(_good_pqr(), universal=universal)
+    raw = _good_grades(universal, pqr)
+    raw["grades"][0]["aggregate_x10"] = 5.0   # but aggregate = 1.0 -> should be 10.0
+    with pytest.raises(ValueError, match="aggregate_x10"):
+        validate_grade(raw, rubric=pqr, universal=universal)
+
+
+def test_validate_grade_rejects_missing_concept_axis_pair():
+    universal = _universal_for_test()
+    pqr = validate_per_question_rubric(_good_pqr(), universal=universal)
+    raw = _good_grades(universal, pqr)
+    # c2 has relevant_axes [a, b] but per_concept only supplies a
+    raw["grades"][0]["per_concept"]["c2"] = {"a": "full"}
+    with pytest.raises(ValueError, match="missing"):
+        validate_grade(raw, rubric=pqr, universal=universal)
+
+
+def test_validate_grade_rejects_unknown_level():
+    universal = _universal_for_test()
+    pqr = validate_per_question_rubric(_good_pqr(), universal=universal)
+    raw = _good_grades(universal, pqr)
+    raw["grades"][0]["per_concept"]["c1"]["a"] = "maybe"
+    with pytest.raises(ValueError, match="level"):
+        validate_grade(raw, rubric=pqr, universal=universal)

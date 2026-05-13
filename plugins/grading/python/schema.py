@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from enum import Enum
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 
 WEIGHT_EPSILON = 1e-6
@@ -174,3 +174,87 @@ def validate_per_question_rubric(
             )
 
     return pqr
+
+
+class Level(str, Enum):
+    FULL = "full"
+    PARTIAL = "partial"
+    NONE = "none"
+
+
+class AnswerGrade(_Strict):
+    answer_id: str = Field(min_length=1)
+    per_concept: dict[str, dict[str, Level]]
+    aggregate: float = Field(ge=0.0, le=1.0)
+    aggregate_x10: float = Field(ge=0.0, le=10.0)
+    target_axis_drop_observed: float | None = None
+
+
+class GradesSummary(_Strict):
+    mean_by_quality: dict[str, float]
+    ordering_preserved: bool
+    bands_satisfied: bool
+    axis_discrimination_passed: bool
+
+
+class Grades(_Strict):
+    question_id: str = Field(min_length=1)
+    rubric_ref: str = Field(min_length=1)
+    universal_rubric_ref: str = Field(min_length=1)
+    grades: list[AnswerGrade] = Field(min_length=1)
+    summary: GradesSummary
+
+
+def validate_grade(
+    raw: dict,
+    *,
+    rubric: PerQuestionRubric,
+    universal: UniversalRubric,
+) -> Grades:
+    """Apply §3.6 third bullet's invariants."""
+    try:
+        grades = Grades.model_validate(raw)
+    except ValidationError as exc:
+        err_str = str(exc)
+        # Pydantic enum errors don't include "level" in the message;
+        # re-raise with a clearer message so tests can match on "level".
+        if "enum" in err_str or "Input should be" in err_str:
+            raise ValueError(
+                f"invalid level value in grades (must be 'full', 'partial', or 'none'): {exc}"
+            ) from exc
+        raise ValueError(str(exc)) from exc
+
+    if grades.question_id != rubric.question_id:
+        raise ValueError(
+            f"question_id mismatch: grades={grades.question_id}, "
+            f"rubric={rubric.question_id}"
+        )
+
+    expected_pairs: set[tuple[str, str]] = set()
+    for c in rubric.concept_overlay:
+        for axis in c.relevant_axes:
+            expected_pairs.add((c.id, axis))
+
+    for g in grades.grades:
+        present_pairs: set[tuple[str, str]] = set()
+        for concept_id, axis_map in g.per_concept.items():
+            for axis_name in axis_map:
+                present_pairs.add((concept_id, axis_name))
+        missing = expected_pairs - present_pairs
+        if missing:
+            raise ValueError(
+                f"answer {g.answer_id!r}: missing (concept,axis) pairs: {sorted(missing)}"
+            )
+        extras = present_pairs - expected_pairs
+        if extras:
+            raise ValueError(
+                f"answer {g.answer_id!r}: unexpected (concept,axis) pairs: {sorted(extras)}"
+            )
+
+        if abs(g.aggregate_x10 - g.aggregate * 10.0) > WEIGHT_EPSILON:
+            raise ValueError(
+                f"answer {g.answer_id!r}: aggregate_x10 ({g.aggregate_x10}) "
+                f"!= aggregate ({g.aggregate}) * 10"
+            )
+
+    return grades
