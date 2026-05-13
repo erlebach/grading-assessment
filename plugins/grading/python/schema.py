@@ -118,3 +118,59 @@ def validate_universal_rubric(raw: dict) -> UniversalRubric:
             )
 
     return rubric
+
+
+class ConceptOverlayEntry(_Strict):
+    id: str = Field(min_length=1)
+    text: str = Field(min_length=1)
+    weight: float = Field(ge=0.0)
+    relevant_axes: list[str] = Field(min_length=1)
+
+
+class PerQuestionRubricStatus(str, Enum):
+    FROZEN = "frozen"
+    DEGRADED = "degraded"
+
+
+class PerQuestionRubric(_Strict):
+    question_id: str = Field(min_length=1)
+    course: str = Field(min_length=1)
+    type: TypeName
+    universal_rubric_ref: str = Field(min_length=1)
+    concept_overlay: list[ConceptOverlayEntry] = Field(min_length=1)
+    status: PerQuestionRubricStatus
+
+
+def validate_per_question_rubric(
+    raw: dict,
+    *,
+    universal: UniversalRubric,
+) -> PerQuestionRubric:
+    """Apply §3.6 second bullet's invariants."""
+    pqr = PerQuestionRubric.model_validate(raw)
+
+    if pqr.type != universal.type:
+        raise ValueError(
+            f"type mismatch: per-question rubric says {pqr.type}, "
+            f"universal rubric says {universal.type}"
+        )
+
+    ids = [c.id for c in pqr.concept_overlay]
+    if len(set(ids)) != len(ids):
+        raise ValueError(f"duplicate concept ids: {ids}")
+
+    total = sum(c.weight for c in pqr.concept_overlay)
+    if abs(total - 1.0) > WEIGHT_EPSILON:
+        raise ValueError(f"concept weights must sum to 1.0; got {total}")
+
+    universal_axis_names = {a.name for a in universal.axes}
+    for c in pqr.concept_overlay:
+        if not c.relevant_axes:
+            raise ValueError(f"concept {c.id!r}: relevant_axes empty")
+        bad = set(c.relevant_axes) - universal_axis_names
+        if bad:
+            raise ValueError(
+                f"concept {c.id!r}: relevant_axes {sorted(bad)} not in universal axes"
+            )
+
+    return pqr
