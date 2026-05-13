@@ -1,19 +1,35 @@
 # SNAPSHOT — autograder
 
-*Last updated: 2026-05-12 14:19*
+*Last updated: 2026-05-13 15:35*
 
 ## Purpose
 
-LLM-based autograder for short-answer assignments. Two pipelines coexist:
+LLM-based autograder for short-answer assignments. Three directions now coexist:
 
 - **v1 (legacy):** keyword + semantic scoring over dynamically generated rubrics.
   Lives in `grading_pipeline/` and `grading_dynamic_rubrics/`. Reached T4.3 sample
   grading; structural failures (vocabulary-dependence, no quality-level
   discrimination) motivated the v2 redesign.
-- **v2 (current focus):** concept-presence LLM judge over typed concept-check
-  rubrics, with Karpathy-style iterative refinement against a held-out validation
-  split. Lives in `v2/`. Design docs: `REDESIGN.md`, `USAGE_v2.md`,
-  `WALKTHROUGH_v2.md`.
+- **v2 (vendored on 2026-05-12):** concept-presence LLM judge over typed
+  concept-check rubrics with Karpathy-style iterative refinement against a
+  held-out validation split. Lives in `v2/` and now also in `version2/`
+  (self-contained vendored copy on branch `version2-self-contained-benchmark`).
+  Task 7 smoke run failed on `httpx.ReadTimeout`; pivot to a simpler offline
+  preprocessing architecture was discussed and superseded by the v3 design
+  below.
+- **v3 (design phase, 2026-05-13):** gold preprocessing benchmark. Produces
+  frozen rubrics (two-layer: 10 universal type rubrics + per-question concept
+  overlay), synthetic answers (good / less_good / wrong + axis perturbations),
+  gold concept coverage annotations, and gold reference scores — all from
+  foundational-tier LLMs. Output artifacts become a benchmark for evaluating
+  future cheap grading approaches (OSS judges, retrieval-only). Karpathy
+  refinement is dropped in favor of a concept-vote + score-band + axis-
+  discrimination calibration criterion. Architecture: a **Claude Code plugin**
+  at `plugins/grading/` running under MAX (no Anthropic API billing). Specs at
+  `docs/superpowers/specs/2026-05-13-preprocessing-benchmark-design.md` (V1
+  / Python+SDK; historical) and
+  `docs/superpowers/specs/2026-05-13-grading-plugin-design.md` (V2 / Option D;
+  rewrite in progress).
 
 ## Scripts / Components
 

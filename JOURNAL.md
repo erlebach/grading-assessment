@@ -1,5 +1,73 @@
 ---
 
+## 2026-05-13 15:35 — Brainstormed gold preprocessing benchmark; mid-session pivot to Option D (Claude Code plugin)
+
+Brainstormed via `/superpowers:brainstorming` a gold-preprocessing pipeline
+that produces frozen rubrics, synthetic answers, gold concept coverage, and
+gold reference scores — these artifacts become a benchmark for future
+cheap grading approaches (OSS judges, retrieval-only, etc.). V1 spec
+written at `docs/superpowers/specs/2026-05-13-preprocessing-benchmark-design.md`
+(7 sections: framing, 5-stage pipeline, run isolation, data model +
+schemas + aggregation, stage details, tracing, testing, open questions).
+Mid-session pivot to **Option D** on user pushback: V1 assumed Python +
+Anthropic SDK, which would duplicate billing on top of Claude MAX.
+Option D re-architects everything as a Claude Code plugin at
+`plugins/grading/`, all LLM work via subagents under MAX, with aggressive
+batching collapsing the earlier "thousands of calls" estimate to ~450/run.
+V1 spec preserved as historical record; an empty byte-identical copy is
+already on disk at `2026-05-13-grading-plugin-design.md` ready for the
+Option D rewrite next session.
+
+### Details
+
+**Key design decisions (ratified in conversation, architecture-independent):**
+
+- **Two-layer rubric:** 10 universal type-level rubrics (axes + weights fixed
+  per type) + per-question concept overlay (concepts with weights and
+  `relevant_axes` referencing the type's axes).
+- **Universal layer is cross-topic** — calibrated with seeds spanning ≥ J
+  topical domains (Claude-knowledge + curated + source-derived). Never
+  bootstrapped on a single course (user vetoed an earlier recommendation).
+- **Calibration criterion:** concept-vote agreement + score-bands + axis
+  discrimination, the latter via axis-perturbation answers — sharper
+  diagnostic than v2 Karpathy's ordering-only criterion.
+- **Discrete labels:** judge picks `full | partial | none`, mapped to fixed
+  values `{1.0, 0.5, 0.0}`. Per-axis criteria in the universal rubric.
+- **Run isolation:** every invocation lives in `runs/<id>/`, id format
+  `YYYY-MM-DD_HH-MM-SSZ__<fingerprint>` (correlates with `.specstory/history/`).
+- **Reproducibility:** `src_snapshot.tar.gz` per run + `git_sha` — two
+  independent reproduction paths.
+- **Persistence policy:** nothing inside a run folder is ever discarded.
+  Every iteration's intermediate state is on disk for audit.
+
+**Option D specifics (not yet written into a spec):**
+
+- Plugin at `plugins/grading/` with manifest, skills (one per stage),
+  slash commands (`/grade:translate`, `/grade:seeds`, `/grade:calibrate`,
+  `/grade:question`, `/grade:course`, `/grade:status`, `/grade:diff`,
+  …), hooks (post-subagent YAML validation), Python helpers (schema,
+  aggregation, diff, snapshot — no LLM, no SDK).
+- Operations tagged by `role` (`answer_gen` / `critic` / `judge` /
+  `gold_annotator` / …); plugin config maps role → tier (Claude Opus /
+  Sonnet / Haiku now; Ollama Gemma4 later, already validated in user's setup).
+- LLM calls batched aggressively — one call generates 20 seed questions;
+  one call generates all 13 synthetic answers for a seed (good + less_good
+  + wrong + axis perturbations) in a single structured JSON; one call
+  judges all val-set answers in an iteration.
+
+**Next session:**
+
+- Rewrite §§1, 4, 5, 6 of the spec under Option D on
+  `docs/superpowers/specs/2026-05-13-grading-plugin-design.md`. §§0, 2, 3, 7
+  carry over verbatim. Add new §8 (plugin manifest + command surface +
+  tier-dispatch config).
+- Build out `plugins/grading/` skeleton (manifest, skill stubs, command
+  stubs, Python helpers).
+- After Option D spec is locked: invoke `superpowers:writing-plans` to
+  produce a step-by-step implementation plan.
+
+---
+
 ## 2026-05-12 22:18 — Follow-up idea: subagent-per-grade fan-out (not yet designed)
 
 If grading shifts to Claude (rather than an OSS judge), the work is
