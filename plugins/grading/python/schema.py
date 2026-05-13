@@ -56,3 +56,66 @@ class TypeCatalog(_Strict):
         if len(set(names)) != len(names):
             raise ValueError("type names must be unique")
         return v
+
+
+class ScoreLevelEntry(_Strict):
+    value: float
+    criterion: str = Field(min_length=1)
+
+
+class ScoreLevels(_Strict):
+    full: ScoreLevelEntry
+    partial: ScoreLevelEntry
+    none: ScoreLevelEntry
+
+
+class AxisDef(_Strict):
+    name: str = Field(min_length=1)
+    description: str = ""
+    weight: float = Field(ge=0.0)
+    score_levels: ScoreLevels
+
+
+class Aggregate(_Strict):
+    method: str = Field(min_length=1)
+    out_of: float = Field(gt=0.0)
+
+
+class UniversalRubricStatus(str, Enum):
+    FROZEN = "frozen"
+    WARNING_TEST_MARGINAL = "warning_test_marginal"
+    FAILED_TO_CONVERGE = "failed_to_converge"
+
+
+class UniversalRubric(_Strict):
+    type: TypeName
+    status: UniversalRubricStatus
+    axes: list[AxisDef] = Field(min_length=1)
+    aggregate: Aggregate
+
+
+def validate_universal_rubric(raw: dict) -> UniversalRubric:
+    """Apply §3.6 first bullet's invariants.
+
+    Returns the validated model. Raises ValueError with a useful message on
+    any invariant violation.
+    """
+    rubric = UniversalRubric.model_validate(raw)
+
+    names = [a.name for a in rubric.axes]
+    if len(set(names)) != len(names):
+        raise ValueError(f"duplicate axis names: {names}")
+
+    total = sum(a.weight for a in rubric.axes)
+    if abs(total - 1.0) > WEIGHT_EPSILON:
+        raise ValueError(f"axis weights must sum to 1.0; got {total}")
+
+    for axis in rubric.axes:
+        sl = axis.score_levels
+        if not (sl.full.value > sl.partial.value > sl.none.value):
+            raise ValueError(
+                f"axis {axis.name!r}: score_levels not monotone "
+                f"(full={sl.full.value}, partial={sl.partial.value}, none={sl.none.value})"
+            )
+
+    return rubric
