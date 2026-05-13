@@ -1,0 +1,20 @@
+# Maps subagent role -> tier (model). role_catalog.yaml is the canonical
+# list of declared roles; this file binds each to a tier.
+# Tier names must be Claude Code-resolvable model identifiers.
+
+default_tier: claude-sonnet-4-6
+
+roles:
+  pdf_translator:           claude-opus-4-7
+  seed_gen:                 claude-sonnet-4-6
+  seed_validator:           claude-haiku-4-5
+  materialize_seed:         claude-opus-4-7
+  axis_criterion_drafter:   claude-sonnet-4-6
+  judge:                    claude-opus-4-7
+  critic:                   claude-opus-4-7
+  overlay_critic:           claude-sonnet-4-6
+  question_workup:          claude-opus-4-7
+  gold_annotator:           claude-opus-4-7
+
+# Future: Ollama Gemma4 entries below once integrated.
+# gold_annotator: ollama:gemma4-26b
