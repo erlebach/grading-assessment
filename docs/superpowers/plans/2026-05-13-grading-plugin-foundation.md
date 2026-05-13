@@ -182,10 +182,13 @@ pythonpath = ["."]
 testpaths = ["tests", "plugins/grading/python/tests"]
 ```
 
-- [ ] **Step 4: Install the new deps**
+- [ ] **Step 4: Resolve and install via uv**
+
+The project uses `uv` (`uv.lock` is checked in). Do **not** use `pip install` directly — it would install into the venv without updating `uv.lock`, causing drift.
 
 ```bash
-.venv/bin/pip install "pymupdf>=1.24" "hypothesis>=6.100"
+uv lock        # resolves pyproject.toml and updates uv.lock
+uv sync        # installs the locked versions into .venv
 ```
 
 Then rerun the smoke test:
@@ -194,7 +197,7 @@ Then rerun the smoke test:
 .venv/bin/python -m pytest plugins/grading/python/tests/test_deps_smoke.py -v
 ```
 
-Expected: 2 passed.
+Expected: 2 passed. After `uv lock`, `uv.lock` will list `pymupdf` and `hypothesis` entries — verify with `grep -E '^name = "(pymupdf|hypothesis)"' uv.lock`.
 
 - [ ] **Step 5: Delete the smoke test (no longer needed)**
 
