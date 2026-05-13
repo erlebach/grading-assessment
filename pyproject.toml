@@ -55,4 +55,10 @@ disallow_untyped_defs = true
 dev = [
     "pytest>=9.0.2",
     "pytest-cov>=7.1.0",
+    "pymupdf>=1.24",
+    "hypothesis>=6.100",
 ]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests", "plugins/grading/python/tests"]
