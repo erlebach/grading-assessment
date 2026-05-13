@@ -6,7 +6,6 @@ Spec reference: docs/superpowers/specs/2026-05-13-grading-plugin-design.md §3.
 from __future__ import annotations
 
 from enum import Enum
-from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 

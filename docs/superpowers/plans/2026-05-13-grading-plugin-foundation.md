@@ -234,7 +234,7 @@ git commit -m "chore: add pymupdf + hypothesis dev deps and pytest config for gr
 import json
 from pathlib import Path
 
-PLUGIN_ROOT = Path(__file__).resolve().parents[3]
+PLUGIN_ROOT = Path(__file__).resolve().parents[2]
 MANIFEST = PLUGIN_ROOT / ".claude-plugin" / "plugin.json"
 
 
@@ -811,7 +811,6 @@ Spec reference: docs/superpowers/specs/2026-05-13-grading-plugin-design.md §3.
 from __future__ import annotations
 
 from enum import Enum
-from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
