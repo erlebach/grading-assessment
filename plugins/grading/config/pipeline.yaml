@@ -1,0 +1,42 @@
+# Tunable knobs for the grading plugin's preprocessing pipeline.
+# Every value here is overridable per-run via config.yaml in the run folder.
+# Defaults reflect spec §4.
+
+seeds_per_type:
+  default: 8
+  topical_domains_min: 6     # J in spec §4.2
+  composition:
+    from_user_curated: 2
+    from_source: 2
+    from_claude_knowledge: 4
+  validation_pass_enabled: true
+
+calibration:
+  max_iterations: 6
+  split:
+    train: 0.60
+    val: 0.20
+    test: 0.20
+  concept_vote_agreement_min: 0.85
+  score_band_satisfaction_min: 0.90
+  axis_discrimination_delta_min: 0.25
+  proceed_on_warning: false
+
+score_bands:
+  good:      [0.85, 1.00]
+  less_good: [0.40, 0.70]
+  wrong:     [0.00, 0.30]
+
+generate_rubric:
+  good_count: 3
+  less_good_count: 3
+  wrong_count: 3
+  axis_perturbation_count_per_axis: 1
+  overlay_refinement_iterations: 3
+
+parallelism:
+  max_parallel_questions: 3
+  max_parallel_seeds: 4
+
+retries:
+  max_redispatches: 2
