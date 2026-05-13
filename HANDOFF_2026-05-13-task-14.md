@@ -1,14 +1,14 @@
-# Handoff — grading-plugin foundation plan, after Task 13
+# Handoff — grading-plugin foundation plan, after Task 14
 
 **Branch:** `version2-self-contained-benchmark`
 **Plan:** [`docs/superpowers/plans/2026-05-13-grading-plugin-foundation.md`](docs/superpowers/plans/2026-05-13-grading-plugin-foundation.md)
-**Last completed task:** **13** of 24 (aggregation property tests)
-**Last commit SHA:** `6c895b9` — `test(grading-plugin): property-based invariants for aggregation`
-**Next task:** **14** — Run resolution (`--run <prefix>` matching). Creates `plugins/grading/python/run_resolution.py` and `tests/test_run_resolution.py`.
+**Last completed task:** **14** of 24 (run resolution `--run <prefix>`)
+**Last commit SHA:** `4ba7783` — `feat(grading-plugin): --run prefix resolution helper`
+**Next task:** **15** — Source snapshot (`src_snapshot.tar.gz`). Creates `plugins/grading/python/snapshot.py` and `tests/test_snapshot.py`.
 
 ## Status
 
-Foundation work past the schema + math midpoint. Tests green: 41 plugin tests + 3 hypothesis property tests.
+Foundation work past the schema + math midpoint and into the deterministic helpers. Tests green: 65 plugin tests including 3 hypothesis property tests.
 
 ## Quick resume
 
@@ -18,9 +18,9 @@ git -C /Users/erlebach/src/2026/grading_assessment/autograder log --oneline -10
 .venv/bin/python -m pytest plugins/grading/python/tests/ -v
 ```
 
-Then re-enter `/superpowers:subagent-driven-development` against the plan, skip to Task 14.
+Then re-enter `/superpowers:subagent-driven-development` against the plan, skip to Task 15.
 
-## Tasks completed (1–13)
+## Tasks completed (1–14)
 
 | # | Subject | Final commit |
 |---|---|---|
@@ -37,12 +37,12 @@ Then re-enter `/superpowers:subagent-driven-development` against the plan, skip 
 | 11 | RunMeta + Calibration + Answers + Coverage + Timeline | `8217627` |
 | 12 | Aggregation §3.3 formula | `c2725a9` |
 | 13 | Aggregation property tests (hypothesis) | `6c895b9` |
+| 14 | Run resolution (`--run <prefix>`) | `4ba7783` |
 
 Per-task records under `docs/superpowers/tasks/2026-05-13-task-NN-*.md`.
 
-## Tasks remaining (14–24)
+## Tasks remaining (15–24)
 
-14. Run resolution (`--run` prefix matching)
 15. Source snapshot (`src_snapshot.tar.gz`)
 16. PDF render (pymupdf)
 17. Semantic diff between run folders
