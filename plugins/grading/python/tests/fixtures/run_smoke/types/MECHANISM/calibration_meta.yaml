@@ -1,0 +1,10 @@
+type: MECHANISM
+seed_ids_train: [seed_001]
+seed_ids_val: [seed_002]
+seed_ids_test: [seed_003]
+iterations: []
+final_criterion_outcomes:
+  concept_vote_agreement: 0.95
+  score_band_satisfaction: 1.0
+  axis_discrimination_delta: 0.5
+limitation_notes: fixture

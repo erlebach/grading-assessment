@@ -1,0 +1,10 @@
+question_id: Qfix01
+course: fixture
+type: MECHANISM
+universal_rubric_ref: types/MECHANISM/universal_rubric.yaml
+concept_overlay:
+  - id: c1
+    text: X causes Y.
+    weight: 1.0
+    relevant_axes: [causal_chain_correctness, completeness]
+status: frozen

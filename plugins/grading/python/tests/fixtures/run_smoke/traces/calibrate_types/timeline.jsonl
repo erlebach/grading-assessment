@@ -1,0 +1,2 @@
+{"ts":"2026-05-13T00:00:00.000Z","event_type":"stage","actor":"main_agent","name":"calibrate_types:MECHANISM","phase":"start","details":{}}
+{"ts":"2026-05-13T00:00:01.000Z","event_type":"stage","actor":"main_agent","name":"calibrate_types:MECHANISM","phase":"end","details":{}}

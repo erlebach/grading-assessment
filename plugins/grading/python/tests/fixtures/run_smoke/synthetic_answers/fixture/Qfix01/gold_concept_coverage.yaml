@@ -1,0 +1,6 @@
+question_id: Qfix01
+coverage:
+  good_1:      { c1: { causal_chain_correctness: full,    completeness: full } }
+  less_good_1: { c1: { causal_chain_correctness: full,    completeness: partial } }
+  wrong_1:     { c1: { causal_chain_correctness: none,    completeness: none } }
+target_axis_weakness: {}

@@ -1,0 +1,5 @@
+question_id: Qfix01
+course: fixture
+type: MECHANISM
+text: Describe how X causes Y.
+sources: [fixture_source]

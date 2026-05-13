@@ -1,0 +1,21 @@
+question_id: Qfix01
+rubric_ref: rubrics/fixture/Qfix01/rubric.yaml
+universal_rubric_ref: types/MECHANISM/universal_rubric.yaml
+grades:
+  - answer_id: good_1
+    per_concept: { c1: { causal_chain_correctness: full, completeness: full } }
+    aggregate: 1.0
+    aggregate_x10: 10.0
+  - answer_id: less_good_1
+    per_concept: { c1: { causal_chain_correctness: full, completeness: partial } }
+    aggregate: 0.8
+    aggregate_x10: 8.0
+  - answer_id: wrong_1
+    per_concept: { c1: { causal_chain_correctness: none, completeness: none } }
+    aggregate: 0.0
+    aggregate_x10: 0.0
+summary:
+  mean_by_quality: { good: 1.0, less_good: 0.8, wrong: 0.0 }
+  ordering_preserved: true
+  bands_satisfied: true
+  axis_discrimination_passed: true

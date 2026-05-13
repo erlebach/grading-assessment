@@ -1,0 +1,5 @@
+stage: calibrate_types
+total_subagents: 0
+counts_by_role: {}
+counts_by_status: {}
+duration_ms: 0

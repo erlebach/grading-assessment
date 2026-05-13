@@ -1,0 +1,5 @@
+question_id: Qfix01
+answers:
+  - { answer_id: good_1,      quality: good,      text: "X causes Y via mechanism M." }
+  - { answer_id: less_good_1, quality: less_good, text: "X causes Y." }
+  - { answer_id: wrong_1,     quality: wrong,     text: "Y causes X." }

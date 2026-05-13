@@ -1,0 +1,20 @@
+type: MECHANISM
+status: frozen
+axes:
+  - name: causal_chain_correctness
+    description: Are causes correctly linked to effects?
+    weight: 0.6
+    score_levels:
+      full:    { value: 1.0, criterion: "All correct." }
+      partial: { value: 0.5, criterion: "Some correct." }
+      none:    { value: 0.0, criterion: "Incorrect." }
+  - name: completeness
+    description: Coverage of the mechanism.
+    weight: 0.4
+    score_levels:
+      full:    { value: 1.0, criterion: "All present." }
+      partial: { value: 0.5, criterion: "Some present." }
+      none:    { value: 0.0, criterion: "Missing." }
+aggregate:
+  method: weighted_mean
+  out_of: 10.0

@@ -1,0 +1,4 @@
+types:
+  - name: MECHANISM
+    description: How a process unfolds.
+    candidate_axes: [causal_chain_correctness, completeness]
