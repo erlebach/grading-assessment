@@ -38,6 +38,7 @@ from plugins.grading.python.schema import SourceMeta, TimelineEvent
 
 _IMG_LINK_RE = re.compile(r"!\[([^\]]*)\]\(([^)]+)\)")
 _IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
+_DEFAULT_MARKER_CONFIG = {"ocr": False, "extract_images": True}
 
 
 def _resolve_source_name(source_path: Path, name: str | None) -> str:
@@ -180,8 +181,8 @@ def _load_marker_config(run_dir: Path) -> dict:
     cfg_path = run_dir / "config.yaml"
     if cfg_path.is_file():
         cfg = yaml.safe_load(cfg_path.read_text()) or {}
-        return cfg.get("marker_single", {}) or {}
-    return {"ocr": False, "extract_images": True}
+        return cfg.get("marker_single") or _DEFAULT_MARKER_CONFIG
+    return _DEFAULT_MARKER_CONFIG
 
 
 def _append_timeline(run_dir: Path, source_name: str, *, skipped: bool) -> None:
@@ -242,14 +243,14 @@ def main(argv: list[str] | None = None) -> int:
                         help="override the auto-derived source name")
     parser.add_argument("--run", default=None,
                         help="run-folder prefix; defaults to most recent")
-    parser.add_argument("--runs-dir", type=Path, default=None,
+    parser.add_argument("--runs-root", type=Path, default=None,
                         help="override preprocessing/runs/ location (for tests)")
     parser.add_argument("--force", action="store_true",
                         help="re-translate even if already present")
     args = parser.parse_args(argv)
 
     repo_root = Path(__file__).resolve().parents[3]
-    runs_dir = args.runs_dir or (repo_root / "preprocessing" / "runs")
+    runs_dir = args.runs_root or (repo_root / "preprocessing" / "runs")
     try:
         run_dir = (resolve_run(args.run, runs_dir) if args.run
                    else most_recent_run(runs_dir))

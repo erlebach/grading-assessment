@@ -125,12 +125,12 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="run_init")
     parser.add_argument("--profile", default=None,
                         help="named profile from pipeline.yaml's profiles: block")
-    parser.add_argument("--runs-dir", type=Path, default=None,
+    parser.add_argument("--runs-root", type=Path, default=None,
                         help="override preprocessing/runs/ location (for tests)")
     args = parser.parse_args(argv)
 
     repo_root = Path(__file__).resolve().parents[3]
-    runs_dir = args.runs_dir or (repo_root / "preprocessing" / "runs")
+    runs_dir = args.runs_root or (repo_root / "preprocessing" / "runs")
     pipeline_path = repo_root / "plugins" / "grading" / "config" / "pipeline.yaml"
     pipeline_config = yaml.safe_load(pipeline_path.read_text())
 

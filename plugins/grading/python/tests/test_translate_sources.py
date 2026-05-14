@@ -271,6 +271,14 @@ def test_translate_source_skip_if_present(tmp_path, capsys):
     assert first_sha == second_sha           # not re-translated
     assert "already translated" in capsys.readouterr().out
 
+    # Verify the skip path appends a skipped=True timeline event
+    timeline_path = run_dir / "traces" / "translate_sources" / "timeline.jsonl"
+    lines = timeline_path.read_text().splitlines()
+    assert len(lines) == 2                   # one per call
+    second_event = _json.loads(lines[1])
+    assert second_event["details"] == {"skipped": True}
+    TimelineEvent.model_validate(second_event)
+
 
 def test_translate_source_force_retranslates(tmp_path):
     run_dir = _run_dir_with_config(tmp_path)
@@ -294,6 +302,15 @@ def test_main_errors_when_no_run_folder(tmp_path, capsys):
     (tmp_path / "runs").mkdir()
     src = tmp_path / "notes.md"
     src.write_text("# x\n")
-    rc = ts.main([str(src), "--runs-dir", str(tmp_path / "runs")])
+    rc = ts.main([str(src), "--runs-root", str(tmp_path / "runs")])
     assert rc == 1
     assert "/grade:init" in capsys.readouterr().err
+
+
+def test_translate_source_unsupported_type_raises(tmp_path):
+    run_dir = _run_dir_with_config(tmp_path)
+    src = tmp_path / "notes.txt"
+    src.write_text("plain text\n")
+    import pytest
+    with pytest.raises(ValueError):
+        ts.translate_source(src, run_dir)
