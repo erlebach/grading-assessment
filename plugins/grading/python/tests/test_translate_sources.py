@@ -149,3 +149,33 @@ def test_invoke_marker_single_raises_on_nonzero(tmp_path, monkeypatch):
     with pytest.raises(RuntimeError, match="marker_single failed"):
         ts._invoke_marker_single(tmp_path / "x.pdf", tmp_path / "out",
                                  {"ocr": False, "extract_images": True})
+
+
+def test_translate_markdown_passthrough_and_image_copy(tmp_path):
+    src = tmp_path / "notes.md"
+    src.write_text("# Notes\n![](diagram.png)\n![ext](http://x/y.png)\n")
+    (tmp_path / "diagram.png").write_bytes(b"\x89PNG fake")
+    dest = tmp_path / "sources" / "notes"
+    dest.mkdir(parents=True)
+
+    page_count, figure_count, extraction = ts._translate_markdown(src, dest)
+
+    assert page_count == 0
+    assert figure_count == 1
+    assert extraction is None
+    assert (dest / "figures" / "diagram.png").is_file()
+    content = (dest / "content.md").read_text()
+    assert "![](figures/diagram.png)" in content
+    assert "![ext](http://x/y.png)" in content   # external URL untouched
+
+
+def test_translate_markdown_no_images(tmp_path):
+    src = tmp_path / "plain.md"
+    src.write_text("# Plain\njust text\n")
+    dest = tmp_path / "sources" / "plain"
+    dest.mkdir(parents=True)
+
+    page_count, figure_count, extraction = ts._translate_markdown(src, dest)
+
+    assert (page_count, figure_count, extraction) == (0, 0, None)
+    assert (dest / "content.md").read_text() == "# Plain\njust text\n"

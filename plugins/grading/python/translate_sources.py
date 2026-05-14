@@ -139,3 +139,21 @@ def _translate_pdf(source_path: Path, dest_dir: Path,
         "ts": datetime.now(timezone.utc).isoformat(),
     }
     return _pdf_page_count(source_path), figure_count, extraction
+
+
+def _translate_markdown(source_path: Path,
+                        dest_dir: Path) -> tuple[int, int, None]:
+    raw = source_path.read_text()
+    figures_dir = dest_dir / "figures"
+    figure_count = 0
+    for m in _IMG_LINK_RE.finditer(raw):
+        target = m.group(2)
+        if "://" in target or target.startswith("/"):
+            continue
+        img_src = source_path.parent / target
+        if img_src.is_file():
+            figures_dir.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(img_src, figures_dir / img_src.name)
+            figure_count += 1
+    (dest_dir / "content.md").write_text(_rewrite_image_links(raw))
+    return 0, figure_count, None
