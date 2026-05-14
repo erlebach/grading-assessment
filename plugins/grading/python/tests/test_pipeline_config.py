@@ -41,3 +41,22 @@ def test_parallelism_knobs_present():
     p = data["parallelism"]
     assert p["max_parallel_questions"] >= 1
     assert p["max_parallel_seeds"] >= 1
+
+
+def test_marker_single_block_present():
+    data = yaml.safe_load(PIPELINE.read_text())
+    m = data["marker_single"]
+    assert isinstance(m["ocr"], bool)
+    assert isinstance(m["extract_images"], bool)
+
+
+def test_profiles_block_has_smoke():
+    data = yaml.safe_load(PIPELINE.read_text())
+    profiles = data["profiles"]
+    assert "smoke" in profiles
+    # smoke dials count knobs down to 1
+    assert profiles["smoke"]["seeds_per_type"]["default"] == 1
+    gr = profiles["smoke"]["generate_rubric"]
+    assert gr["good_count"] == 1
+    assert gr["less_good_count"] == 1
+    assert gr["wrong_count"] == 1

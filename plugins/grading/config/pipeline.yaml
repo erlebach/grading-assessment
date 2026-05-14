@@ -40,3 +40,17 @@ parallelism:
 
 retries:
   max_redispatches: 2
+
+marker_single:
+  ocr: false               # passes --disable_ocr when false; enable for scanned PDFs
+  extract_images: true     # extract + inline-reference figures
+
+profiles:
+  smoke:
+    seeds_per_type:
+      default: 1
+    generate_rubric:
+      good_count: 1
+      less_good_count: 1
+      wrong_count: 1
+      axis_perturbation_count_per_axis: 1
