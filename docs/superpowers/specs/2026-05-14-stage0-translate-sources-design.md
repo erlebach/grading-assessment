@@ -5,7 +5,9 @@
 **Parent spec:** `docs/superpowers/specs/2026-05-13-grading-plugin-design.md` (the ratified Option D grading-plugin design). This document is a **specification**, not an implementation plan — it expands §4.1 (Stage 0) and the run-init half of §2 into enough detail that an implementation plan can be derived from it.
 **Produces:** the Stage 0 implementation plan, written next via the `writing-plans` skill into `docs/superpowers/plans/`.
 
-**Divergence from parent spec §4.1:** the parent spec describes PDF translation as a `pdf_translator` *subagent* dispatch over rendered page images. This spec replaces that with **`marker` (`marker-pdf`), a deterministic local PDF→markdown tool** — no subagent, no LLM call. Consequently **Stage 0 is entirely deterministic Python**: no subagent dispatch anywhere, neither for PDFs nor markdown. If `marker` cannot handle a source, Stage 0 **hard-errors** rather than falling back to an LLM path — the assumption is modern born-digital PDFs (or markdown prepared by other means). An LLM fallback is explicitly *not* built now; if real sources prove it necessary, it is added as a follow-up. The `pdf_translator` role in `role_catalog.yaml` / `tier_dispatch.yaml` is left in place but unused by Stage 0 (see §7).
+**Terminology:** `marker-pdf` is the PyPI package. It installs several distinct console scripts; the two relevant here are the `marker_single` CLI (converts one file) and the `marker` CLI (batch-converts a folder). They are siblings — `marker` does **not** wrap `marker_single`. Stage 0 translates exactly one source per `/grade:translate` invocation, so it uses the **`marker_single` CLI** exclusively; the `marker` batch CLI is never invoked. This spec always says either "the `marker-pdf` package" or "the `marker_single` CLI" — never bare "marker".
+
+**Divergence from parent spec §4.1:** the parent spec describes PDF translation as a `pdf_translator` *subagent* dispatch over rendered page images. This spec replaces that with **the `marker_single` CLI from the `marker-pdf` package, a deterministic local PDF→markdown tool** — no subagent, no LLM call. Consequently **Stage 0 is entirely deterministic Python**: no subagent dispatch anywhere, neither for PDFs nor markdown. If `marker_single` cannot handle a source, Stage 0 **hard-errors** rather than falling back to an LLM path — the assumption is modern born-digital PDFs (or markdown prepared by other means). An LLM fallback is explicitly *not* built now; if real sources prove it necessary, it is added as a follow-up. The `pdf_translator` role in `role_catalog.yaml` / `tier_dispatch.yaml` is left in place but unused by Stage 0 (see §7).
 
 ## 1. Scope
 
@@ -13,8 +15,8 @@ This document specifies the entry point of the grading pipeline: creating a run 
 
 - Two slash commands: `/grade:init` and `/grade:translate`.
 - Two new Python helper modules: `run_init.py` and `translate_sources.py`.
-- A new project dependency: `marker-pdf` (provides the `marker_single` CLI).
-- Config additions to `plugins/grading/config/pipeline.yaml`: a `marker:` knob block and a `profiles:` block.
+- A new project dependency: the `marker-pdf` package (provides the `marker_single` CLI).
+- Config additions to `plugins/grading/config/pipeline.yaml`: a `marker_single:` knob block and a `profiles:` block.
 - One additive schema field: `RunMeta.profile`.
 - A CI test suite for the Python helpers plus one frozen live-verification baseline.
 
@@ -58,7 +60,7 @@ All under `plugins/grading/python/`:
 | Module | Status | Responsibility |
 |---|---|---|
 | `run_init.py` | new | `init_run(runs_dir, config, profile=None) -> Path` — run_id generation, skeleton creation, config merge, snapshot, `run_meta.yaml`. |
-| `translate_sources.py` | new | `translate_source(...)` plus private helpers — fully deterministic PDF (via `marker`) and markdown translation. |
+| `translate_sources.py` | new | `translate_source(...)` plus private helpers — fully deterministic PDF (via the `marker_single` CLI) and markdown translation. |
 | `run_resolution.py` | reused | `resolve_run`, `most_recent_run` — `--run` prefix resolution. |
 | `snapshot.py` | reused | `create_snapshot` — `src_snapshot.tar.gz`. |
 | `schema.py` | reused (+1 field) | `SourceMeta` validation; `RunMeta` gains `profile`. |
@@ -81,12 +83,15 @@ translate_source(source_path, run_dir, *, name=None, force=False) -> Path
   returns sources/<source_name>/
 
 _translate_pdf(source_path, dest_dir) -> (page_count, figure_count, extraction)
-  • run `marker_single` via subprocess into a temp output dir (flags from the marker: config block)
-  • _ingest_marker_output: relocate marker's <stem>.md → content.md; relocate extracted
-    images → figures/; rewrite content.md image links to point at figures/
-  • hard-error if marker exits non-zero or produces no / empty content.md
-  • page_count via pymupdf (fitz.open(path).page_count — no full render); figure_count = images relocated
-  • extraction = {role: "marker", tier: "marker-pdf==<version>", ts: <iso8601>}
+  • run the `marker_single` CLI via subprocess into a temp output dir
+    (flags from the `marker_single:` config block)
+  • _ingest_marker_single_output: relocate the `marker_single` output's <stem>.md
+    → content.md; relocate extracted images → figures/; rewrite content.md image
+    links to point at figures/
+  • hard-error if `marker_single` exits non-zero or produces no / empty content.md
+  • page_count via pymupdf (fitz.open(path).page_count — no full render);
+    figure_count = images relocated
+  • extraction = {role: "marker_single", tier: "marker-pdf==<version>", ts: <iso8601>}
 
 _translate_markdown(source_path, dest_dir) -> (0, figure_count, None)
   • copy file verbatim → content.md; copy inline-linked images → figures/
@@ -97,7 +102,7 @@ _finalize(dest_dir, name, fmt, page_count, figure_count, extraction) -> Path
   • build + validate schema.SourceMeta; write meta.yaml
 ```
 
-Every step is deterministic Python and unit-testable; `marker_single` is the one external process and is stubbed in CI (see §6).
+Every step is deterministic Python and unit-testable; the `marker_single` CLI is the one external process and is stubbed in CI (see §6).
 
 ### 3.3 Skip-if-present
 
@@ -105,13 +110,13 @@ Within a single run, a source is never re-translated once done — the parent sp
 
 - If `runs/<id>/sources/<name>/content.md` exists **and** its `meta.yaml` validates, `/grade:translate` is a no-op that prints "already translated" and exits success.
 - `--force` re-translates, writing into the same path — the one sanctioned overwrite.
-- The check is cheap (existence + schema validation), so it never burns a `marker` run needlessly, and re-running `/grade:translate` after an earlier hard failure is safe.
+- The check is cheap (existence + schema validation), so it never burns a `marker_single` run needlessly, and re-running `/grade:translate` after an earlier hard failure is safe.
 
-Cross-run de-duplication is **not** handled here — a new run folder re-translates from scratch. That is what the deferred content-addressed source cache (parent spec §2) is for. With `marker` as the engine a re-translation costs local wall-clock time, not API tokens, so the cache stays a deferred enhancement — but its value rises with source-library size, noted for when it is picked up.
+Cross-run de-duplication is **not** handled here — a new run folder re-translates from scratch. That is what the deferred content-addressed source cache (parent spec §2) is for. With the `marker_single` CLI as the engine a re-translation costs local wall-clock time, not API tokens, so the cache stays a deferred enhancement — but its value rises with source-library size, noted for when it is picked up.
 
 ### 3.4 Data flow summary
 
-- **PDF:** `translate_source` → `_translate_pdf` runs `marker_single` → `_ingest_marker_output` relocates markdown + figures and rewrites links → `_finalize` writes `meta.yaml`. No subagent, no LLM.
+- **PDF:** `translate_source` → `_translate_pdf` runs the `marker_single` CLI → `_ingest_marker_single_output` relocates markdown + figures and rewrites links → `_finalize` writes `meta.yaml`. No subagent, no LLM.
 - **Markdown:** `translate_source` → `_translate_markdown` copies verbatim (+ inline images) → `_finalize` writes `meta.yaml`. No subagent, no LLM.
 - **Source location:** raw sources live at `preprocessing/inputs/sources_raw/` — a sibling of `runs/`, **not** inside a run folder. They are captured by `src_snapshot.tar.gz` (which excludes only `.git/`, `.venv/`, `__pycache__/`, `.specstory/`, `runs/`), so reproducibility holds. Translated artifacts are written into `runs/<id>/sources/<name>/`.
 
@@ -120,7 +125,7 @@ Cross-run de-duplication is **not** handled here — a new run folder re-transla
 Per `/grade:translate` invocation, into the active run folder:
 
 - `sources/<name>/content.md`
-- `sources/<name>/figures/<marker-figure-name>` — `marker`'s extracted cropped figures (PDFs), referenced inline from `content.md`; or inline-linked images copied verbatim (markdown). Figure files keep `marker`'s own names; no renaming.
+- `sources/<name>/figures/<figure-name>` — the `marker_single` CLI's extracted cropped figures (PDFs), referenced inline from `content.md`; or inline-linked images copied verbatim (markdown). Figure files keep the `marker_single` CLI's own names; no renaming.
 - `sources/<name>/meta.yaml` — `format`, `courses`, `topics`, `extraction` (`{role, tier, ts}`; `None` for markdown), `content_sha`, `figure_count`, `page_count`. Validated against `schema.SourceMeta`.
 - `traces/translate_sources/timeline.jsonl` — append-only; one `python_helper_call` event per invocation (parent spec §4.0 invariant). No `<subagent_id>.json` record — Stage 0 dispatches no subagent.
 
@@ -128,12 +133,12 @@ Per `/grade:translate` invocation, into the active run folder:
 
 To `plugins/grading/config/pipeline.yaml`:
 
-### `marker:` block
+### `marker_single:` block
 
-`marker` invocation knobs. Defaults match the user's proven `marker_single` flag set (OCR disabled — born-digital PDFs; image extraction on):
+`marker_single` CLI invocation knobs. Defaults match the user's proven `marker_single` flag set (OCR disabled — born-digital PDFs; image extraction on):
 
 ```yaml
-marker:
+marker_single:
   ocr: false               # --disable_ocr when false; enable for scanned PDFs
   extract_images: true     # extract + inline-reference figures
 ```
@@ -169,20 +174,20 @@ profile: str | None = None
 
 Records the active profile name in `run_meta.yaml` so it is visible without parsing the merged config. Additive, no migration.
 
-`schema.SourceMeta` / `ExtractionMeta` are reused unchanged: for `marker` PDFs, `extraction` is `{role: "marker", tier: "marker-pdf==<version>", ts: <iso8601>}`. The `role` / `tier` field names were coined for LLM dispatch and are a mild semantic stretch here; reused as-is to avoid schema churn (see §7).
+`schema.SourceMeta` / `ExtractionMeta` are reused unchanged: for PDFs translated by the `marker_single` CLI, `extraction` is `{role: "marker_single", tier: "marker-pdf==<version>", ts: <iso8601>}`. The `role` / `tier` field names were coined for LLM dispatch and are a mild semantic stretch here; reused as-is to avoid schema churn (see §7).
 
 ## 6. Testing
 
-Strategy: CI tests for the Python helpers only, with `marker_single` stubbed; plus one documented live verification (real `marker`) frozen as a regression baseline.
+Strategy: CI tests for the Python helpers only, with the `marker_single` CLI stubbed; plus one documented live verification (the real `marker_single` CLI) frozen as a regression baseline.
 
 ### 6.1 CI — Python helpers
 
 New test files under `plugins/grading/python/tests/`:
 
 - **`test_run_init.py`** — run_id format + fingerprint determinism; skeleton directory creation; base-config → merged-config with and without a profile; `run_meta.yaml` contents incl. `profile`; `config.yaml` written; `src_snapshot.tar.gz` written.
-- **`test_translate_sources.py`** — `<source_name>` derivation (stem, snake_case) and `--name` override; skip-if-present (present+valid → no-op; `--force` → re-translate); `_translate_pdf` invokes `marker_single` with the flags implied by the `marker:` config; `_ingest_marker_output` relocates markdown + figures and rewrites image links correctly; hard-error when the stubbed `marker_single` exits non-zero or yields empty `content.md`; `_translate_markdown` verbatim passthrough + inline-image copy; `_finalize` `meta.yaml` build + `SourceMeta` validation; `timeline.jsonl` `python_helper_call` event appended; error paths (no run folder — and the error message names `/grade:init`; source not found).
+- **`test_translate_sources.py`** — `<source_name>` derivation (stem, snake_case) and `--name` override; skip-if-present (present+valid → no-op; `--force` → re-translate); `_translate_pdf` invokes `marker_single` with the flags implied by the `marker_single:` config; `_ingest_marker_single_output` relocates markdown + figures and rewrites image links correctly; hard-error when the stubbed `marker_single` exits non-zero or yields empty `content.md`; `_translate_markdown` verbatim passthrough + inline-image copy; `_finalize` `meta.yaml` build + `SourceMeta` validation; `timeline.jsonl` `python_helper_call` event appended; error paths (no run folder — and the error message names `/grade:init`; source not found).
 
-`marker_single` is stubbed: a fake executable / monkeypatched subprocess that writes a known `marker`-style output directory (a `<stem>.md` with image links plus image files). This lets CI verify all ingestion and link-rewriting logic without `marker`'s ML model weights.
+The `marker_single` CLI is stubbed: a fake executable / monkeypatched subprocess that writes a known `marker_single`-style output directory (a `<stem>.md` with image links plus image files). This lets CI verify all ingestion and link-rewriting logic without the `marker-pdf` package's ML model weights.
 
 Reused helpers (`snapshot`, `schema`, `run_resolution`) already have coverage.
 
@@ -192,16 +197,16 @@ A synthetic PDF generated in-test via `pymupdf` (`new_page()` + `insert_text()`,
 
 ### 6.3 Live verification — final plan task
 
-A manual `/grade:translate` on a real PDF with at least one figure, running `marker` for real. The produced `content.md`, `figures/`, and `meta.yaml` are committed under `tests/fixtures/` as a frozen regression baseline. This is the only exercise of real `marker`; it is run once and frozen.
+A manual `/grade:translate` on a real PDF with at least one figure, running the `marker_single` CLI for real. The produced `content.md`, `figures/`, and `meta.yaml` are committed under `tests/fixtures/` as a frozen regression baseline. This is the only exercise of the real `marker_single` CLI; it is run once and frozen.
 
 ## 7. Open items resolved by the implementation plan
 
 These need no further design decision; the plan addresses them mechanically:
 
-- **`SKILL.md` stub correction** — `plugins/grading/skills/translate-sources/SKILL.md` currently says raw sources live "inside the active run folder" and describes a `pdf_translator` subagent. Both are now wrong; the plan rewrites the stub for the `marker`, no-subagent flow with raw inputs at `preprocessing/inputs/sources_raw/`.
+- **`SKILL.md` stub correction** — `plugins/grading/skills/translate-sources/SKILL.md` currently says raw sources live "inside the active run folder" and describes a `pdf_translator` subagent. Both are now wrong; the plan rewrites the stub for the `marker_single`, no-subagent flow with raw inputs at `preprocessing/inputs/sources_raw/`.
 - **`pdf_translator` role / `pdf_render.py`** — both are now unused by Stage 0. Left in place (Task 16 / parent-spec artifacts); whether to remove the `pdf_translator` entries from `role_catalog.yaml` / `tier_dispatch.yaml` and retire `pdf_render.py` is a separate cleanup, not Stage 0's concern.
-- **`marker-pdf` version pinning** — `marker` is an ML pipeline; reproducibility requires the `marker-pdf` version pinned in the project lockfile (the model weights themselves are external, like the Claude model weights). The exact version is a plan/dependency decision.
-- **`ExtractionMeta` field naming** — `role` / `tier` are LLM-dispatch terms; reused as-is for `marker`. A rename is deferred unless it proves confusing.
+- **`marker-pdf` version pinning** — the `marker-pdf` package is an ML pipeline; reproducibility requires its version pinned in the project lockfile (the model weights themselves are external, like the Claude model weights). The exact version is a plan/dependency decision.
+- **`ExtractionMeta` field naming** — `role` / `tier` are LLM-dispatch terms; reused as-is for `marker_single` output. A rename is deferred unless it proves confusing.
 - **Init-time fingerprint** — no input-artifact run-ids exist at `/grade:init` time, so the fingerprint is computed as `SHA8(merged_config + git_sha)[:4]`.
 - **Markdown front-matter validation** — parent spec §4.1 marks this "optional, configurable." v1 skips it entirely (pure passthrough); revisit when a real source needs it.
 - **Live-baseline fixture choice** — synthetic `pymupdf` PDF with an embedded image vs. a small committed real PDF (§6.2).
@@ -210,11 +215,11 @@ These need no further design decision; the plan addresses them mechanically:
 
 - `/grade:init` creates a self-contained run folder with skeleton, `config.yaml`, `src_snapshot.tar.gz`, and `run_meta.yaml` (incl. `profile`).
 - `/grade:init --profile smoke` freezes the merged config and records `profile: smoke`.
-- `/grade:translate <pdf>` runs `marker`, producing `content.md`, `marker`'s extracted figures under `figures/` (with `content.md` image links pointing into `figures/`), and a `SourceMeta`-valid `meta.yaml`.
+- `/grade:translate <pdf>` runs the `marker_single` CLI, producing `content.md`, the CLI's extracted figures under `figures/` (with `content.md` image links pointing into `figures/`), and a `SourceMeta`-valid `meta.yaml`.
 - `/grade:translate <md>` produces `content.md` + `meta.yaml` (verbatim passthrough, inline images copied).
-- A source `marker` cannot translate (non-zero exit or empty `content.md`) causes a hard error surfaced to the user — no LLM fallback.
+- A source the `marker_single` CLI cannot translate (non-zero exit or empty `content.md`) causes a hard error surfaced to the user — no LLM fallback.
 - Re-running `/grade:translate` on an already-translated source is a no-op; `--force` re-translates.
 - `/grade:translate` with no run folder present errors with a message that names `/grade:init`.
 - Each `/grade:translate` invocation appends a `python_helper_call` event to `traces/translate_sources/timeline.jsonl`.
-- `test_run_init.py` and `test_translate_sources.py` pass (with `marker_single` stubbed); the full `plugins/grading/python/tests/` suite stays green.
-- A frozen live-verification baseline (`content.md`, `figures/`, `meta.yaml` from a real `marker` run on a real PDF) is committed under `tests/fixtures/`.
+- `test_run_init.py` and `test_translate_sources.py` pass (with the `marker_single` CLI stubbed); the full `plugins/grading/python/tests/` suite stays green.
+- A frozen live-verification baseline (`content.md`, `figures/`, `meta.yaml` from a real `marker_single` run on a real PDF) is committed under `tests/fixtures/`.
