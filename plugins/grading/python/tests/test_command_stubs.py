@@ -5,6 +5,7 @@ PLUGIN_ROOT = Path(__file__).resolve().parents[2]
 COMMANDS_DIR = PLUGIN_ROOT / "commands"
 
 EXPECTED = {
+    "init": None,             # no skill — direct python helper
     "translate": "translate-sources",
     "seeds": "prepare-seed-questions",
     "review-seeds": "review-seeds",
