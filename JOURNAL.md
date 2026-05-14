@@ -1,5 +1,39 @@
 ---
 
+## 2026-05-14 18:01 — Stage 0 Task 14 done; `_marker_pdf_version()` resolves the external marker-pdf
+
+Completed Stage 0 Task 14 (frozen live-verification baseline): a real
+`marker_single` run on a synthetic 2-page PDF, output frozen as a committed
+fixture under `tests/fixtures/stage0_baseline/`, guarded by a 3-test
+regression file. Both reviews passed (spec ✅, code quality ✅). Then fixed
+the follow-up issue: `_marker_pdf_version()` queried `importlib.metadata` in
+the project venv, but `marker-pdf` is no longer a venv package (external
+`uv tool` install), so `extraction.tier` always recorded `marker-pdf==unknown`.
+It now resolves the `marker_single` script on PATH, reads its shebang for the
+owning interpreter, and queries metadata there — verified resolving `1.10.2`
+in this environment. Plugin suite green at 146 (139 → +3 baseline → +4
+version-resolution tests).
+
+### Details
+
+Commits:
+- `c461221` test(grading-plugin): frozen Stage 0 live-verification baseline
+- `35f1731` docs(grading-plugin): Stage 0 per-task record 14
+- `b208349` fix(grading-plugin): resolve marker-pdf version from external install
+
+The Task 14 run required `dangerouslyDisableSandbox` (marker weights live
+under `~/Library/Caches/datalab`). The frozen `meta.yaml` still carries
+`extraction.tier: marker-pdf==unknown` — it was a genuine snapshot taken
+*before* the `_marker_pdf_version()` fix; the baseline test does not assert on
+`tier`, so it remains valid. Whether to regenerate the fixture so `tier`
+reads `1.10.2` is an open call (a fresh fixture means another heavy marker
+run).
+
+Stage 0 plan: Task 14 of 15 complete; Task 15 (full-suite verification) is
+the only remaining task.
+
+---
+
 ## 2026-05-14 17:39 — Dropped `marker-pdf` from project deps; preprocessing now requires an external `marker_single` install
 
 Removed `marker-pdf>=1.5.5` from `pyproject.toml`; `uv lock` + `uv sync`
