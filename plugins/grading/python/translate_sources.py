@@ -22,7 +22,6 @@ import subprocess
 import sys
 import tempfile
 from datetime import datetime, timezone
-from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
 import yaml
@@ -94,10 +93,37 @@ def _ingest_marker_single_output(marker_out_dir: Path, dest_dir: Path) -> int:
 
 
 def _marker_pdf_version() -> str:
-    try:
-        return version("marker-pdf")
-    except PackageNotFoundError:
+    """Version of the external `marker-pdf` that provides the `marker_single` CLI.
+
+    `marker-pdf` is not a dependency of this project's venv (it is an external
+    `uv tool` install), so `importlib.metadata` in *this* interpreter cannot see
+    it. Resolve the `marker_single` entry-point script on PATH, read its shebang
+    to find the interpreter of the environment it lives in, and query that.
+    Returns "unknown" if resolution fails at any step.
+    """
+    marker_bin = shutil.which("marker_single")
+    if marker_bin is None:
         return "unknown"
+    try:
+        first_line = Path(marker_bin).read_text(encoding="utf-8").splitlines()[0]
+    except (OSError, IndexError, UnicodeDecodeError):
+        return "unknown"
+    if not first_line.startswith("#!"):
+        return "unknown"
+    interpreter = first_line[2:].split()
+    if not interpreter:
+        return "unknown"
+    try:
+        result = subprocess.run(
+            [*interpreter, "-c",
+             "import importlib.metadata as m; print(m.version('marker-pdf'))"],
+            capture_output=True, text=True, timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return "unknown"
+    if result.returncode != 0:
+        return "unknown"
+    return result.stdout.strip() or "unknown"
 
 
 def _pdf_page_count(pdf_path: Path) -> int:

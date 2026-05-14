@@ -153,6 +153,56 @@ def test_invoke_marker_single_raises_on_nonzero(tmp_path, monkeypatch):
                                  {"ocr": False, "extract_images": True})
 
 
+def test_marker_pdf_version_unknown_when_not_on_path(monkeypatch):
+    monkeypatch.setattr(ts.shutil, "which", lambda name: None)
+    assert ts._marker_pdf_version() == "unknown"
+
+
+def test_marker_pdf_version_reads_shebang_and_queries_interpreter(tmp_path, monkeypatch):
+    fake_bin = tmp_path / "marker_single"
+    fake_bin.write_text("#!/fake/python\n# entry point\n", encoding="utf-8")
+    monkeypatch.setattr(ts.shutil, "which", lambda name: str(fake_bin))
+
+    def fake_run(argv, **kwargs):
+        assert argv[0] == "/fake/python"
+        assert "marker-pdf" in argv[-1]
+
+        class R:
+            returncode = 0
+            stdout = "1.10.2\n"
+        return R()
+
+    monkeypatch.setattr(ts.subprocess, "run", fake_run)
+    assert ts._marker_pdf_version() == "1.10.2"
+
+
+def test_marker_pdf_version_unknown_when_interpreter_query_fails(tmp_path, monkeypatch):
+    fake_bin = tmp_path / "marker_single"
+    fake_bin.write_text("#!/fake/python\n", encoding="utf-8")
+    monkeypatch.setattr(ts.shutil, "which", lambda name: str(fake_bin))
+
+    def fake_run(argv, **kwargs):
+        class R:
+            returncode = 1
+            stdout = ""
+        return R()
+
+    monkeypatch.setattr(ts.subprocess, "run", fake_run)
+    assert ts._marker_pdf_version() == "unknown"
+
+
+def test_marker_pdf_version_resolves_external_install():
+    """Integration: when marker_single is actually installed, resolve its real version."""
+    import re
+
+    import pytest
+    if ts.shutil.which("marker_single") is None:
+        pytest.skip("marker_single not installed in this environment")
+    resolved = ts._marker_pdf_version()
+    assert resolved != "unknown"
+    assert re.match(r"\d+\.\d+", resolved), f"expected a version, got {resolved!r}"
+
+
 def test_translate_markdown_passthrough_and_image_copy(tmp_path):
     src = tmp_path / "notes.md"
     src.write_text("# Notes\n![](diagram.png)\n![ext](http://x/y.png)\n")
