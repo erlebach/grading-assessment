@@ -54,7 +54,7 @@ def _is_already_translated(dest_dir: Path) -> bool:
     if not (content.is_file() and meta.is_file()):
         return False
     try:
-        SourceMeta.model_validate(yaml.safe_load(meta.read_text()))
+        SourceMeta.model_validate(yaml.safe_load(meta.read_text(encoding="utf-8")))
         return True
     except (ValidationError, yaml.YAMLError):
         return False
@@ -89,7 +89,7 @@ def _ingest_marker_single_output(marker_out_dir: Path, dest_dir: Path) -> int:
             shutil.copy2(item, figures_dir / item.name)
             figure_count += 1
 
-    (dest_dir / "content.md").write_text(_rewrite_image_links(src_md.read_text()))
+    (dest_dir / "content.md").write_text(_rewrite_image_links(src_md.read_text(encoding="utf-8")), encoding="utf-8")
     return figure_count
 
 
@@ -129,7 +129,7 @@ def _translate_pdf(source_path: Path, dest_dir: Path,
         figure_count = _ingest_marker_single_output(out_dir, dest_dir)
 
     content_md = dest_dir / "content.md"
-    if not content_md.is_file() or not content_md.read_text().strip():
+    if not content_md.is_file() or not content_md.read_text(encoding="utf-8").strip():
         raise RuntimeError(
             f"marker_single produced no usable content.md for {source_path}"
         )
@@ -144,7 +144,7 @@ def _translate_pdf(source_path: Path, dest_dir: Path,
 
 def _translate_markdown(source_path: Path,
                         dest_dir: Path) -> tuple[int, int, None]:
-    raw = source_path.read_text()
+    raw = source_path.read_text(encoding="utf-8")
     figures_dir = dest_dir / "figures"
     figure_count = 0
     for m in _IMG_LINK_RE.finditer(raw):
@@ -156,7 +156,7 @@ def _translate_markdown(source_path: Path,
             figures_dir.mkdir(parents=True, exist_ok=True)
             shutil.copy2(img_src, figures_dir / img_src.name)
             figure_count += 1
-    (dest_dir / "content.md").write_text(_rewrite_image_links(raw))
+    (dest_dir / "content.md").write_text(_rewrite_image_links(raw), encoding="utf-8")
     return 0, figure_count, None
 
 
@@ -173,14 +173,14 @@ def _finalize(dest_dir: Path, fmt: str, page_count: int,
         "page_count": page_count,
     }
     SourceMeta.model_validate(meta)              # invariant: must be schema-valid
-    (dest_dir / "meta.yaml").write_text(yaml.safe_dump(meta, sort_keys=False))
+    (dest_dir / "meta.yaml").write_text(yaml.safe_dump(meta, sort_keys=False), encoding="utf-8")
     return dest_dir
 
 
 def _load_marker_config(run_dir: Path) -> dict:
     cfg_path = run_dir / "config.yaml"
     if cfg_path.is_file():
-        cfg = yaml.safe_load(cfg_path.read_text()) or {}
+        cfg = yaml.safe_load(cfg_path.read_text(encoding="utf-8")) or {}
         return cfg.get("marker_single") or _DEFAULT_MARKER_CONFIG
     return _DEFAULT_MARKER_CONFIG
 
@@ -197,7 +197,7 @@ def _append_timeline(run_dir: Path, source_name: str, *, skipped: bool) -> None:
         "details": {"skipped": skipped},
     }
     TimelineEvent.model_validate(event)          # invariant: schema-valid
-    with (traces_dir / "timeline.jsonl").open("a") as f:
+    with (traces_dir / "timeline.jsonl").open("a", encoding="utf-8") as f:
         f.write(json.dumps(event) + "\n")
 
 

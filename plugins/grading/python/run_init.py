@@ -104,7 +104,7 @@ def init_run(
     for sub in _RUN_SUBDIRS:
         (run_dir / sub).mkdir(parents=True, exist_ok=True)
 
-    (run_dir / "config.yaml").write_text(yaml.safe_dump(config, sort_keys=False))
+    (run_dir / "config.yaml").write_text(yaml.safe_dump(config, sort_keys=False), encoding="utf-8")
     create_snapshot(repo_root, run_dir / "src_snapshot.tar.gz")
 
     run_meta = {
@@ -117,7 +117,7 @@ def init_run(
         "profile": profile,
     }
     RunMeta.model_validate(run_meta)          # invariant: must be schema-valid
-    (run_dir / "run_meta.yaml").write_text(yaml.safe_dump(run_meta, sort_keys=False))
+    (run_dir / "run_meta.yaml").write_text(yaml.safe_dump(run_meta, sort_keys=False), encoding="utf-8")
     return run_dir
 
 
@@ -132,7 +132,7 @@ def main(argv: list[str] | None = None) -> int:
     repo_root = Path(__file__).resolve().parents[3]
     runs_dir = args.runs_root or (repo_root / "preprocessing" / "runs")
     pipeline_path = repo_root / "plugins" / "grading" / "config" / "pipeline.yaml"
-    pipeline_config = yaml.safe_load(pipeline_path.read_text())
+    pipeline_config = yaml.safe_load(pipeline_path.read_text(encoding="utf-8"))
 
     run_dir = init_run(runs_dir, repo_root, pipeline_config, profile=args.profile)
     print(f"initialized run → {run_dir}")
