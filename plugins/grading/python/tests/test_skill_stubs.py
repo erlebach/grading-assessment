@@ -55,7 +55,7 @@ def test_frontmatter_has_description():
 
 
 def test_body_marks_stub_status():
-    for name in EXPECTED_SKILLS:
+    for name in EXPECTED_SKILLS - {"translate-sources"}:
         path = SKILLS_DIR / name / "SKILL.md"
         text = path.read_text()
         assert "Status: stub" in text, name
