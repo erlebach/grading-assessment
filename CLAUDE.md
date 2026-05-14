@@ -39,6 +39,14 @@ all tests pass. This is non-negotiable.
 .venv/bin/python -m pytest tests/test_models.py tests/test_check_extraction.py tests/test_categorization.py tests/test_deduplication.py tests/test_rubric_generator.py tests/test_check_evaluation.py tests/test_scoring.py tests/test_grade_storage.py -v
 ```
 
+**Run the grading-plugin foundation test suite:**
+
+```bash
+.venv/bin/python -m pytest plugins/grading/python/tests/ -v
+```
+
+Both suites must be green before any commit that touches `grading_pipeline/`, `grading_dynamic_rubrics/`, or `plugins/grading/`.
+
 **Run all project tests (broader safety check):**
 
 ```bash
