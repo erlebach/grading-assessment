@@ -15,7 +15,7 @@ verbatim passthrough. No subagent, no LLM.
 
 ## Inputs read
 
-- A `.pdf` or `.md` file under `preprocessing/inputs/sources_raw/`
+- A `.pdf` or `.md` file (conventionally placed under `preprocessing/inputs/sources_raw/`)
 - The active run folder's `config.yaml` (`marker_single:` knobs)
 
 ## Outputs written (into the active run folder)
@@ -44,5 +44,7 @@ LLM fallback.
 
 - No run folder exists → error directing the user to `/grade:init`.
 - `marker_single` exits non-zero or yields empty `content.md` → hard error,
-  surfaced to the user; the run folder is left untouched for that source.
+  surfaced to the user; an empty `sources/<source_name>/` directory may be left
+  behind — re-running (without `--force`) will retry the translation, since the
+  skip-if-present check requires a valid `content.md` + `meta.yaml`.
 - Unsupported file type (not `.pdf` / `.md`) → `ValueError`.
