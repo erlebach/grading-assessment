@@ -1,0 +1,10 @@
+format: pdf
+courses: []
+topics: []
+extraction:
+  role: marker_single
+  tier: marker-pdf==unknown
+  ts: '2026-05-14T21:51:24.279973+00:00'
+content_sha: 78170ea5c903f3d5ef8a82fafc8f8932c90d85a4b78a6ed89189bfff188150d5
+figure_count: 1
+page_count: 2
