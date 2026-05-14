@@ -1,5 +1,41 @@
 ---
 
+## 2026-05-14 18:54 — Stage 0 plan complete; final whole-implementation review + fixes
+
+Stage 0 plan (15 tasks) is done. Task 15 (full-suite verification) confirmed
+the grading-plugin suite green and the broader `tests/` failures all
+pre-existing/environmental. A final whole-implementation review (opus, over
+the full `7aec57b..` range) returned **ready to merge with fixes** — no
+Critical, 3 Important. All 3 addressed: (#2) `_invoke_marker_single` now
+catches `FileNotFoundError` and re-raises a clean `RuntimeError` pointing at
+the README; the `translate.md` doc bug claiming marker is "installed via the
+marker-pdf dependency" was corrected; (#1) the baseline fixture was re-frozen
+so `meta.yaml` records `tier: marker-pdf==1.10.2` instead of the stale
+`unknown`. (#3 — partial `sources/<name>/` dir on failure — deferred as a
+follow-up per the reviewer's own call.) Suite green at 147.
+
+### Details
+
+Commits:
+- `03f9508` docs(grading-plugin): Stage 0 per-task record 15
+- `776499d` fix(grading-plugin): clean error when marker_single is not on PATH
+- `d960ad1` test(grading-plugin): re-freeze Stage 0 baseline with resolved marker-pdf version
+
+The baseline re-freeze changed only `meta.yaml` (`tier` + `ts`) — `content.md`
+and the figure are byte-identical (`content_sha` unchanged), since
+`marker_single` is deterministic on the same synthetic input.
+
+Final-review Minor items not actioned (nice-to-haves, not requested):
+unhandled `_pdf_page_count` failure, thin `timeline.jsonl` payload (no
+`start`/failure events), scattered mid-file test imports, minimal
+`marker_single` config knobs. The reviewer also suggested optionally
+tightening `test_baseline_meta_validates` to assert `tier` matches a version
+pattern — not yet done.
+
+Next per the subagent-driven-development workflow: `finishing-a-development-branch`.
+
+---
+
 ## 2026-05-14 18:01 — Stage 0 Task 14 done; `_marker_pdf_version()` resolves the external marker-pdf
 
 Completed Stage 0 Task 14 (frozen live-verification baseline): a real
