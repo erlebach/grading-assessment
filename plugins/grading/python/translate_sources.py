@@ -159,7 +159,7 @@ def _translate_markdown(source_path: Path,
     return 0, figure_count, None
 
 
-def _finalize(dest_dir: Path, name: str, fmt: str, page_count: int,
+def _finalize(dest_dir: Path, fmt: str, page_count: int,
               figure_count: int, extraction: dict | None) -> Path:
     content_bytes = (dest_dir / "content.md").read_bytes()
     meta = {

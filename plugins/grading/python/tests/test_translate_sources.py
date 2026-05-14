@@ -187,7 +187,7 @@ def test_finalize_writes_valid_meta(tmp_path):
     dest.mkdir(parents=True)
     (dest / "content.md").write_text("# hello world\n")
 
-    ts._finalize(dest, "doc", "pdf", page_count=3, figure_count=2,
+    ts._finalize(dest, "pdf", page_count=3, figure_count=2,
                  extraction={"role": "marker_single",
                              "tier": "marker-pdf==1.0", "ts": "2026-05-14T00:00:00Z"})
 
@@ -205,7 +205,7 @@ def test_finalize_markdown_extraction_none(tmp_path):
     dest.mkdir(parents=True)
     (dest / "content.md").write_text("text\n")
 
-    ts._finalize(dest, "n", "markdown", page_count=0, figure_count=0,
+    ts._finalize(dest, "markdown", page_count=0, figure_count=0,
                  extraction=None)
 
     meta = yaml.safe_load((dest / "meta.yaml").read_text())
@@ -217,9 +217,9 @@ def test_finalize_content_sha_tracks_content(tmp_path):
     dest = tmp_path / "sources" / "d"
     dest.mkdir(parents=True)
     (dest / "content.md").write_text("AAA")
-    ts._finalize(dest, "d", "markdown", 0, 0, None)
+    ts._finalize(dest, "markdown", 0, 0, None)
     sha_a = yaml.safe_load((dest / "meta.yaml").read_text())["content_sha"]
     (dest / "content.md").write_text("BBB")
-    ts._finalize(dest, "d", "markdown", 0, 0, None)
+    ts._finalize(dest, "markdown", 0, 0, None)
     sha_b = yaml.safe_load((dest / "meta.yaml").read_text())["content_sha"]
     assert sha_a != sha_b
