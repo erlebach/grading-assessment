@@ -1,3 +1,4 @@
+import json as _json
 from pathlib import Path
 
 import fitz  # pymupdf — dev dependency, used to build a real PDF fixture
@@ -8,7 +9,7 @@ from plugins.grading.python.translate_sources import (
     _resolve_source_name,
     _is_already_translated,
 )
-from plugins.grading.python.schema import SourceMeta
+from plugins.grading.python.schema import SourceMeta, TimelineEvent
 
 
 def test_resolve_source_name_snake_cases_stem():
@@ -223,3 +224,76 @@ def test_finalize_content_sha_tracks_content(tmp_path):
     ts._finalize(dest, "markdown", 0, 0, None)
     sha_b = yaml.safe_load((dest / "meta.yaml").read_text())["content_sha"]
     assert sha_a != sha_b
+
+
+# ---------------------------------------------------------------------------
+# Task 12: translate_source(), _append_timeline(), main()
+# ---------------------------------------------------------------------------
+
+def _run_dir_with_config(tmp_path) -> Path:
+    run_dir = tmp_path / "runs" / "2026-05-14_00-00-00Z__abcd"
+    for sub in ("sources", "traces"):
+        (run_dir / sub).mkdir(parents=True)
+    (run_dir / "config.yaml").write_text(yaml.safe_dump(
+        {"marker_single": {"ocr": False, "extract_images": True}}))
+    return run_dir
+
+
+def test_translate_source_markdown_end_to_end(tmp_path):
+    run_dir = _run_dir_with_config(tmp_path)
+    src = tmp_path / "My Notes.md"
+    src.write_text("# Notes\ntext\n")
+
+    dest = ts.translate_source(src, run_dir)
+
+    assert dest == run_dir / "sources" / "my_notes"
+    assert (dest / "content.md").is_file()
+    SourceMeta.model_validate(yaml.safe_load((dest / "meta.yaml").read_text()))
+    lines = (run_dir / "traces" / "translate_sources" / "timeline.jsonl") \
+        .read_text().splitlines()
+    assert len(lines) == 1
+    TimelineEvent.model_validate(_json.loads(lines[0]))
+    assert _json.loads(lines[0])["event_type"] == "python_helper_call"
+
+
+def test_translate_source_skip_if_present(tmp_path, capsys):
+    run_dir = _run_dir_with_config(tmp_path)
+    src = tmp_path / "notes.md"
+    src.write_text("# Notes\n")
+    ts.translate_source(src, run_dir)
+    first_sha = yaml.safe_load(
+        (run_dir / "sources" / "notes" / "meta.yaml").read_text())["content_sha"]
+
+    src.write_text("# CHANGED\n")            # change source
+    ts.translate_source(src, run_dir)        # second call: should skip
+    second_sha = yaml.safe_load(
+        (run_dir / "sources" / "notes" / "meta.yaml").read_text())["content_sha"]
+    assert first_sha == second_sha           # not re-translated
+    assert "already translated" in capsys.readouterr().out
+
+
+def test_translate_source_force_retranslates(tmp_path):
+    run_dir = _run_dir_with_config(tmp_path)
+    src = tmp_path / "notes.md"
+    src.write_text("# Notes\n")
+    ts.translate_source(src, run_dir)
+    src.write_text("# CHANGED\n")
+    ts.translate_source(src, run_dir, force=True)
+    content = (run_dir / "sources" / "notes" / "content.md").read_text()
+    assert content == "# CHANGED\n"
+
+
+def test_translate_source_missing_file_raises(tmp_path):
+    run_dir = _run_dir_with_config(tmp_path)
+    import pytest
+    with pytest.raises(FileNotFoundError):
+        ts.translate_source(tmp_path / "nope.md", run_dir)
+
+
+def test_main_errors_when_no_run_folder(tmp_path, capsys):
+    (tmp_path / "runs").mkdir()
+    src = tmp_path / "notes.md"
+    src.write_text("# x\n")
+    rc = ts.main([str(src), "--runs-dir", str(tmp_path / "runs")])
+    assert rc == 1
+    assert "/grade:init" in capsys.readouterr().err

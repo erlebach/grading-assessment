@@ -174,3 +174,95 @@ def _finalize(dest_dir: Path, fmt: str, page_count: int,
     SourceMeta.model_validate(meta)              # invariant: must be schema-valid
     (dest_dir / "meta.yaml").write_text(yaml.safe_dump(meta, sort_keys=False))
     return dest_dir
+
+
+def _load_marker_config(run_dir: Path) -> dict:
+    cfg_path = run_dir / "config.yaml"
+    if cfg_path.is_file():
+        cfg = yaml.safe_load(cfg_path.read_text()) or {}
+        return cfg.get("marker_single", {}) or {}
+    return {"ocr": False, "extract_images": True}
+
+
+def _append_timeline(run_dir: Path, source_name: str, *, skipped: bool) -> None:
+    traces_dir = run_dir / "traces" / "translate_sources"
+    traces_dir.mkdir(parents=True, exist_ok=True)
+    event = {
+        "ts": datetime.now(timezone.utc).isoformat(),
+        "event_type": "python_helper_call",
+        "actor": "translate_sources",
+        "name": source_name,
+        "phase": "end",
+        "details": {"skipped": skipped},
+    }
+    TimelineEvent.model_validate(event)          # invariant: schema-valid
+    with (traces_dir / "timeline.jsonl").open("a") as f:
+        f.write(json.dumps(event) + "\n")
+
+
+def translate_source(source_path: Path, run_dir: Path, *,
+                     name: str | None = None, force: bool = False) -> Path:
+    """Translate one PDF or markdown source into run_dir/sources/<name>/."""
+    source_path = Path(source_path)
+    run_dir = Path(run_dir)
+    if not source_path.is_file():
+        raise FileNotFoundError(f"source not found: {source_path}")
+
+    source_name = _resolve_source_name(source_path, name)
+    dest_dir = run_dir / "sources" / source_name
+
+    if not force and _is_already_translated(dest_dir):
+        print(f"already translated: {source_name}")
+        _append_timeline(run_dir, source_name, skipped=True)
+        return dest_dir
+
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    suffix = source_path.suffix.lower()
+    if suffix == ".pdf":
+        marker_cfg = _load_marker_config(run_dir)
+        page_count, figure_count, extraction = _translate_pdf(
+            source_path, dest_dir, marker_cfg)
+        fmt = "pdf"
+    elif suffix == ".md":
+        page_count, figure_count, extraction = _translate_markdown(
+            source_path, dest_dir)
+        fmt = "markdown"
+    else:
+        raise ValueError(f"unsupported source type: {suffix!r} (expected .pdf or .md)")
+
+    _finalize(dest_dir, fmt, page_count, figure_count, extraction)
+    _append_timeline(run_dir, source_name, skipped=False)
+    return dest_dir
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(prog="translate_sources")
+    parser.add_argument("source_path", type=Path)
+    parser.add_argument("--name", default=None,
+                        help="override the auto-derived source name")
+    parser.add_argument("--run", default=None,
+                        help="run-folder prefix; defaults to most recent")
+    parser.add_argument("--runs-dir", type=Path, default=None,
+                        help="override preprocessing/runs/ location (for tests)")
+    parser.add_argument("--force", action="store_true",
+                        help="re-translate even if already present")
+    args = parser.parse_args(argv)
+
+    repo_root = Path(__file__).resolve().parents[3]
+    runs_dir = args.runs_dir or (repo_root / "preprocessing" / "runs")
+    try:
+        run_dir = (resolve_run(args.run, runs_dir) if args.run
+                   else most_recent_run(runs_dir))
+    except NoRunMatch:
+        print("error: no run folder found — run /grade:init first.",
+              file=sys.stderr)
+        return 1
+
+    dest = translate_source(args.source_path, run_dir,
+                            name=args.name, force=args.force)
+    print(f"translated -> {dest}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
