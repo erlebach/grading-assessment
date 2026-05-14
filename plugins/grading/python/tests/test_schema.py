@@ -232,3 +232,22 @@ def test_timeline_event_round_trip():
         "details": {"role": "materialize_seed"},
     })
     assert ev.phase == "start"
+
+
+def test_run_meta_profile_defaults_to_none():
+    rm = RunMeta.model_validate({
+        "run_id": "2026-05-14_09-00-00Z__abc1",
+        "started_at": "2026-05-14T09:00:00Z",
+        "status": "success",
+    })
+    assert rm.profile is None
+
+
+def test_run_meta_profile_accepts_string():
+    rm = RunMeta.model_validate({
+        "run_id": "2026-05-14_09-00-00Z__abc1",
+        "started_at": "2026-05-14T09:00:00Z",
+        "status": "success",
+        "profile": "smoke",
+    })
+    assert rm.profile == "smoke"

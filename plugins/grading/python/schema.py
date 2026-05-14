@@ -319,6 +319,7 @@ class RunMeta(_Strict):
     git_dirty: bool = False
     status: RunStatus
     stages_run: list[str] = Field(default_factory=list)
+    profile: str | None = None
 
 
 class RunConfig(_Strict):
