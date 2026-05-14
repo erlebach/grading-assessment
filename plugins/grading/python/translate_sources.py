@@ -157,3 +157,20 @@ def _translate_markdown(source_path: Path,
             figure_count += 1
     (dest_dir / "content.md").write_text(_rewrite_image_links(raw))
     return 0, figure_count, None
+
+
+def _finalize(dest_dir: Path, name: str, fmt: str, page_count: int,
+              figure_count: int, extraction: dict | None) -> Path:
+    content_bytes = (dest_dir / "content.md").read_bytes()
+    meta = {
+        "format": fmt,
+        "courses": [],
+        "topics": [],
+        "extraction": extraction,
+        "content_sha": hashlib.sha256(content_bytes).hexdigest(),
+        "figure_count": figure_count,
+        "page_count": page_count,
+    }
+    SourceMeta.model_validate(meta)              # invariant: must be schema-valid
+    (dest_dir / "meta.yaml").write_text(yaml.safe_dump(meta, sort_keys=False))
+    return dest_dir

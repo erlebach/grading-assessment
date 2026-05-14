@@ -8,6 +8,7 @@ from plugins.grading.python.translate_sources import (
     _resolve_source_name,
     _is_already_translated,
 )
+from plugins.grading.python.schema import SourceMeta
 
 
 def test_resolve_source_name_snake_cases_stem():
@@ -179,3 +180,46 @@ def test_translate_markdown_no_images(tmp_path):
 
     assert (page_count, figure_count, extraction) == (0, 0, None)
     assert (dest / "content.md").read_text() == "# Plain\njust text\n"
+
+
+def test_finalize_writes_valid_meta(tmp_path):
+    dest = tmp_path / "sources" / "doc"
+    dest.mkdir(parents=True)
+    (dest / "content.md").write_text("# hello world\n")
+
+    ts._finalize(dest, "doc", "pdf", page_count=3, figure_count=2,
+                 extraction={"role": "marker_single",
+                             "tier": "marker-pdf==1.0", "ts": "2026-05-14T00:00:00Z"})
+
+    meta = yaml.safe_load((dest / "meta.yaml").read_text())
+    SourceMeta.model_validate(meta)               # raises if invalid
+    assert meta["format"] == "pdf"
+    assert meta["page_count"] == 3
+    assert meta["figure_count"] == 2
+    assert meta["courses"] == [] and meta["topics"] == []
+    assert len(meta["content_sha"]) >= 8
+
+
+def test_finalize_markdown_extraction_none(tmp_path):
+    dest = tmp_path / "sources" / "n"
+    dest.mkdir(parents=True)
+    (dest / "content.md").write_text("text\n")
+
+    ts._finalize(dest, "n", "markdown", page_count=0, figure_count=0,
+                 extraction=None)
+
+    meta = yaml.safe_load((dest / "meta.yaml").read_text())
+    SourceMeta.model_validate(meta)
+    assert meta["extraction"] is None
+
+
+def test_finalize_content_sha_tracks_content(tmp_path):
+    dest = tmp_path / "sources" / "d"
+    dest.mkdir(parents=True)
+    (dest / "content.md").write_text("AAA")
+    ts._finalize(dest, "d", "markdown", 0, 0, None)
+    sha_a = yaml.safe_load((dest / "meta.yaml").read_text())["content_sha"]
+    (dest / "content.md").write_text("BBB")
+    ts._finalize(dest, "d", "markdown", 0, 0, None)
+    sha_b = yaml.safe_load((dest / "meta.yaml").read_text())["content_sha"]
+    assert sha_a != sha_b
