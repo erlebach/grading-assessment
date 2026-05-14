@@ -132,7 +132,10 @@ def _pdf_page_count(pdf_path: Path) -> int:
 
 def _invoke_marker_single(input_pdf: Path, output_dir: Path,
                           marker_cfg: dict) -> None:
-    """Run the marker_single CLI. Raises RuntimeError on non-zero exit."""
+    """Run the marker_single CLI.
+
+    Raises RuntimeError on non-zero exit, or if marker_single is not on PATH.
+    """
     argv = ["marker_single", "--output_dir", str(output_dir),
             "--output_format", "markdown"]
     if not marker_cfg.get("ocr", False):
@@ -140,7 +143,13 @@ def _invoke_marker_single(input_pdf: Path, output_dir: Path,
     if not marker_cfg.get("extract_images", True):
         argv.append("--disable_image_extraction")
     argv.append(str(input_pdf))
-    result = subprocess.run(argv, capture_output=True, text=True)
+    try:
+        result = subprocess.run(argv, capture_output=True, text=True)
+    except FileNotFoundError as exc:
+        raise RuntimeError(
+            "marker_single not found on PATH — install it and see "
+            "README_preprocessing.md"
+        ) from exc
     if result.returncode != 0:
         raise RuntimeError(
             f"marker_single failed (exit {result.returncode}): {result.stderr}"

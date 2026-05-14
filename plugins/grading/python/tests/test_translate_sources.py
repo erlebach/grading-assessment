@@ -153,6 +153,16 @@ def test_invoke_marker_single_raises_on_nonzero(tmp_path, monkeypatch):
                                  {"ocr": False, "extract_images": True})
 
 
+def test_invoke_marker_single_raises_when_not_on_path(tmp_path, monkeypatch):
+    def fake_run(argv, **kwargs):
+        raise FileNotFoundError(2, "No such file or directory", "marker_single")
+    monkeypatch.setattr(ts.subprocess, "run", fake_run)
+    import pytest
+    with pytest.raises(RuntimeError, match="marker_single not found on PATH"):
+        ts._invoke_marker_single(tmp_path / "x.pdf", tmp_path / "out",
+                                 {"ocr": False, "extract_images": True})
+
+
 def test_marker_pdf_version_unknown_when_not_on_path(monkeypatch):
     monkeypatch.setattr(ts.shutil, "which", lambda name: None)
     assert ts._marker_pdf_version() == "unknown"

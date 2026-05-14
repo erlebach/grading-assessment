@@ -19,4 +19,5 @@ the active run folder.
 ## Prerequisites
 
 A run folder must exist — run `/grade:init` first. PDFs require the
-`marker_single` CLI on PATH (installed via the `marker-pdf` dependency).
+`marker_single` CLI on PATH — it is **not** a project dependency; install it
+separately (see `README_preprocessing.md`).
