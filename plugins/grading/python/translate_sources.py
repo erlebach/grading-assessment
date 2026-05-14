@@ -27,6 +27,7 @@ from pathlib import Path
 
 import yaml
 from pydantic import ValidationError
+from pypdf import PdfReader
 
 from plugins.grading.python.run_resolution import (
     NoRunMatch,
@@ -99,7 +100,6 @@ def _marker_pdf_version() -> str:
 
 
 def _pdf_page_count(pdf_path: Path) -> int:
-    from pypdf import PdfReader   # pypdf is a main dependency
     return len(PdfReader(str(pdf_path)).pages)
 
 
@@ -110,7 +110,8 @@ def _invoke_marker_single(input_pdf: Path, output_dir: Path,
             "--output_format", "markdown"]
     if not marker_cfg.get("ocr", False):
         argv.append("--disable_ocr")
-    argv += ["--extract_images", str(marker_cfg.get("extract_images", True))]
+    if not marker_cfg.get("extract_images", True):
+        argv.append("--disable_image_extraction")
     argv.append(str(input_pdf))
     result = subprocess.run(argv, capture_output=True, text=True)
     if result.returncode != 0:
