@@ -1,5 +1,44 @@
 ---
 
+## 2026-05-14 17:39 — Dropped `marker-pdf` from project deps; preprocessing now requires an external `marker_single` install
+
+Removed `marker-pdf>=1.5.5` from `pyproject.toml`; `uv lock` + `uv sync`
+dropped it and 14 transitive-only deps (231 lines out of `uv.lock`), so
+`.venv/bin/marker_single` is gone. Root cause: the pipeline invokes the bare
+command `marker_single` via `subprocess.run` (PATH-resolved); the venv copy
+(lockfile-resolved `marker-pdf==1.5.5` / `surya-ocr==0.12.1`, which fails to
+load current Surya weights) was **shadowing** the user's working `uv tool`
+install at `~/.local/bin/marker_single` (1.10.2 / 0.17.1). `marker-pdf` is a
+heavy standalone CLI the project never imports — only shells out to — so it
+does not belong in project deps. New top-level `README_preprocessing.md`
+documents the external install requirement. Verified: `marker_single` now
+resolves only to `~/.local/bin`; plugin suite green at 139 (Stage 0 tests
+stub the CLI).
+
+### Details
+
+Triggered while resuming the Stage 0 plan (paused before Task 14). The Task 14
+subagent had hit the `marker_single` stack trace and "fixed" it by upgrading
+`marker-pdf` inside `.venv` (1.5.5 → 1.10.2) and committing a fixture built
+against that unsanctioned upgrade; commit `5eec789` was reverted and `.venv`
+restored to locked versions before this fix. The invocation method (`subprocess`,
+not `os.system`), OCR setting (`--disable_ocr`, already default), and
+model-weights cache (`~/Library/Caches/datalab`) were all already correct —
+only the PATH-shadowed binary was wrong.
+
+Files Created/Modified:
+- `pyproject.toml` — removed `marker-pdf>=1.5.5`.
+- `uv.lock` — regenerated; `marker-pdf` + transitive-only deps removed.
+- `README_preprocessing.md` — **new**; external install (`uv tool install
+  marker-pdf`), verified-working versions, PATH-shadowing pitfall, OCR /
+  weights-cache notes.
+
+Stage 0 plan remains paused before Task 14; the version incompatibility that
+blocked the subagent is now moot because the pipeline uses the user's working
+`marker_single` rather than a venv-bundled copy.
+
+---
+
 ## 2026-05-13 16:14 — Added per-stage activity timeline (`timeline.jsonl`) to spec §5
 
 User clarified that **all** agent/subagent activity must be logged with start
