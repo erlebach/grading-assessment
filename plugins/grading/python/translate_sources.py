@@ -89,3 +89,52 @@ def _ingest_marker_single_output(marker_out_dir: Path, dest_dir: Path) -> int:
 
     (dest_dir / "content.md").write_text(_rewrite_image_links(src_md.read_text()))
     return figure_count
+
+
+def _marker_pdf_version() -> str:
+    try:
+        return version("marker-pdf")
+    except PackageNotFoundError:
+        return "unknown"
+
+
+def _pdf_page_count(pdf_path: Path) -> int:
+    from pypdf import PdfReader   # pypdf is a main dependency
+    return len(PdfReader(str(pdf_path)).pages)
+
+
+def _invoke_marker_single(input_pdf: Path, output_dir: Path,
+                          marker_cfg: dict) -> None:
+    """Run the marker_single CLI. Raises RuntimeError on non-zero exit."""
+    argv = ["marker_single", "--output_dir", str(output_dir),
+            "--output_format", "markdown"]
+    if not marker_cfg.get("ocr", False):
+        argv.append("--disable_ocr")
+    argv += ["--extract_images", str(marker_cfg.get("extract_images", True))]
+    argv.append(str(input_pdf))
+    result = subprocess.run(argv, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"marker_single failed (exit {result.returncode}): {result.stderr}"
+        )
+
+
+def _translate_pdf(source_path: Path, dest_dir: Path,
+                   marker_cfg: dict) -> tuple[int, int, dict]:
+    with tempfile.TemporaryDirectory() as tmp:
+        out_dir = Path(tmp)
+        _invoke_marker_single(source_path, out_dir, marker_cfg)
+        figure_count = _ingest_marker_single_output(out_dir, dest_dir)
+
+    content_md = dest_dir / "content.md"
+    if not content_md.is_file() or not content_md.read_text().strip():
+        raise RuntimeError(
+            f"marker_single produced no usable content.md for {source_path}"
+        )
+
+    extraction = {
+        "role": "marker_single",
+        "tier": f"marker-pdf=={_marker_pdf_version()}",
+        "ts": datetime.now(timezone.utc).isoformat(),
+    }
+    return _pdf_page_count(source_path), figure_count, extraction

@@ -1,7 +1,9 @@
 from pathlib import Path
 
+import fitz  # pymupdf — dev dependency, used to build a real PDF fixture
 import yaml
 
+from plugins.grading.python import translate_sources as ts
 from plugins.grading.python.translate_sources import (
     _resolve_source_name,
     _is_already_translated,
@@ -83,3 +85,67 @@ def test_ingest_marker_single_output_errors_on_zero_md(tmp_path):
     import pytest
     with pytest.raises(RuntimeError, match="exactly one .md"):
         _ingest_marker_single_output(empty, tmp_path / "dest")
+
+
+def _make_pdf(path: Path, pages: int = 2) -> None:
+    doc = fitz.open()
+    for i in range(pages):
+        page = doc.new_page()
+        page.insert_text((72, 72), f"page {i}")
+    doc.save(str(path))
+    doc.close()
+
+
+def test_translate_pdf_happy_path(tmp_path, monkeypatch):
+    pdf = tmp_path / "doc.pdf"
+    _make_pdf(pdf, pages=2)
+    dest = tmp_path / "sources" / "doc"
+    dest.mkdir(parents=True)
+
+    def fake_invoke(input_pdf, output_dir, marker_cfg):
+        d = Path(output_dir) / "doc"
+        d.mkdir(parents=True)
+        (d / "doc.md").write_text("# Doc\n![](pic.png)\n")
+        (d / "pic.png").write_bytes(b"\x89PNG fake")
+
+    monkeypatch.setattr(ts, "_invoke_marker_single", fake_invoke)
+
+    page_count, figure_count, extraction = ts._translate_pdf(
+        pdf, dest, {"ocr": False, "extract_images": True})
+
+    assert page_count == 2
+    assert figure_count == 1
+    assert extraction["role"] == "marker_single"
+    assert extraction["tier"].startswith("marker-pdf==")
+    assert (dest / "content.md").read_text().startswith("# Doc")
+
+
+def test_translate_pdf_errors_on_empty_content(tmp_path, monkeypatch):
+    pdf = tmp_path / "doc.pdf"
+    _make_pdf(pdf, pages=1)
+    dest = tmp_path / "sources" / "doc"
+    dest.mkdir(parents=True)
+
+    def fake_invoke(input_pdf, output_dir, marker_cfg):
+        d = Path(output_dir) / "doc"
+        d.mkdir(parents=True)
+        (d / "doc.md").write_text("   \n")   # whitespace only
+
+    monkeypatch.setattr(ts, "_invoke_marker_single", fake_invoke)
+
+    import pytest
+    with pytest.raises(RuntimeError, match="no usable content"):
+        ts._translate_pdf(pdf, dest, {"ocr": False, "extract_images": True})
+
+
+def test_invoke_marker_single_raises_on_nonzero(tmp_path, monkeypatch):
+    def fake_run(argv, **kwargs):
+        class R:
+            returncode = 2
+            stderr = "boom"
+        return R()
+    monkeypatch.setattr(ts.subprocess, "run", fake_run)
+    import pytest
+    with pytest.raises(RuntimeError, match="marker_single failed"):
+        ts._invoke_marker_single(tmp_path / "x.pdf", tmp_path / "out",
+                                 {"ocr": False, "extract_images": True})
